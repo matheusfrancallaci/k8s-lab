@@ -25,7 +25,7 @@
 .mode-card.incident:hover { border-color:rgba(248,113,113,.5); box-shadow:0 12px 32px -14px rgba(248,113,113,.4); }
 .cfg-card {
     background:var(--surface-2); border:1px solid var(--border-2);
-    border-radius:16px; padding:24px; box-shadow:0 20px 60px -20px rgba(0,0,0,.5);
+    border-radius:16px; padding:24px; box-shadow:0 20px 60px -20px var(--shadow-color);
     animation:fadeUp .35s ease both;
 }
 .cta-start {
@@ -64,7 +64,7 @@
 .seg input:checked + .seg-btn {
     background:var(--surface); color:var(--text);
     border-color:var(--border-2);
-    box-shadow:0 2px 12px rgba(0,0,0,.22);
+    box-shadow:0 2px 12px var(--shadow-soft);
 }
 .seg .dot { width:6px; height:6px; border-radius:50%; display:inline-block; }
 .d-green { background:var(--green); } .d-amber { background:var(--amber); } .d-red { background:var(--red); }
