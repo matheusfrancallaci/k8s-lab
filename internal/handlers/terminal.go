@@ -16,9 +16,18 @@ import (
 
 	"estudo-app/internal/tutor"
 
-	"github.com/UserExistsError/conpty"
 	"github.com/gorilla/websocket"
 )
+
+// ptySession abstrai um PTY interativo entre plataformas: ConPTY (Windows,
+// spawnando wsl.exe) e /dev/pts via creack/pty (Linux, quando o app roda
+// dentro do WSL). A implementação vem de terminal_windows.go/terminal_linux.go.
+type ptySession interface {
+	Read(p []byte) (int, error)
+	Write(p []byte) (int, error)
+	Resize(cols, rows int) error
+	Close() error
+}
 
 // activeTerminals conta sessões de terminal abertas — enquanto houver uma,
 // o auto-stop do cluster cloud não pode disparar (usuário está estudando).
@@ -333,17 +342,11 @@ func TerminalWS(w http.ResponseWriter, r *http.Request) {
 	} else {
 		shellCmd = "bash -c \"exec bash --rcfile ~/.k8slab_rc -i\""
 	}
-	var ptyCmd string
-	if user := getWslUser(); user != "" {
-		ptyCmd = fmt.Sprintf("wsl.exe -u %s -- %s", user, shellCmd)
-	} else {
-		ptyCmd = fmt.Sprintf("wsl.exe -- %s", shellCmd)
-	}
-
-	// Create ConPTY with initial size (will be resized on first message)
-	cpty, err := conpty.Start(ptyCmd, conpty.ConPtyDimensions(220, 50))
+	// Inicia o PTY pela implementação da plataforma: ConPTY (Windows, via
+	// wsl.exe) ou PTY nativo (Linux, quando o app roda dentro do WSL).
+	cpty, err := startPTY(shellCmd, 220, 50)
 	if err != nil {
-		log.Printf("[terminal] ConPTY start failed: %v", err)
+		log.Printf("[terminal] PTY start failed: %v", err)
 		conn.WriteMessage(websocket.TextMessage, []byte(
 			"\x1b[1;31mFalha ao iniciar terminal PTY: "+err.Error()+"\x1b[0m\r\n",
 		))
