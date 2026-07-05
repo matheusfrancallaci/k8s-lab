@@ -249,6 +249,30 @@ body {
   outline: 2px solid var(--violet); outline-offset: 2px;
 }
 
+/* ── Loading: skeleton shimmer + pulse (estados intermediários) ──── */
+@keyframes shimmer { 100% { background-position: -200% 0; } }
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-3) 25%, var(--surface-4) 37%, var(--surface-3) 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: var(--r-sm);
+  display: inline-block;
+}
+@keyframes softpulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+.is-loading { animation: softpulse 1.3s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .skeleton, .is-loading { animation: none; }
+}
+
+/* Empty-state desenhado (erro/sem dados) — em vez de sumir ou travar em texto cru */
+.empty-state {
+  grid-column: 1 / -1;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: var(--space-6) var(--space-4);
+  border: 1px dashed var(--border-2); border-radius: var(--r-lg);
+  color: var(--text-3); font-size: var(--fs); text-align: center;
+}
+
 /* ── Scrollbar ──────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
