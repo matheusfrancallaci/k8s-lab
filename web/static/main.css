@@ -6,6 +6,16 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 16px; scroll-behavior: smooth; }
 img, svg { display: block; }
+
+/* Ícone SVG inline (Lucide) — herda a cor do texto, alinha à baseline.
+   Substitui os emojis multicoloridos que variavam por SO. */
+.lic { display: inline-block; vertical-align: -0.15em; flex-shrink: 0; }
+.lic svg, svg.lic { stroke: currentColor; fill: none; }
+
+/* Ícones dos cards de modo/sugestão — tingidos por contexto */
+.m-ico, .s-ico { color: var(--violet); line-height: 0; }
+.mode-card.exam .m-ico { color: var(--amber); }
+.mode-card.incident .m-ico { color: var(--red); }
 button, input, select, textarea { font: inherit; }
 a { color: inherit; text-decoration: none; }
 button { cursor: pointer; }

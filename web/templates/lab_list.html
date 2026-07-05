@@ -109,17 +109,17 @@
             <!-- Modos -->
             <div class="mode-grid">
                 <div class="mode-card study" onclick="document.querySelector('.cfg-card').scrollIntoView({behavior:'smooth',block:'start'})" style="cursor:pointer;">
-                    <div class="m-ico">🧪</div>
+                    <div class="m-ico"><svg class="lic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg></div>
                     <div class="m-t" data-i18n="labs.study">Sessão de Estudo</div>
                     <div class="m-d" data-i18n="labs.study.d">configure abaixo: hints, solution e tutor liberados</div>
                 </div>
                 <button class="mode-card exam" onclick="startExamMode()">
-                    <div class="m-ico">🏆</div>
+                    <div class="m-ico"><svg class="lic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg></div>
                     <div class="m-t" data-i18n="labs.exam">Modo Exame</div>
                     <div class="m-d" data-i18n="labs.exam.d">16 questões · 2h · sem dicas · score report</div>
                 </button>
                 <button class="mode-card incident" onclick="startIncidentMode(this)">
-                    <div class="m-ico">🚨</div>
+                    <div class="m-ico"><svg class="lic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18v-6a5 5 0 1 1 10 0v6"/><path d="M5 21a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1z"/><path d="M21 12h1"/><path d="M18.5 4.5 18 5"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="M5.5 4.5 6 5"/></svg></div>
                     <div class="m-t" data-i18n="labs.incident">Modo Incidente</div>
                     <div class="m-d" data-i18n="labs.incident.d">o cluster chega quebrado — diagnostique e conserte</div>
                 </button>
@@ -303,10 +303,10 @@ async function refreshEnv() {
             txt.textContent = on ? 'cloud ativo · ' + d.cluster_name + ' (AKS)'
                                  : 'cloud parado — ligue o cluster em Cloud';
             tDot.style.background = on ? '#38bdf8' : 'var(--red)';
-            tLbl.textContent = 'alvo: ☁ ' + d.cluster_name + ' (Azure AKS)';
+            tLbl.textContent = 'alvo: ' + d.cluster_name + ' (Azure AKS)';
             tLink.href = '/cloud';
         } else {
-            tLbl.textContent = 'alvo: 🖥 ' + (d.active_context || 'minikube') + ' (local)';
+            tLbl.textContent = 'alvo: ' + (d.active_context || 'minikube') + ' (local)';
             tLink.href = '/onpremise';
             const c = await fetch('/api/cluster-status').then(x => x.json());
             dot.className = 'cluster-dot ' + (c.running ? 'on' : 'off');

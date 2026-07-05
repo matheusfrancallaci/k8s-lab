@@ -151,17 +151,17 @@
                     <div class="s-d">"crie um lab de storage nível 3 passo a passo"</div>
                 </button>
                 <button class="sugg" onclick="sendSuggestion('modo incidente: quebre o cluster para eu consertar')">
-                    <div class="s-ico">🚨</div>
+                    <div class="s-ico" style="color:var(--red);"><svg class="lic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18v-6a5 5 0 1 1 10 0v6"/><path d="M5 21a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1z"/><path d="M21 12h1"/><path d="M18.5 4.5 18 5"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="M5.5 4.5 6 5"/></svg></div>
                     <div class="s-t">Modo Incidente</div>
                     <div class="s-d">o cluster chega quebrado — diagnostique e conserte</div>
                 </button>
                 <button class="sugg" onclick="sendSuggestion('quero fazer um simulado completo')">
-                    <div class="s-ico">🏆</div>
+                    <div class="s-ico" style="color:var(--amber);"><svg class="lic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg></div>
                     <div class="s-t">Simulado de prova</div>
                     <div class="s-d">16 questões · 2 horas · sem dicas · score report</div>
                 </button>
                 <button class="sugg" onclick="sendSuggestion('como está meu desempenho?')">
-                    <div class="s-ico">📊</div>
+                    <div class="s-ico"><svg class="lic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg></div>
                     <div class="s-t">Meu desempenho</div>
                     <div class="s-d">pontos fortes, fracos e recomendações</div>
                 </button>
@@ -331,7 +331,7 @@ function renderAction(slot, a) {
         slot.insertAdjacentHTML('beforeend',
             `<div class="chat-card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
                 <span style="font-size:12px;color:var(--text-3);">16 questões · 120 min · sem dicas</span>
-                <button class="btn btn-primary btn-sm" onclick="startExam()">🏆 Iniciar Exame</button>
+                <button class="btn btn-primary btn-sm" onclick="startExam()"><svg class="lic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg> Iniciar Exame</button>
              </div>`);
     } else if (a.type === 'certs') {
         refreshCerts();
