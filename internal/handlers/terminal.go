@@ -237,6 +237,11 @@ func ensureCloudShellPod(report func(string)) error {
 var clusterMu sync.Mutex
 
 func clusterIsUp() bool {
+	// Hot path (polled): quando rodando no WSL, checa via API sem spawn.
+	if up, handled := k8sClusterUp(currentContext()); handled {
+		return up
+	}
+	// Fallback: host Windows ou client-go indisponível → shell.
 	out, err := wslShell("kubectl cluster-info --request-timeout=5s 2>/dev/null").Output()
 	return err == nil && len(out) > 0
 }

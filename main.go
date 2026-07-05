@@ -2,7 +2,6 @@ package main
 
 import (
 	"embed"
-	"encoding/json"
 	"html/template"
 	"io/fs"
 	"log"
@@ -210,24 +209,8 @@ func main() {
 	mux.HandleFunc("POST /api/argocd/portforward", handlers.ArgoCDPortForwardHandler)
 	mux.HandleFunc("DELETE /api/argocd/portforward", handlers.ArgoCDPortForwardHandler)
 
-	// Cluster status API
-	mux.HandleFunc("GET /api/cluster-status", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		out, err := handlers.ClusterInfoCmd().CombinedOutput()
-		running := err == nil && strings.Contains(string(out), "running")
-		info := ""
-		if running {
-			lines := strings.Split(string(out), "\n")
-			if len(lines) > 0 {
-				info = strings.TrimSpace(lines[0])
-			}
-		}
-		json.NewEncoder(w).Encode(map[string]any{
-			"running": running,
-			"info":    info,
-			"context": handlers.CurrentContext(),
-		})
-	})
+	// Cluster status API (client-go no WSL, shell no host Windows)
+	mux.HandleFunc("GET /api/cluster-status", handlers.ClusterStatusHandler)
 
 	// LAB_NO_CLUSTER=1 pula o auto-start do minikube e o monitor de nuvem —
 	// útil para testes, CI ou subir só a UI sem tocar em cluster.
