@@ -244,6 +244,11 @@ body {
   clip: rect(0,0,0,0); white-space: nowrap; border: 0;
 }
 
+/* Anel de foco por teclado em chips cujo input real é sr-only (o label envolve o input) */
+.filter-chip:has(input:focus-visible) {
+  outline: 2px solid var(--violet); outline-offset: 2px;
+}
+
 /* ── Scrollbar ──────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
