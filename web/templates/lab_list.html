@@ -4,7 +4,7 @@
 .labs-hero { text-align:center; padding:5vh 12px 6px; animation:fadeUp .4s ease both; }
 .labs-hero h1 {
     font-size:30px; font-weight:800; letter-spacing:-.5px; margin-bottom:8px;
-    background:linear-gradient(92deg,var(--green) 5%,#38bdf8 55%,var(--violet) 105%);
+    background:linear-gradient(92deg,var(--green) 5%,var(--sky) 55%,var(--violet) 105%);
     -webkit-background-clip:text; background-clip:text; color:transparent;
 }
 .labs-hero p { font-size:13px; color:var(--text-3); }
@@ -299,10 +299,10 @@ async function refreshEnv() {
         if (isCloud) {
             const on = d.power_state === 'Running';
             dot.className = 'cluster-dot ' + (on ? 'on' : 'off');
-            txt.style.color = on ? '#38bdf8' : 'var(--red)';
+            txt.style.color = on ? 'var(--sky)' : 'var(--red)';
             txt.textContent = on ? 'cloud ativo · ' + d.cluster_name + ' (AKS)'
                                  : 'cloud parado — ligue o cluster em Cloud';
-            tDot.style.background = on ? '#38bdf8' : 'var(--red)';
+            tDot.style.background = on ? 'var(--sky)' : 'var(--red)';
             tLbl.textContent = 'alvo: ' + d.cluster_name + ' (Azure AKS)';
             tLink.href = '/cloud';
         } else {

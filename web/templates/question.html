@@ -89,7 +89,7 @@ const t = setInterval(() => {
     const m = String(Math.floor(total/60)).padStart(2,'0');
     const s = String(total%60).padStart(2,'0');
     el.textContent = m + ':' + s;
-    if (total < 120) el.style.color = '#f87171';
+    if (total < 120) el.style.color = 'var(--red)';
 }, 1000);
 
 document.addEventListener('keydown', e => {

@@ -71,6 +71,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   --orange:      #fb923c;
   --orange-dim:  rgba(251, 146, 60, 0.07);
 
+  /* Sky — acento de nuvem/Azure */
+  --sky:         #38bdf8;
+  --sky-dim:     rgba(56, 189, 248, 0.08);
+
+  /* ArgoCD — laranja de marca */
+  --argo:        #f87c35;
+
   /* Text */
   --text:        #eef0ff;
   --text-2:      #9193b8;
@@ -195,6 +202,9 @@ html[data-theme="light"] {
   --amber-dim:   rgba(180, 83, 9, 0.08);
   --orange:      #c2410c;
   --orange-dim:  rgba(194, 65, 12, 0.07);
+  --sky:         #0284c7;
+  --sky-dim:     rgba(2, 132, 199, 0.08);
+  --argo:        #ea580c;
   --term-bg:       #ffffff;
   --term-chrome-1: #f6f8fa;
   --term-chrome-2: #eaeef2;

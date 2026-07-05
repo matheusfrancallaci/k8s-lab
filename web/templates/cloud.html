@@ -21,7 +21,7 @@
 .mono { font-family:'JetBrains Mono',monospace; }
 .copy-btn {
     padding:3px 10px; border-radius:4px; font-size:10px; font-weight:600;
-    background:#1e2e3e; color:#38bdf8; border:1px solid rgba(56,189,248,.2);
+    background:#1e2e3e; color:var(--sky); border:1px solid rgba(56,189,248,.2);
     cursor:pointer; transition:opacity .15s;
 }
 .copy-btn:hover { opacity:.75; }
@@ -273,8 +273,8 @@ function ctxIndicator(active, clusterName) {
     const dot = document.getElementById('ctx-dot');
     const lbl = document.getElementById('ctx-label');
     const isCloud = active && active === clusterName;
-    dot.style.background = active ? (isCloud ? '#38bdf8' : '#34d399') : 'var(--text-3)';
-    lbl.style.color = active ? (isCloud ? '#38bdf8' : '#34d399') : 'var(--text-3)';
+    dot.style.background = active ? (isCloud ? 'var(--sky)' : 'var(--green)') : 'var(--text-3)';
+    lbl.style.color = active ? (isCloud ? 'var(--sky)' : 'var(--green)') : 'var(--text-3)';
     lbl.textContent = active || '(nenhum)';
 
     // (pills removidas — abas dinâmicas assumiram o papel)
@@ -294,24 +294,24 @@ function applyStatus(d) {
     if (busy) return; // não redesenhar botões enquanto uma ação SSE roda
 
     if (!d.az_installed) {
-        azDot.style.background = '#f87171';
-        azText.style.color = '#f87171';
+        azDot.style.background = 'var(--red)';
+        azText.style.color = 'var(--red)';
         azText.textContent = 'Azure CLI não instalado no WSL';
         azActions.innerHTML = '<button class="btn btn-primary" onclick="installAz()">Instalar Azure CLI</button>';
         clusterCard.style.display = 'none';
         return;
     }
     if (!d.logged_in) {
-        azDot.style.background = '#fbbf24';
-        azText.style.color = '#fbbf24';
+        azDot.style.background = 'var(--amber)';
+        azText.style.color = 'var(--amber)';
         azText.textContent = 'Não autenticado';
         azActions.innerHTML = '<button class="btn btn-primary" onclick="login()">Fazer login no Azure</button>';
         clusterCard.style.display = 'none';
         return;
     }
 
-    azDot.style.background = '#34d399';
-    azText.style.color = '#34d399';
+    azDot.style.background = 'var(--green)';
+    azText.style.color = 'var(--green)';
     azText.innerHTML = 'Logado · subscription <strong class="mono">' + escHtml(d.subscription) + '</strong>';
     azActions.innerHTML = '';
     clusterCard.style.display = 'block';
@@ -335,8 +335,8 @@ function renderCluster(d) {
     }
 
     const running = d.power_state === 'Running';
-    dot.style.background = running ? '#34d399' : '#fbbf24';
-    text.style.color = running ? '#34d399' : '#fbbf24';
+    dot.style.background = running ? 'var(--green)' : 'var(--amber)';
+    text.style.color = running ? 'var(--green)' : 'var(--amber)';
     text.textContent = running
         ? (d.connected ? 'Running · conectado (alvo ativo)' : 'Running')
         : (d.power_state || 'Desconhecido');
@@ -407,7 +407,7 @@ function createCluster() {
 
 function runSSE(url, logId, logEl) {
     logEl.style.display = 'block';
-    logEl.innerHTML = '<div class="step-item"><div class="step-icon"><div style="color:#38bdf8;animation:spin 1s linear infinite;display:inline-block;">⟳</div></div><div class="step-desc" id="' + logId + '-lines"></div></div>';
+    logEl.innerHTML = '<div class="step-item"><div class="step-icon"><div style="color:var(--sky);animation:spin 1s linear infinite;display:inline-block;">⟳</div></div><div class="step-desc" id="' + logId + '-lines"></div></div>';
     busy = true;
     const es = new EventSource(url);
     es.onmessage = e => {
@@ -433,9 +433,9 @@ function renderStep(containerId, id, desc, status) {
         document.getElementById(containerId).appendChild(el);
     }
     let icon = '';
-    if (status === 'running') icon = '<div style="color:#38bdf8;animation:spin 1s linear infinite;display:inline-block;">⟳</div>';
-    else if (status === 'done') icon = '<span style="color:#4ade80;">✓</span>';
-    else if (status === 'warn') icon = '<span style="color:#fbbf24;">⚠</span>';
+    if (status === 'running') icon = '<div style="color:var(--sky);animation:spin 1s linear infinite;display:inline-block;">⟳</div>';
+    else if (status === 'done') icon = '<span style="color:var(--green);">✓</span>';
+    else if (status === 'warn') icon = '<span style="color:var(--amber);">⚠</span>';
     el.innerHTML = '<div class="step-icon">' + icon + '</div><div class="step-desc">' + escHtml(desc) + '</div>';
 }
 

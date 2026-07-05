@@ -140,7 +140,7 @@
                     <button onclick="stopCluster()" class="btn btn-danger" style="background:var(--red);color:#fff;border-color:var(--red);">Parar Cluster</button>
                 </div>
                 <div id="stopcluster-loading" style="display:none;">
-                    <div style="font-size:20px;color:#38bdf8;animation:spin 1s linear infinite;display:inline-block;">⟳</div>
+                    <div style="font-size:20px;color:var(--sky);animation:spin 1s linear infinite;display:inline-block;">⟳</div>
                     <p style="font-size:12px;font-weight:600;color:var(--text-2);margin-top:10px;">Parando o cluster... (~2-3 min)</p>
                     <p class="mono" style="font-size:10px;color:var(--text-4);margin-top:4px;">pode fechar esta janela — o desligamento continua na Azure</p>
                 </div>
@@ -763,16 +763,16 @@ refreshEnvChip();
 const TERM_THEMES = {
     dark: {
         background: '#08080f', foreground: '#d7d9ec',
-        cursor: '#818cf8', cursorAccent: '#08080f',
+        cursor: 'var(--violet)', cursorAccent: '#08080f',
         selectionBackground: 'rgba(129,140,248,.28)',
         black: '#16163a',   brightBlack: '#50527a',
-        red: '#f87171',     brightRed: '#fca5a5',
-        green: '#34d399',   brightGreen: '#6ee7b7',
-        yellow: '#fbbf24',  brightYellow: '#fcd34d',
-        blue: '#818cf8',    brightBlue: '#a5b4fc',
+        red: 'var(--red)',     brightRed: '#fca5a5',
+        green: 'var(--green)',   brightGreen: '#6ee7b7',
+        yellow: 'var(--amber)',  brightYellow: '#fcd34d',
+        blue: 'var(--violet)',    brightBlue: '#a5b4fc',
         magenta: '#c084fc', brightMagenta: '#d8b4fe',
         cyan: '#22d3ee',    brightCyan: '#67e8f9',
-        white: '#d7d9ec',   brightWhite: '#eef0ff',
+        white: '#d7d9ec',   brightWhite: 'var(--text)',
     },
     dimmed: {
         background: '#22272e', foreground: '#adbac7',
