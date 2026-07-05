@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -73,4 +74,23 @@ func k8sClusterUp(kctx string) (up bool, handled bool) {
 		return false, true
 	}
 	return true, true
+}
+
+// deploymentExists checa via API se um Deployment existe. handled=false =>
+// client-go indisponível ou erro de conexão (use o fallback shell).
+func deploymentExists(kctx, ns, name string) (exists bool, handled bool) {
+	cs, err := k8sClientFor(kctx)
+	if err != nil {
+		return false, false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	_, err = cs.AppsV1().Deployments(ns).Get(ctx, name, metav1.GetOptions{})
+	if err == nil {
+		return true, true
+	}
+	if apierrors.IsNotFound(err) {
+		return false, true
+	}
+	return false, false // erro de conexão/permissão → melhor cair no shell
 }
