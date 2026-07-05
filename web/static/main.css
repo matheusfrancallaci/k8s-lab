@@ -124,6 +124,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   /* Sizes */
   --nav-h: 44px;
 
+  /* Larguras de conteúdo — 2 padrões (evita 520/680/720/760/820 espalhados) */
+  --content:        720px;
+  --content-narrow: 560px;
+
   /* ── Legacy aliases (existing templates use these names) ── */
   --primary:     var(--violet);
   --primary-b:   var(--violet-b);
@@ -586,7 +590,9 @@ body {
 }
 .home-title em {
   font-style: normal;
-  color: var(--violet);
+  /* mesmo DNA gradiente do hero de labs/tutor */
+  background: linear-gradient(92deg, var(--green) 5%, var(--sky) 55%, var(--violet) 105%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .home-desc {
   font-size: 13px;
