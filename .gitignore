@@ -6,6 +6,9 @@
 *.dylib
 /estudo-app
 /estudo-app.exe
+/estudo-app-linux
+/k8s-study-lab
+/k8s-study-lab.exe
 
 # Saídas de teste
 *.test

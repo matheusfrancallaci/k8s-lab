@@ -1,12 +1,20 @@
-.PHONY: run build setup setup-win clean kill
+.PHONY: run run-wsl build build-linux setup setup-win clean kill
 
 ## run: Build and start the study app on :8080
 run:
 	go run .
 
+## run-wsl: Cross-compila p/ Linux e roda DENTRO do WSL (client-go nativo, acesso direto ao minikube)
+run-wsl: build-linux
+	wsl.exe -- bash -c 'cd /mnt/c/desenv/estudo-app && ./estudo-app-linux'
+
 ## build: Compile to a binary
 build:
 	go build -o k8s-study-lab .
+
+## build-linux: Cross-compila o binário Linux (autossuficiente, assets embutidos) p/ rodar no WSL
+build-linux:
+	GOOS=linux GOARCH=amd64 go build -o estudo-app-linux .
 
 ## setup: Install kubectl + minikube and start cluster (Linux/macOS)
 setup:

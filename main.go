@@ -229,8 +229,14 @@ func main() {
 		})
 	})
 
-	go handlers.EnsureCluster()
-	go handlers.StartCloudMonitor()
+	// LAB_NO_CLUSTER=1 pula o auto-start do minikube e o monitor de nuvem —
+	// útil para testes, CI ou subir só a UI sem tocar em cluster.
+	if os.Getenv("LAB_NO_CLUSTER") == "" {
+		go handlers.EnsureCluster()
+		go handlers.StartCloudMonitor()
+	} else {
+		log.Println("LAB_NO_CLUSTER definido — auto-gerenciamento de cluster desativado")
+	}
 
 	addr := ":8080"
 	if p := os.Getenv("PORT"); p != "" {
