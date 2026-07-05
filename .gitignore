@@ -21,3 +21,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Estado de runtime (progresso do tutor, certs cadastrados, perfis)
+/data/

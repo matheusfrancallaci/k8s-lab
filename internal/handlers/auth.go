@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -41,13 +42,13 @@ func isAuthenticated(r *http.Request) bool {
 const loginPage = `<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>K8s Study Lab — Login</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <style>
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
-background:#050510;font-family:'Inter',sans-serif;color:#eef0ff;}
+background:#050510;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#eef0ff;}
 .card{width:100%;max-width:340px;padding:36px 32px;border-radius:14px;
 background:#0d0d20;border:1px solid #20204a;text-align:center;}
-.brand{font-family:'JetBrains Mono',monospace;font-weight:600;color:#818cf8;font-size:15px;margin-bottom:6px;}
+.brand{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;color:#818cf8;font-size:15px;margin-bottom:6px;}
 p{font-size:12px;color:#50527a;margin:0 0 22px;}
 input{width:100%;box-sizing:border-box;padding:11px 13px;border-radius:8px;margin-bottom:12px;
 border:1px solid #20204a;background:#08081a;color:#eef0ff;font-size:14px;outline:none;}
@@ -108,7 +109,9 @@ func replaceErr(page, err string) string {
 // RequireAuth protege todas as rotas quando APP_PASSWORD está definido.
 func RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if appPassword() == "" || r.URL.Path == "/login" {
+		// Assets estáticos e o login são públicos (não expõem dados).
+		if appPassword() == "" || r.URL.Path == "/login" ||
+			strings.HasPrefix(r.URL.Path, "/static/") {
 			next.ServeHTTP(w, r)
 			return
 		}
