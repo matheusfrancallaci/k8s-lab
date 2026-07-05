@@ -14,22 +14,20 @@ type Recommendation struct {
 	Reason string `json:"reason"`
 }
 
-// cooldown evita insistir na mesma recomendação repetidamente.
-var lastAdvised = map[string]time.Time{}
-
 const adviseCooldown = 10 * time.Minute
 
-// Advise avalia o modelo de habilidade e devolve recomendações ativas,
-// da mais urgente para a menos. Determinístico, sem LLM.
-func Advise() []Recommendation {
-	mu.Lock()
-	defer mu.Unlock()
+// Advise avalia o modelo de habilidade do usuário e devolve recomendações
+// ativas, da mais urgente para a menos. Determinístico, sem LLM.
+func Advise(userID string) []Recommendation {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	var recs []Recommendation
 	now := time.Now()
 
-	for key, s := range state.Skills {
-		if t, ok := lastAdvised[key]; ok && now.Sub(t) < adviseCooldown {
+	for key, s := range p.Skills {
+		if t, ok := p.lastAdvised[key]; ok && now.Sub(t) < adviseCooldown {
 			continue
 		}
 
@@ -71,16 +69,17 @@ func Advise() []Recommendation {
 		if recs[i].Level != recs[j].Level {
 			return recs[i].Level > recs[j].Level
 		}
-		si := state.Skills[recs[i].Cert+"|"+recs[i].Topic]
-		sj := state.Skills[recs[j].Cert+"|"+recs[j].Topic]
+		si := p.Skills[recs[i].Cert+"|"+recs[i].Topic]
+		sj := p.Skills[recs[j].Cert+"|"+recs[j].Topic]
 		return si.Score < sj.Score
 	})
 	return recs
 }
 
 // MarkAdvised inicia o cooldown de uma recomendação (aceita ou dispensada).
-func MarkAdvised(cert, topic string) {
-	mu.Lock()
-	defer mu.Unlock()
-	lastAdvised[cert+"|"+topic] = time.Now()
+func MarkAdvised(userID, cert, topic string) {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.lastAdvised[cert+"|"+topic] = time.Now()
 }

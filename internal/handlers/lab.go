@@ -81,7 +81,7 @@ func (h *LabHandler) Show(w http.ResponseWriter, r *http.Request) {
 	prevID, nextID := h.repo.GetLabNeighbors(id)
 
 	// Contexto do tutor: eventos do terminal serão atribuídos a esta questão.
-	tutor.SetActiveQuestion(q)
+	tutor.SetActiveQuestion(userID(r), q)
 
 	// Build effective goals: use explicit Goals if defined, else synthesize from question's own Validation
 	goals := q.Goals
@@ -331,7 +331,7 @@ func (h *LabHandler) Validate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Alimenta o modelo de habilidade do tutor com o resultado do check.
-	tutor.RecordGoal(q, success)
+	tutor.RecordGoal(userID(r), q, success)
 
 	resp := validateResponse{
 		Success: success,

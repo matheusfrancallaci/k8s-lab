@@ -47,8 +47,8 @@ func (h *TutorHandler) Status(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	llmOK, llmModel := tutor.LLMStatus()
 	json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
-		"recommendations": tutor.Advise(),
-		"stats":           tutor.Stats(),
+		"recommendations": tutor.Advise(userID(r)),
+		"stats":           tutor.Stats(userID(r)),
 		"gen_topics":      tutor.Topics(),
 		"certs":           tutor.AllCerts(),
 		"llm":             map[string]any{"available": llmOK, "model": llmModel},
@@ -103,14 +103,14 @@ func (h *TutorHandler) Event(w http.ResponseWriter, r *http.Request) {
 	switch body.Type {
 	case "hint_view":
 		if q, ok := h.repo.GetByID(body.QuestionID); ok {
-			tutor.RecordHint(q)
+			tutor.RecordHint(userID(r), q)
 		}
 	case "solution_view":
 		if q, ok := h.repo.GetByID(body.QuestionID); ok {
-			tutor.RecordSolution(q)
+			tutor.RecordSolution(userID(r), q)
 		}
 	case "dismiss":
-		tutor.MarkAdvised(body.Cert, body.Topic)
+		tutor.MarkAdvised(userID(r), body.Cert, body.Topic)
 	}
 	json.NewEncoder(w).Encode(map[string]any{"ok": true}) //nolint:errcheck
 }
@@ -135,7 +135,7 @@ func (h *TutorHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.repo.Add(qs)
-	tutor.MarkAdvised(body.Cert, body.Topic) // aceitou a sugestão → cooldown
+	tutor.MarkAdvised(userID(r), body.Cert, body.Topic) // aceitou a sugestão → cooldown
 
 	ids := make([]string, len(qs))
 	for i, q := range qs {

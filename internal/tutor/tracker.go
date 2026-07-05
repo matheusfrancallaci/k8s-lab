@@ -1,6 +1,9 @@
 // Package tutor implementa um tutor adaptativo 100% local (zero API):
 // observa o desempenho do usuário (goals, hints, terminal), mantém um modelo
 // de habilidade estatístico por tópico e gera labs personalizados por template.
+//
+// O estado é POR USUÁRIO (Profile), keyed por um id de perfil vindo do cookie.
+// Sem perfil definido, tudo cai no perfil "default" (comportamento single-user).
 package tutor
 
 import (
@@ -8,6 +11,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,85 +41,124 @@ type TopicSkill struct {
 	LastAttempt time.Time `json:"last_attempt"`
 }
 
-type trackerState struct {
-	Skills map[string]*TopicSkill `json:"skills"` // key: cert|topic
+// Profile é o estado adaptativo de UM usuário (isolado dos demais).
+type Profile struct {
+	mu          sync.Mutex
+	id          string
+	Skills      map[string]*TopicSkill `json:"skills"`
+	activeCert  string
+	activeTopic string
+	lastAdvised map[string]time.Time // cooldown de recomendações
+	saveTimer   *time.Timer
 }
 
 var (
-	mu    sync.Mutex
-	state = trackerState{Skills: map[string]*TopicSkill{}}
-
-	// contexto do terminal: última questão aberta
-	activeCert  string
-	activeTopic string
-
-	saveTimer *time.Timer
+	profilesMu sync.Mutex
+	profiles   = map[string]*Profile{}
 )
 
-func dataFile() string { return filepath.Join("data", "tutor.json") }
+var idRe = regexp.MustCompile(`[^a-z0-9_-]+`)
 
-// Load carrega o histórico de habilidade do disco (chame no boot).
-func Load() {
-	mu.Lock()
-	defer mu.Unlock()
-	b, err := os.ReadFile(dataFile())
-	if err != nil {
-		return // primeiro uso
+// SanitizeID normaliza um nome de perfil para um slug seguro de arquivo.
+// Fonte única da regra — handlers usam isto para derivar o id do cookie.
+func SanitizeID(raw string) string {
+	s := idRe.ReplaceAllString(strings.ToLower(strings.TrimSpace(raw)), "-")
+	s = strings.Trim(s, "-")
+	if len(s) > 40 {
+		s = s[:40]
 	}
-	var s trackerState
-	if json.Unmarshal(b, &s) == nil && s.Skills != nil {
-		state = s
+	if s == "" {
+		return "default"
 	}
+	return s
 }
 
-// scheduleSave persiste com debounce (caller deve segurar mu).
-func scheduleSave() {
-	if saveTimer != nil {
-		saveTimer.Stop()
+func profilesDir() string       { return filepath.Join("data", "profiles") }
+func profilePath(id string) string { return filepath.Join(profilesDir(), id+".json") }
+
+func profileFor(userID string) *Profile {
+	id := SanitizeID(userID)
+	profilesMu.Lock()
+	defer profilesMu.Unlock()
+	if p := profiles[id]; p != nil {
+		return p
 	}
-	saveTimer = time.AfterFunc(2*time.Second, func() {
-		mu.Lock()
-		b, err := json.MarshalIndent(state, "", "  ")
-		mu.Unlock()
+	p := loadProfile(id)
+	profiles[id] = p
+	return p
+}
+
+type skillsDoc struct {
+	Skills map[string]*TopicSkill `json:"skills"`
+}
+
+func loadProfile(id string) *Profile {
+	p := &Profile{id: id, Skills: map[string]*TopicSkill{}, lastAdvised: map[string]time.Time{}}
+	b, err := os.ReadFile(profilePath(id))
+	if err != nil && id == "default" {
+		// Migração única: progresso legado morava em data/tutor.json.
+		b, err = os.ReadFile(filepath.Join("data", "tutor.json"))
+	}
+	if err == nil {
+		var s skillsDoc
+		if json.Unmarshal(b, &s) == nil && s.Skills != nil {
+			p.Skills = s.Skills
+		}
+	}
+	return p
+}
+
+// scheduleSave persiste com debounce (caller deve segurar p.mu).
+func (p *Profile) scheduleSave() {
+	if p.saveTimer != nil {
+		p.saveTimer.Stop()
+	}
+	p.saveTimer = time.AfterFunc(2*time.Second, func() {
+		p.mu.Lock()
+		b, err := json.MarshalIndent(skillsDoc{Skills: p.Skills}, "", "  ")
+		p.mu.Unlock()
 		if err != nil {
 			return
 		}
-		if err := os.MkdirAll("data", 0o755); err != nil {
+		if err := os.MkdirAll(profilesDir(), 0o755); err != nil {
 			return
 		}
-		if err := os.WriteFile(dataFile(), b, 0o644); err != nil {
-			log.Printf("[tutor] falha ao salvar estado: %v", err)
+		if err := os.WriteFile(profilePath(p.id), b, 0o644); err != nil {
+			log.Printf("[tutor] falha ao salvar perfil %s: %v", p.id, err)
 		}
 	})
 }
 
-func skillFor(cert, topic string) *TopicSkill {
+// skillFor devolve/cria o skill do tópico (caller deve segurar p.mu).
+func (p *Profile) skillFor(cert, topic string) *TopicSkill {
 	key := cert + "|" + topic
-	s, ok := state.Skills[key]
+	s, ok := p.Skills[key]
 	if !ok {
 		s = &TopicSkill{Cert: cert, Topic: topic, Score: 0.5} // prior neutro
-		state.Skills[key] = s
+		p.Skills[key] = s
 	}
 	return s
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Eventos
+// Eventos — API pública, sempre por usuário (userID vem do cookie de perfil).
 // ─────────────────────────────────────────────────────────────────────────────
 
 // SetActiveQuestion registra a questão aberta — dá contexto aos eventos do terminal.
-func SetActiveQuestion(q models.Question) {
-	mu.Lock()
-	defer mu.Unlock()
-	activeCert = string(q.Cert)
-	activeTopic = q.Topic
+func SetActiveQuestion(userID string, q models.Question) {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.activeCert = string(q.Cert)
+	p.activeTopic = q.Topic
 }
 
 // RecordGoal registra o resultado de um CHECK de goal.
-func RecordGoal(q models.Question, success bool) {
-	mu.Lock()
-	defer mu.Unlock()
-	s := skillFor(string(q.Cert), q.Topic)
+func RecordGoal(userID string, q models.Question, success bool) {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	s := p.skillFor(string(q.Cert), q.Topic)
 	s.Attempts++
 	s.LastAttempt = time.Now()
 	v := 0.0
@@ -126,53 +170,58 @@ func RecordGoal(q models.Question, success bool) {
 		s.FailStreak++
 	}
 	s.Score = s.Score*(1-ewmaAlpha) + v*ewmaAlpha
-	scheduleSave()
+	p.scheduleSave()
 }
 
 // RecordHint registra a abertura da aba HINT.
-func RecordHint(q models.Question) {
-	mu.Lock()
-	defer mu.Unlock()
-	skillFor(string(q.Cert), q.Topic).Hints++
-	scheduleSave()
+func RecordHint(userID string, q models.Question) {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.skillFor(string(q.Cert), q.Topic).Hints++
+	p.scheduleSave()
 }
 
 // RecordSolution registra a abertura da aba SOLUTION.
-func RecordSolution(q models.Question) {
-	mu.Lock()
-	defer mu.Unlock()
-	skillFor(string(q.Cert), q.Topic).Solutions++
-	scheduleSave()
+func RecordSolution(userID string, q models.Question) {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.skillFor(string(q.Cert), q.Topic).Solutions++
+	p.scheduleSave()
 }
 
 // RecordDone registra a conclusão de uma questão e o tempo gasto.
-func RecordDone(q models.Question, seconds int) {
-	mu.Lock()
-	defer mu.Unlock()
-	s := skillFor(string(q.Cert), q.Topic)
+func RecordDone(userID string, q models.Question, seconds int) {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	s := p.skillFor(string(q.Cert), q.Topic)
 	s.Completed++
 	s.TotalSecs += seconds
-	scheduleSave()
+	p.scheduleSave()
 }
 
 // RecordTermError registra um erro de comando visto no terminal do lab,
-// atribuído ao tópico da questão ativa.
-func RecordTermError() {
-	mu.Lock()
-	defer mu.Unlock()
-	if activeTopic == "" {
+// atribuído ao tópico da questão ativa do usuário.
+func RecordTermError(userID string) {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.activeTopic == "" {
 		return
 	}
-	skillFor(activeCert, activeTopic).TermErrors++
-	scheduleSave()
+	p.skillFor(p.activeCert, p.activeTopic).TermErrors++
+	p.scheduleSave()
 }
 
-// Stats devolve uma cópia dos skills para o dashboard (ordenação fica na UI).
-func Stats() []TopicSkill {
-	mu.Lock()
-	defer mu.Unlock()
-	out := make([]TopicSkill, 0, len(state.Skills))
-	for _, s := range state.Skills {
+// Stats devolve uma cópia dos skills do usuário para o dashboard.
+func Stats(userID string) []TopicSkill {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make([]TopicSkill, 0, len(p.Skills))
+	for _, s := range p.Skills {
 		out = append(out, *s)
 	}
 	return out

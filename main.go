@@ -98,7 +98,6 @@ func main() {
 	quiz := handlers.NewQuizHandler(repo, store, templatesFS)
 	lab := handlers.NewLabHandler(repo, store, labSessions, templatesFS)
 	tutorH := handlers.NewTutorHandler(repo, labSessions, templatesFS)
-	tutor.Load()
 	tutor.LoadCerts()
 
 	mux := http.NewServeMux()
@@ -187,6 +186,10 @@ func main() {
 	mux.HandleFunc("POST /api/tutor/explain", tutorH.Explain)
 	mux.HandleFunc("POST /api/tutor/chat", tutorH.Chat)
 	mux.HandleFunc("POST /api/tutor/chat/stream", tutorH.ChatStream)
+
+	// Perfil de usuário (identidade leve para isolar progresso entre pessoas)
+	mux.HandleFunc("GET /api/profile", handlers.ProfileHandler)
+	mux.HandleFunc("POST /api/profile", handlers.ProfileHandler)
 
 	// Cloud (Azure AKS) routes
 	mux.HandleFunc("GET /cloud", cloudPage(templatesFS))

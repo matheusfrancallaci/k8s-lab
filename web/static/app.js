@@ -164,3 +164,26 @@
                 document.getElementById('theme-pop').classList.remove('open');
             }
         });
+
+        // ── Perfil de usuário — isola progresso entre pessoas na mesma instância ──
+        async function loadProfile() {
+            try {
+                const d = await fetch('/api/profile').then(r => r.json());
+                const inp = document.getElementById('profile-name');
+                if (inp && d.profile && d.profile !== 'default') inp.value = d.profile;
+            } catch (e) {}
+        }
+        async function saveProfile() {
+            const inp = document.getElementById('profile-name');
+            if (!inp || !inp.value.trim()) return;
+            try {
+                await fetch('/api/profile', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: inp.value })
+                });
+            } catch (e) {}
+            // Recarrega para todas as views passarem a usar o novo perfil.
+            location.reload();
+        }
+        window.saveProfile = saveProfile;
+        document.addEventListener('DOMContentLoaded', loadProfile);

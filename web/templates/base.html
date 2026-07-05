@@ -30,6 +30,13 @@
             </svg>
         </button>
         <div class="theme-pop" id="theme-pop">
+            <p class="theme-pop-title">seu perfil</p>
+            <div style="display:flex;gap:6px;padding:2px 10px 10px;">
+                <input id="profile-name" placeholder="seu nome" maxlength="40"
+                       style="flex:1;min-width:0;padding:7px 10px;border-radius:8px;border:1px solid var(--border-2);background:var(--surface);color:var(--text);font-size:12px;outline:none;"
+                       onkeydown="if(event.key==='Enter')saveProfile()">
+                <button class="theme-opt" onclick="saveProfile()" style="flex:0 0 auto;justify-content:center;">salvar</button>
+            </div>
             <p class="theme-pop-title">idioma · language</p>
             <div style="display:flex;gap:6px;padding:2px 10px 10px;">
                 <button class="theme-opt" data-lang-opt="pt" onclick="setLang('pt')" style="flex:1;justify-content:center;">Português <span class="check">✓</span></button>

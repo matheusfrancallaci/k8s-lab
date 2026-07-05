@@ -313,6 +313,9 @@ func TerminalWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
+	// Perfil do usuário desta sessão (erros de terminal vão para o skill dele).
+	uid := userID(r)
+
 	touchActivity()
 	atomic.AddInt32(&activeTerminals, 1)
 	defer atomic.AddInt32(&activeTerminals, -1)
@@ -378,7 +381,7 @@ func TerminalWS(w http.ResponseWriter, r *http.Request) {
 						strings.Contains(chunk, "error: unknown command") ||
 						strings.Contains(chunk, "error: exactly one") ||
 						strings.Contains(chunk, "Error: unknown flag")) {
-					tutor.RecordTermError()
+					tutor.RecordTermError(uid)
 					lastErrAt = time.Now()
 				}
 				if wErr := conn.WriteMessage(websocket.BinaryMessage, buf[:n]); wErr != nil {
