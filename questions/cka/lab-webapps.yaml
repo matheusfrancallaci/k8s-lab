@@ -1,0 +1,395 @@
+questions:
+  # ══════════════════════════════════════════════════════════════════
+  # WEB APPS — deploy, expose, scale, rollout, ingress e troubleshooting
+  # Inspirado no curriculo do curso CKA da KodeKloud
+  # ══════════════════════════════════════════════════════════════════
+
+  # ── 056 — Deploy de aplicação web ────────────────────────────────
+  - id: cka-lab-056
+    cert: CKA
+    topic: Web Apps
+    difficulty: easy
+    type: lab
+    question: "Faça o deploy de uma aplicação web: crie um **Deployment** chamado **web-app** com a imagem **nginx:1.21** e **3 réplicas** no namespace **default**."
+    hint: "kubectl create deployment web-app --image=nginx:1.21 --replicas=3"
+    answer_command: "kubectl create deployment web-app --image=nginx:1.21 --replicas=3"
+    goals:
+      - description: "Deployment **web-app** existe"
+        hint: "kubectl create deployment web-app --image=nginx:1.21 --replicas=3"
+        validation:
+          command: "kubectl get deploy web-app -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "web-app"
+      - description: "Usa a imagem **nginx:1.21**"
+        validation:
+          command: "kubectl get deploy web-app -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null"
+          expected_contains: "nginx:1.21"
+      - description: "As **3 réplicas** estão prontas (Running)"
+        hint: "Aguarde os pods ficarem Ready e clique novamente."
+        validation:
+          command: "kubectl get deploy web-app -o jsonpath='{.status.readyReplicas}' 2>/dev/null"
+          expected_contains: "3"
+    teardown:
+      - "kubectl delete deployment web-app --ignore-not-found=true"
+    explanation: "kubectl create deployment cria um Deployment que gerencia um ReplicaSet, garantindo o número desejado de réplicas do Pod. Deployments são a forma padrão de rodar aplicações stateless (como servidores web) no Kubernetes."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"
+    doc_section: "Concepts → Workloads → Deployments"
+
+  # ── 057 — Expor via ClusterIP e validar que o app responde ───────
+  - id: cka-lab-057
+    cert: CKA
+    topic: Web Apps
+    difficulty: easy
+    type: lab
+    question: "A aplicação **web-app** já está no ar. Exponha-a criando um **Service ClusterIP** chamado **web-svc** na porta **80**.\n\nAo final, o Service deve ter **endpoints ativos** (pods prontos associados) — ou seja, a aplicação web deve estar acessível dentro do cluster."
+    hint: "kubectl expose deployment web-app --name=web-svc --port=80"
+    answer_command: "kubectl expose deployment web-app --name=web-svc --port=80"
+    setup:
+      - description: "Criando o Deployment web-app..."
+        command: "kubectl create deployment web-app --image=nginx:1.21 --replicas=2 2>/dev/null || true"
+      - description: "Aguardando os pods ficarem prontos..."
+        command: "kubectl rollout status deployment/web-app --timeout=90s 2>/dev/null || true"
+    goals:
+      - description: "Service **web-svc** existe e é do tipo **ClusterIP**"
+        hint: "kubectl expose deployment web-app --name=web-svc --port=80"
+        validation:
+          command: "kubectl get svc web-svc -o jsonpath='{.spec.type}' 2>/dev/null"
+          expected_contains: "ClusterIP"
+      - description: "O Service escuta na porta **80**"
+        validation:
+          command: "kubectl get svc web-svc -o jsonpath='{.spec.ports[0].port}' 2>/dev/null"
+          expected_contains: "80"
+      - description: "🌐 A aplicação web está **no ar** (Service tem endpoints ativos)"
+        hint: "Os endpoints são populados automaticamente quando o selector do Service casa com pods Ready."
+        validation:
+          command: "kubectl get endpoints web-svc -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -qE '[0-9]' && echo 'REACHABLE: app respondendo' || echo 'sem endpoints — app fora do ar'"
+          expected_contains: "REACHABLE"
+    teardown:
+      - "kubectl delete service web-svc --ignore-not-found=true"
+      - "kubectl delete deployment web-app --ignore-not-found=true"
+    explanation: "kubectl expose cria um Service cujo selector é herdado das labels do Deployment. Quando pods Ready casam com o selector, o Service ganha endpoints — é assim que o tráfego chega até a aplicação. Endpoints vazios = nenhum pod pronto atrás do Service."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/service/"
+    doc_section: "Concepts → Services → ClusterIP"
+
+  # ── 058 — Expor via NodePort ─────────────────────────────────────
+  - id: cka-lab-058
+    cert: CKA
+    topic: Web Apps
+    difficulty: mid
+    type: lab
+    question: "Exponha a aplicação **web-app** para fora do cluster criando um **Service NodePort** chamado **web-np** na porta **80**.\n\nA aplicação deve continuar acessível (endpoints ativos)."
+    hint: "kubectl expose deployment web-app --name=web-np --type=NodePort --port=80"
+    answer_command: "kubectl expose deployment web-app --name=web-np --type=NodePort --port=80"
+    setup:
+      - description: "Criando o Deployment web-app..."
+        command: "kubectl create deployment web-app --image=nginx:1.21 --replicas=2 2>/dev/null || true"
+      - description: "Aguardando os pods ficarem prontos..."
+        command: "kubectl rollout status deployment/web-app --timeout=90s 2>/dev/null || true"
+    goals:
+      - description: "Service **web-np** é do tipo **NodePort**"
+        hint: "kubectl expose deployment web-app --name=web-np --type=NodePort --port=80"
+        validation:
+          command: "kubectl get svc web-np -o jsonpath='{.spec.type}' 2>/dev/null"
+          expected_contains: "NodePort"
+      - description: "Uma **nodePort** foi atribuída (30000-32767)"
+        validation:
+          command: "kubectl get svc web-np -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null | grep -qE '3[0-2][0-9]{3}' && echo OK-NODEPORT || echo SEM-NODEPORT"
+          expected_contains: "OK-NODEPORT"
+      - description: "🌐 A aplicação web está **no ar** (endpoints ativos)"
+        validation:
+          command: "kubectl get endpoints web-np -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -qE '[0-9]' && echo REACHABLE || echo DOWN"
+          expected_contains: "REACHABLE"
+    teardown:
+      - "kubectl delete service web-np --ignore-not-found=true"
+      - "kubectl delete deployment web-app --ignore-not-found=true"
+    explanation: "NodePort expõe o Service em uma porta estática (30000-32767) em cada nó do cluster, permitindo acesso externo via IP-do-nó:nodePort. É a base para acesso externo antes de LoadBalancer/Ingress."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport"
+    doc_section: "Concepts → Services → NodePort"
+
+  # ── 059 — Escalar aplicação web ──────────────────────────────────
+  - id: cka-lab-059
+    cert: CKA
+    topic: Web Apps
+    difficulty: easy
+    type: lab
+    question: "A aplicação **web-app** está recebendo mais tráfego. Escale o Deployment para **5** réplicas."
+    hint: "kubectl scale deployment web-app --replicas=5"
+    answer_command: "kubectl scale deployment web-app --replicas=5"
+    setup:
+      - description: "Criando o Deployment web-app com 2 réplicas..."
+        command: "kubectl create deployment web-app --image=nginx:1.21 --replicas=2 2>/dev/null || true"
+      - description: "Aguardando os pods ficarem prontos..."
+        command: "kubectl rollout status deployment/web-app --timeout=90s 2>/dev/null || true"
+    goals:
+      - description: "O Deployment está configurado para **5** réplicas"
+        hint: "kubectl scale deployment web-app --replicas=5"
+        validation:
+          command: "kubectl get deploy web-app -o jsonpath='{.spec.replicas}' 2>/dev/null"
+          expected_contains: "5"
+      - description: "As **5 réplicas** estão prontas"
+        hint: "Aguarde os novos pods ficarem Ready e clique novamente."
+        validation:
+          command: "kubectl get deploy web-app -o jsonpath='{.status.readyReplicas}' 2>/dev/null"
+          expected_contains: "5"
+    teardown:
+      - "kubectl delete deployment web-app --ignore-not-found=true"
+    explanation: "kubectl scale ajusta o número de réplicas do Deployment. O ReplicaSet cria ou remove pods para atingir o estado desejado. Escalar horizontalmente é a forma padrão de lidar com aumento de carga."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#scaling-a-deployment"
+    doc_section: "Deployments → Scaling"
+
+  # ── 060 — Rolling update de imagem ───────────────────────────────
+  - id: cka-lab-060
+    cert: CKA
+    topic: Web Apps
+    difficulty: mid
+    type: lab
+    question: "Atualize a imagem da aplicação **web-app** de **nginx:1.21** para **nginx:1.25** usando um **rolling update**, e aguarde o rollout completar sem downtime."
+    hint: "kubectl set image deployment/web-app nginx=nginx:1.25 && kubectl rollout status deployment/web-app"
+    answer_command: "kubectl set image deployment/web-app nginx=nginx:1.25"
+    setup:
+      - description: "Criando o Deployment web-app (nginx:1.21)..."
+        command: "kubectl create deployment web-app --image=nginx:1.21 --replicas=3 2>/dev/null || true"
+      - description: "Aguardando o rollout inicial..."
+        command: "kubectl rollout status deployment/web-app --timeout=90s 2>/dev/null || true"
+    goals:
+      - description: "A imagem foi atualizada para **nginx:1.25**"
+        hint: "O container criado por 'create deployment' se chama 'nginx'. Use: kubectl set image deployment/web-app nginx=nginx:1.25"
+        validation:
+          command: "kubectl get deploy web-app -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null"
+          expected_contains: "nginx:1.25"
+      - description: "O **rollout completou** com sucesso"
+        validation:
+          command: "kubectl rollout status deployment/web-app --timeout=20s 2>&1"
+          expected_contains: "successfully rolled out"
+    teardown:
+      - "kubectl delete deployment web-app --ignore-not-found=true"
+    explanation: "kubectl set image dispara um rolling update: o Deployment cria um novo ReplicaSet com a nova imagem e reduz o antigo gradualmente, mantendo a aplicação disponível. kubectl rollout status acompanha o progresso."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#updating-a-deployment"
+    doc_section: "Deployments → Rolling Update"
+
+  # ── 061 — Rollback ───────────────────────────────────────────────
+  - id: cka-lab-061
+    cert: CKA
+    topic: Web Apps
+    difficulty: mid
+    type: lab
+    question: "O último deploy da aplicação **web-app** (nginx:1.25) apresentou bugs. Faça o **rollback** para a revisão anterior (nginx:1.21)."
+    hint: "kubectl rollout undo deployment/web-app"
+    answer_command: "kubectl rollout undo deployment/web-app"
+    setup:
+      - description: "Criando o Deployment web-app (nginx:1.21)..."
+        command: "kubectl create deployment web-app --image=nginx:1.21 --replicas=3 2>/dev/null || true"
+      - description: "Aguardando o rollout inicial..."
+        command: "kubectl rollout status deployment/web-app --timeout=90s 2>/dev/null || true"
+      - description: "Simulando deploy problemático (nginx:1.25)..."
+        command: "kubectl set image deployment/web-app nginx=nginx:1.25 2>/dev/null || true"
+      - description: "Aguardando o rollout do deploy ruim..."
+        command: "kubectl rollout status deployment/web-app --timeout=90s 2>/dev/null || true"
+    goals:
+      - description: "A imagem voltou para **nginx:1.21**"
+        hint: "kubectl rollout undo deployment/web-app"
+        validation:
+          command: "kubectl get deploy web-app -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null"
+          expected_contains: "nginx:1.21"
+      - description: "O Deployment está **disponível** após o rollback"
+        validation:
+          command: "kubectl rollout status deployment/web-app --timeout=20s 2>&1"
+          expected_contains: "successfully rolled out"
+    teardown:
+      - "kubectl delete deployment web-app --ignore-not-found=true"
+    explanation: "kubectl rollout undo reverte o Deployment para a revisão anterior usando o histórico de ReplicaSets. É a forma rápida de recuperar de um deploy quebrado. Use 'kubectl rollout history' para ver as revisões."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#rolling-back-a-deployment"
+    doc_section: "Deployments → Rollback"
+
+  # ── 062 — Health checks (probes) ─────────────────────────────────
+  - id: cka-lab-062
+    cert: CKA
+    topic: Web Apps
+    difficulty: mid
+    type: lab
+    question: "Configure health checks na aplicação **web-app**: adicione uma **readinessProbe** e uma **livenessProbe** do tipo **httpGet** no path **/** e porta **80** ao container.\n\nDica: use `kubectl edit deployment web-app` e edite o campo do container."
+    hint: "Em spec.template.spec.containers[0], adicione readinessProbe e livenessProbe com httpGet: {path: /, port: 80}."
+    answer_command: "kubectl edit deployment web-app  # adicione readinessProbe/livenessProbe httpGet / :80"
+    setup:
+      - description: "Criando o Deployment web-app..."
+        command: "kubectl create deployment web-app --image=nginx:1.21 --replicas=1 2>/dev/null || true"
+      - description: "Aguardando o pod ficar pronto..."
+        command: "kubectl rollout status deployment/web-app --timeout=90s 2>/dev/null || true"
+    goals:
+      - description: "**readinessProbe** httpGet configurada no path **/**"
+        hint: "readinessProbe: { httpGet: { path: /, port: 80 } }"
+        validation:
+          command: "kubectl get deploy web-app -o jsonpath='{.spec.template.spec.containers[0].readinessProbe.httpGet.path}' 2>/dev/null"
+          expected_contains: "/"
+      - description: "**livenessProbe** httpGet configurada na porta **80**"
+        hint: "livenessProbe: { httpGet: { path: /, port: 80 } }"
+        validation:
+          command: "kubectl get deploy web-app -o jsonpath='{.spec.template.spec.containers[0].livenessProbe.httpGet.port}' 2>/dev/null"
+          expected_contains: "80"
+    teardown:
+      - "kubectl delete deployment web-app --ignore-not-found=true"
+    explanation: "readinessProbe controla quando o pod entra nos endpoints do Service (recebe tráfego); livenessProbe reinicia o container se ele travar. Ambas são essenciais para aplicações web resilientes e para rolling updates sem downtime."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/"
+    doc_section: "Tasks → Configure Probes"
+
+  # ── 063 — ConfigMap como variável de ambiente ────────────────────
+  - id: cka-lab-063
+    cert: CKA
+    topic: Web Apps
+    difficulty: mid
+    type: lab
+    question: "Configure a aplicação **web-app** por ambiente:\n\n1. Crie um **ConfigMap** chamado **web-config** com a chave **APP_MODE=production**.\n2. Injete essa chave como variável de ambiente **APP_MODE** no container do Deployment **web-app**."
+    hint: "kubectl create configmap web-config --from-literal=APP_MODE=production && kubectl set env deployment/web-app --from=configmap/web-config"
+    answer_command: "kubectl create configmap web-config --from-literal=APP_MODE=production; kubectl set env deployment/web-app --from=configmap/web-config"
+    setup:
+      - description: "Criando o Deployment web-app..."
+        command: "kubectl create deployment web-app --image=nginx:1.21 --replicas=1 2>/dev/null || true"
+      - description: "Aguardando o pod ficar pronto..."
+        command: "kubectl rollout status deployment/web-app --timeout=90s 2>/dev/null || true"
+    goals:
+      - description: "ConfigMap **web-config** tem a chave **APP_MODE=production**"
+        hint: "kubectl create configmap web-config --from-literal=APP_MODE=production"
+        validation:
+          command: "kubectl get configmap web-config -o jsonpath='{.data.APP_MODE}' 2>/dev/null"
+          expected_contains: "production"
+      - description: "O container referencia o ConfigMap **web-config** via env"
+        hint: "kubectl set env deployment/web-app --from=configmap/web-config"
+        validation:
+          command: "kubectl get deploy web-app -o jsonpath='{.spec.template.spec.containers[0].env[*].valueFrom.configMapKeyRef.name}' 2>/dev/null"
+          expected_contains: "web-config"
+    teardown:
+      - "kubectl delete deployment web-app --ignore-not-found=true"
+      - "kubectl delete configmap web-config --ignore-not-found=true"
+    explanation: "ConfigMaps externalizam a configuração da aplicação. Injetados como variáveis de ambiente (envFrom/valueFrom.configMapKeyRef), permitem alterar o comportamento do app sem reconstruir a imagem — um princípio central de apps 12-factor."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/"
+    doc_section: "Tasks → ConfigMaps"
+
+  # ── 064 — Ingress ────────────────────────────────────────────────
+  - id: cka-lab-064
+    cert: CKA
+    topic: Web Apps
+    difficulty: hard
+    type: lab
+    question: "Publique a aplicação web em um host HTTP. Crie um **Ingress** chamado **web-ing** que roteia o host **web.local** (path **/**) para o Service **web-svc** na porta **80**."
+    hint: "kubectl create ingress web-ing --rule=\"web.local/*=web-svc:80\""
+    answer_command: "kubectl create ingress web-ing --rule=\"web.local/*=web-svc:80\""
+    setup:
+      - description: "Criando o Deployment web-app..."
+        command: "kubectl create deployment web-app --image=nginx:1.21 --replicas=2 2>/dev/null || true"
+      - description: "Expondo o Service web-svc..."
+        command: "kubectl expose deployment web-app --name=web-svc --port=80 2>/dev/null || true"
+      - description: "Aguardando os pods ficarem prontos..."
+        command: "kubectl rollout status deployment/web-app --timeout=90s 2>/dev/null || true"
+    goals:
+      - description: "Ingress **web-ing** existe"
+        hint: "kubectl create ingress web-ing --rule=\"web.local/*=web-svc:80\""
+        validation:
+          command: "kubectl get ingress web-ing -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "web-ing"
+      - description: "A regra usa o host **web.local**"
+        validation:
+          command: "kubectl get ingress web-ing -o jsonpath='{.spec.rules[0].host}' 2>/dev/null"
+          expected_contains: "web.local"
+      - description: "A regra aponta para o Service **web-svc**"
+        validation:
+          command: "kubectl get ingress web-ing -o jsonpath='{.spec.rules[0].http.paths[0].backend.service.name}' 2>/dev/null"
+          expected_contains: "web-svc"
+    teardown:
+      - "kubectl delete ingress web-ing --ignore-not-found=true"
+      - "kubectl delete service web-svc --ignore-not-found=true"
+      - "kubectl delete deployment web-app --ignore-not-found=true"
+    explanation: "Ingress define regras L7 (host/path) para rotear tráfego HTTP/HTTPS externo para Services internos. Requer um Ingress Controller rodando no cluster (ex.: nginx-ingress) para efetivamente atender o tráfego."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/ingress/"
+    doc_section: "Concepts → Services → Ingress"
+
+  # ── 065 — Troubleshooting: app web fora do ar (selector errado) ──
+  - id: cka-lab-065
+    cert: CKA
+    topic: Web Apps
+    difficulty: hard
+    type: lab
+    question: "🔧 **Incidente:** a aplicação **shop** está fora do ar — o Service **shop-svc** não entrega tráfego a nenhum pod (endpoints vazios).\n\nOs pods do Deployment **shop** usam a label **app=shop**, mas o Service foi criado com o **selector errado**. Corrija o selector do Service para restaurar a aplicação."
+    hint: "Compare 'kubectl describe svc shop-svc' (Selector) com 'kubectl get pods --show-labels'. Corrija com: kubectl patch svc shop-svc -p '{\"spec\":{\"selector\":{\"app\":\"shop\"}}}'"
+    answer_command: "kubectl patch svc shop-svc -p '{\"spec\":{\"selector\":{\"app\":\"shop\"}}}'"
+    setup:
+      - description: "Criando o Deployment shop (app=shop)..."
+        command: "kubectl create deployment shop --image=nginx:1.21 --replicas=2 2>/dev/null || true"
+      - description: "Aguardando os pods ficarem prontos..."
+        command: "kubectl rollout status deployment/shop --timeout=90s 2>/dev/null || true"
+      - description: "Criando o Service shop-svc com selector QUEBRADO (app=store)..."
+        command: "kubectl create service clusterip shop-svc --tcp=80:80 2>/dev/null || true; kubectl set selector service shop-svc 'app=store' 2>/dev/null || true"
+    goals:
+      - description: "O selector do Service aponta para **app=shop**"
+        hint: "kubectl patch svc shop-svc -p '{\"spec\":{\"selector\":{\"app\":\"shop\"}}}'"
+        validation:
+          command: "kubectl get svc shop-svc -o jsonpath='{.spec.selector.app}' 2>/dev/null"
+          expected_contains: "shop"
+      - description: "🌐 A aplicação **voltou ao ar** (endpoints populados)"
+        validation:
+          command: "kubectl get endpoints shop-svc -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -qE '[0-9]' && echo RECOVERED || echo STILL-DOWN"
+          expected_contains: "RECOVERED"
+    teardown:
+      - "kubectl delete service shop-svc --ignore-not-found=true"
+      - "kubectl delete deployment shop --ignore-not-found=true"
+    explanation: "Um Service encontra seus pods pelo selector de labels. Se o selector não casa com as labels dos pods, os endpoints ficam vazios e o tráfego não chega — a aplicação parece 'fora do ar' mesmo com pods saudáveis. Diagnóstico: describe svc (selector) vs get pods --show-labels."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/service/#defining-a-service"
+    doc_section: "Services → Selector & Endpoints"
+
+  # ── 066 — Verificar disponibilidade (endpoints) ──────────────────
+  - id: cka-lab-066
+    cert: CKA
+    topic: Web Apps
+    difficulty: easy
+    type: lab
+    question: "A aplicação **web-app** já está exposta pelo Service **web-svc**. Confirme que ela está **no ar**, verificando que o Service possui **endpoints** (pods prontos associados).\n\nUse o terminal para inspecionar e então valide."
+    hint: "kubectl get endpoints web-svc   (ou: kubectl get ep web-svc)"
+    answer_command: "kubectl get endpoints web-svc"
+    setup:
+      - description: "Criando o Deployment web-app..."
+        command: "kubectl create deployment web-app --image=nginx:1.21 --replicas=2 2>/dev/null || true"
+      - description: "Expondo o Service web-svc..."
+        command: "kubectl expose deployment web-app --name=web-svc --port=80 2>/dev/null || true"
+      - description: "Aguardando os pods ficarem prontos..."
+        command: "kubectl rollout status deployment/web-app --timeout=90s 2>/dev/null || true"
+    goals:
+      - description: "🌐 O Service **web-svc** tem **endpoints ativos** (app respondendo)"
+        hint: "kubectl get endpoints web-svc — deve listar IPs dos pods."
+        validation:
+          command: "kubectl get endpoints web-svc -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -qE '[0-9]' && echo REACHABLE || echo DOWN"
+          expected_contains: "REACHABLE"
+    teardown:
+      - "kubectl delete service web-svc --ignore-not-found=true"
+      - "kubectl delete deployment web-app --ignore-not-found=true"
+    explanation: "'kubectl get endpoints' (ou get ep) mostra os IPs dos pods que estão prontos e casam com o selector do Service. Endpoints não-vazios são a prova de que a aplicação web está de pé e apta a receber tráfego."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/service/#endpoints"
+    doc_section: "Services → Endpoints"
+
+  # ── 067 — Capstone: deploy + expose completo ─────────────────────
+  - id: cka-lab-067
+    cert: CKA
+    topic: Web Apps
+    difficulty: mid
+    type: lab
+    question: "Deploy completo de uma aplicação web do zero:\n\n1. Crie o **Deployment frontend** (imagem **nginx:1.21**, **3 réplicas**).\n2. Exponha-o com um **Service NodePort** chamado **frontend-svc** na porta **80**.\n\nAo final, a aplicação deve estar **acessível** (endpoints ativos)."
+    hint: "kubectl create deployment frontend --image=nginx:1.21 --replicas=3 ; kubectl expose deployment frontend --name=frontend-svc --type=NodePort --port=80"
+    answer_command: "kubectl create deployment frontend --image=nginx:1.21 --replicas=3; kubectl expose deployment frontend --name=frontend-svc --type=NodePort --port=80"
+    goals:
+      - description: "Deployment **frontend** com **3 réplicas** prontas"
+        hint: "kubectl create deployment frontend --image=nginx:1.21 --replicas=3"
+        validation:
+          command: "kubectl get deploy frontend -o jsonpath='{.status.readyReplicas}' 2>/dev/null"
+          expected_contains: "3"
+      - description: "Service **frontend-svc** do tipo **NodePort**"
+        hint: "kubectl expose deployment frontend --name=frontend-svc --type=NodePort --port=80"
+        validation:
+          command: "kubectl get svc frontend-svc -o jsonpath='{.spec.type}' 2>/dev/null"
+          expected_contains: "NodePort"
+      - description: "🌐 A aplicação está **acessível** (endpoints ativos)"
+        validation:
+          command: "kubectl get endpoints frontend-svc -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -qE '[0-9]' && echo REACHABLE || echo DOWN"
+          expected_contains: "REACHABLE"
+    teardown:
+      - "kubectl delete service frontend-svc --ignore-not-found=true"
+      - "kubectl delete deployment frontend --ignore-not-found=true"
+    explanation: "O fluxo Deployment → Service é o padrão para publicar aplicações web no Kubernetes: o Deployment garante as réplicas, o Service dá um endereço estável e balanceia o tráfego entre os pods prontos. NodePort torna a app acessível de fora do cluster."
+    doc_url: "https://kubernetes.io/docs/tutorials/kubernetes-basics/expose/expose-intro/"
+    doc_section: "Tutorials → Expose Your App"

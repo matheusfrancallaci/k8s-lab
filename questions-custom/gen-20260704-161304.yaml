@@ -1,0 +1,73 @@
+questions:
+    - id: custom-9cbc04d4
+      cert: CKA
+      topic: Custom
+      difficulty: mid
+      type: multiple_choice
+      question: Qual é o nome do componente responsável por gerenciar e distribuir os pods em um cluster de Kubernetes?
+      options:
+        - kubelet
+        - kube-proxy
+        - etcd
+        - kube-scheduler
+      answer: 2
+      explanation: |-
+        O kube-scheduler é o componente que avalia as condições dos nós e decide qual nó será atribuído a um novo pod.
+
+        (gerada pela IA local a partir da sua documentação)
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-434f5888
+      cert: CKA
+      topic: Custom
+      difficulty: mid
+      type: multiple_choice
+      question: Qual é o propósito do componente 'kubelet'?
+      options:
+        - Executa a execução de pods
+        - Gerencia os recursos do cluster
+        - Avalia as condições dos nós
+        - Monitora o estado do cluster
+      answer: 1
+      explanation: |-
+        O kubelet é responsável por executar as instruções recebidas pelo kube-scheduler e realizar outras tarefas relacionadas à execução dos pods.
+
+        (gerada pela IA local a partir da sua documentação)
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-5cdc995c
+      cert: CKA
+      topic: Custom
+      difficulty: mid
+      type: multiple_choice
+      question: Qual é o componente que armazena a configuração e dados do cluster de Kubernetes?
+      options:
+        - kube-proxy
+        - etcd
+        - kube-scheduler
+        - kubelet
+      answer: 3
+      explanation: |-
+        O etcd é um banco de dados no-memory que armazena a configuração e dados do cluster, incluindo informações sobre os nodes, pods e serviços.
+
+        (gerada pela IA local a partir da sua documentação)
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []

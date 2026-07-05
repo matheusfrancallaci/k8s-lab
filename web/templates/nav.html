@@ -1,0 +1,53 @@
+{{define "sidebar"}}
+<aside class="sidebar">
+    <a href="/" class="sb-brand">
+        <img src="/static/vendor/kubernetes.svg" alt="">
+        <span class="t">k8s-lab</span>
+    </a>
+
+    <p class="sb-section" data-i18n="nav.study">estudar</p>
+    <a href="/" class="sb-link{{if eq .NavActive "home"}} active{{end}}">
+        <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+        <span data-i18n="nav.home">Início</span>
+    </a>
+    <a href="/practice" class="sb-link{{if eq .NavActive "quiz"}} active{{end}}">
+        <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 0-2.5-2.5H2V2z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 1 2.5-2.5H22V2z"/></svg>
+        <span data-i18n="nav.practice">Prova Teórica</span>
+    </a>
+    <a href="/lab" class="sb-link{{if eq .NavActive "labs"}} active{{end}}">
+        <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+        <span data-i18n="nav.labs">Laboratórios</span>
+    </a>
+    <a href="/tutor" class="sb-link{{if eq .NavActive "tutor"}} active{{end}}">
+        <svg viewBox="0 0 64 64" fill="none"><rect x="10" y="12" width="44" height="39" rx="12" stroke="currentColor" stroke-width="5" fill="none"/><circle cx="23.5" cy="29" r="5" fill="currentColor"/><circle cx="40.5" cy="29" r="5" fill="currentColor"/><path d="M24 40c2.6 3.2 13.4 3.2 16 0" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg>
+        Tutor
+    </a>
+
+    <p class="sb-section" data-i18n="nav.platform">plataforma</p>
+    <a href="/cloud" class="sb-link{{if eq .NavActive "cloud"}} active{{end}}">
+        <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9Z"/></svg>
+        Cloud
+    </a>
+    <a href="/tools" class="sb-link{{if eq .NavActive "tools"}} active{{end}}">
+        <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        Instalações
+    </a>
+    <a href="/onpremise" class="sb-link{{if eq .NavActive "onprem"}} active{{end}}">
+        <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
+        On-premise
+    </a>
+    <a href="/argocd" class="sb-link{{if eq .NavActive "argocd"}} active{{end}}">
+        <img src="https://raw.githubusercontent.com/cncf/artwork/main/projects/argo/icon/color/argo-icon-color.png" alt="">
+        ArgoCD
+    </a>
+    <a href="/docs" class="sb-link{{if eq .NavActive "docs"}} active{{end}}">
+        <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+        Docs
+    </a>
+
+    <div class="sb-foot">
+        ⎈ k8s study lab<br>
+        CKA · CKAD · CKS · ArgoCD
+    </div>
+</aside>
+{{end}}

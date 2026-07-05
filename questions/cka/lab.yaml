@@ -1,0 +1,1223 @@
+questions:
+  # ── EASY: Core Concepts ───────────────────────────────────
+  - id: cka-lab-001
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Crie um Pod chamado **nginx-pod** usando a imagem **nginx:1.21** no namespace **default**.\n\nO Pod deve estar Running e usando a imagem correta."
+    options:
+      - "kubectl apply pod nginx-pod --image=nginx:1.21"
+      - "kubectl run nginx-pod --image=nginx:1.21"
+      - "kubectl create pod nginx-pod --image=nginx:1.21"
+      - "kubectl deploy nginx-pod --image=nginx:1.21"
+    answer: 1
+    hint: "kubectl run <nome> --image=<imagem>"
+    answer_command: "kubectl run nginx-pod --image=nginx:1.21"
+    goals:
+      - description: "Pod **nginx-pod** existe no namespace **default**"
+        hint: "kubectl run nginx-pod --image=nginx:1.21"
+        validation:
+          command: "kubectl get pod nginx-pod -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "nginx-pod"
+      - description: "Pod está usando a imagem **nginx:1.21**"
+        validation:
+          command: "kubectl get pod nginx-pod -o jsonpath='{.spec.containers[0].image}' 2>/dev/null"
+          expected_contains: "nginx:1.21"
+      - description: "Pod está no estado **Running**"
+        validation:
+          command: "kubectl get pod nginx-pod -o jsonpath='{.status.phase}' 2>/dev/null"
+          expected_contains: "Running"
+    teardown:
+      - "kubectl delete pod nginx-pod --ignore-not-found=true"
+    explanation: "kubectl run cria um Pod diretamente. A flag --image define a imagem do container. Pods são a menor unidade deployável no Kubernetes."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/pods/"
+    doc_section: "Concepts → Workloads → Pods"
+
+  - id: cka-lab-002
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Liste todos os pods em **todos os namespaces** com um único comando."
+    options:
+      - "kubectl get pods --namespace=all"
+      - "kubectl list pods --all"
+      - "kubectl get pods -A"
+      - "kubectl get pods --include-all-namespaces"
+    answer: 2
+    hint: "kubectl get pods <flag>"
+    answer_command: "kubectl get pods -A"
+    explanation: "-A é o atalho para --all-namespaces. Lista pods em todos os namespaces simultaneamente."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/cheatsheet/"
+    doc_section: "kubectl Cheat Sheet"
+
+  - id: cka-lab-003
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Crie um namespace chamado **estudos** e verifique se ele foi criado corretamente."
+    options:
+      - "kubectl create namespace estudos"
+      - "kubectl new namespace estudos"
+      - "kubectl add ns estudos"
+      - "kubectl init namespace estudos"
+    answer: 0
+    hint: "kubectl create namespace <nome>"
+    answer_command: "kubectl create namespace estudos"
+    goals:
+      - description: "Namespace **estudos** existe no cluster"
+        hint: "kubectl create namespace estudos"
+        validation:
+          command: "kubectl get namespace estudos -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "estudos"
+      - description: "Namespace está no status **Active**"
+        validation:
+          command: "kubectl get namespace estudos -o jsonpath='{.status.phase}' 2>/dev/null"
+          expected_contains: "Active"
+    teardown:
+      - "kubectl delete namespace estudos --ignore-not-found=true"
+    explanation: "kubectl create namespace (ou kubectl create ns) cria um novo namespace. Namespaces isolam recursos dentro do cluster."
+    doc_url: "https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/"
+    doc_section: "Concepts → Namespaces"
+
+  - id: cka-lab-004
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Liste os pods apenas no namespace **kube-system**."
+    options:
+      - "kubectl get pods --ns=kube-system"
+      - "kubectl get pods -n kube-system"
+      - "kubectl list pods kube-system"
+      - "kubectl get pods --namespace-filter=kube-system"
+    answer: 1
+    answer_command: "kubectl get pods -n kube-system"
+    explanation: "-n (ou --namespace) filtra recursos de um namespace específico. kube-system contém componentes do Kubernetes como CoreDNS e kube-proxy."
+    doc_url: "https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/"
+    doc_section: "Concepts → Namespaces"
+
+  - id: cka-lab-005
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Exiba os detalhes do pod **nginx** incluindo seus eventos.\n\nO pod já foi criado para você. Use o comando correto para ver spec, status e Events."
+    answer_command: "kubectl describe pod nginx"
+    hint: "kubectl describe exibe spec, status, condições e Events do recurso."
+    setup:
+      - description: "Criando pod nginx..."
+        command: "kubectl run nginx --image=nginx:1.21 --restart=Never 2>/dev/null || true"
+      - description: "Aguardando pod ficar pronto..."
+        command: "kubectl wait --for=condition=ready pod/nginx --timeout=60s 2>/dev/null || true"
+    teardown:
+      - "kubectl delete pod nginx --ignore-not-found=true"
+    goals:
+      - description: "Execute `kubectl describe pod nginx` — a saída deve conter a seção **Events**"
+        validation:
+          command: "kubectl describe pod nginx 2>/dev/null | grep -c 'Events:'"
+          expected_contains: "1"
+      - description: "Pod **nginx** está no estado **Running**"
+        validation:
+          command: "kubectl get pod nginx -o jsonpath='{.status.phase}' 2>/dev/null"
+          expected_contains: "Running"
+    explanation: "kubectl describe exibe detalhes completos: spec, status, condições e Events. Events são essenciais para diagnóstico de problemas."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/cheatsheet/"
+    doc_section: "kubectl Cheat Sheet → Viewing Resources"
+
+  - id: cka-lab-006
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Execute o comando **ls /var/log** dentro do pod **app-pod**.\n\nO pod já foi criado. Use kubectl exec para rodar o comando dentro do container."
+    answer_command: "kubectl exec app-pod -- ls /var/log"
+    hint: "kubectl exec <pod> -- <command>"
+    setup:
+      - description: "Criando pod app-pod..."
+        command: "kubectl run app-pod --image=busybox:1.35 --restart=Never --command -- sleep 3600 2>/dev/null || true"
+      - description: "Aguardando pod ficar pronto..."
+        command: "kubectl wait --for=condition=ready pod/app-pod --timeout=60s 2>/dev/null || true"
+    teardown:
+      - "kubectl delete pod app-pod --ignore-not-found=true"
+    goals:
+      - description: "Comando `ls /var/log` executado dentro do **app-pod**"
+        validation:
+          command: "kubectl exec app-pod -- ls /var/log 2>/dev/null | grep -c '.'"
+          expected_contains: "1"
+    explanation: "kubectl exec executa comandos em um container rodando. O '--' separa os argumentos do kubectl dos do comando."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-application/get-shell-running-container/"
+    doc_section: "Tasks → Debug → Shell Into Container"
+
+  - id: cka-lab-007
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Visualize os logs do pod **nginx-pod**."
+    options:
+      - "kubectl get logs nginx-pod"
+      - "kubectl describe nginx-pod --logs"
+      - "kubectl log nginx-pod"
+      - "kubectl logs nginx-pod"
+    answer: 3
+    answer_command: "kubectl logs nginx-pod"
+    setup:
+      - description: "Criando pod nginx-pod..."
+        command: "kubectl run nginx-pod --image=nginx:1.21 --restart=Never 2>/dev/null || true"
+      - description: "Aguardando pod ficar pronto..."
+        command: "kubectl wait --for=condition=ready pod/nginx-pod --timeout=90s 2>/dev/null || true"
+    teardown:
+      - "kubectl delete pod nginx-pod --ignore-not-found=true"
+    goals:
+      - description: "Execute `kubectl logs nginx-pod` — o comando deve funcionar sem erro"
+        validation:
+          command: "kubectl logs nginx-pod 2>/dev/null && echo 'logs_ok'"
+          expected_contains: "logs_ok"
+      - description: "Pod **nginx-pod** está no estado **Running**"
+        validation:
+          command: "kubectl get pod nginx-pod -o jsonpath='{.status.phase}' 2>/dev/null"
+          expected_contains: "Running"
+    explanation: "kubectl logs exibe stdout/stderr do container. Use -f para streaming em tempo real, --previous para logs do crash anterior, -c para container específico."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/cheatsheet/#interacting-with-running-pods"
+    doc_section: "kubectl Cheat Sheet → Interacting with Pods"
+
+  - id: cka-lab-008
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Adicione a label **env=production** ao pod **api-pod**.\n\nO pod já existe. Adicione a label sem recriar o recurso."
+    answer_command: "kubectl label pod api-pod env=production"
+    hint: "kubectl label <resource> <name> <key>=<value>"
+    setup:
+      - description: "Criando pod api-pod..."
+        command: "kubectl run api-pod --image=nginx:1.21 --restart=Never 2>/dev/null || true"
+      - description: "Aguardando pod ficar pronto..."
+        command: "kubectl wait --for=condition=ready pod/api-pod --timeout=60s 2>/dev/null || true"
+    teardown:
+      - "kubectl delete pod api-pod --ignore-not-found=true"
+    goals:
+      - description: "Pod **api-pod** tem label `env=production`"
+        validation:
+          command: "kubectl get pod api-pod -o jsonpath='{.metadata.labels.env}' 2>/dev/null"
+          expected_contains: "production"
+    explanation: "kubectl label adiciona ou modifica labels em recursos existentes. Labels são pares chave-valor usados para organizar e selecionar recursos. Use --overwrite para modificar uma label existente."
+    doc_url: "https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/"
+    doc_section: "Concepts → Labels and Selectors"
+
+  - id: cka-lab-009
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Exporte a definição YAML do pod **nginx** para o arquivo **/tmp/nginx.yaml**.\n\nO pod já existe no namespace default."
+    answer_command: "kubectl get pod nginx -o yaml > /tmp/nginx.yaml"
+    hint: "Use -o yaml e redirecione a saída para um arquivo."
+    setup:
+      - description: "Criando pod nginx..."
+        command: "kubectl run nginx --image=nginx:1.21 --restart=Never 2>/dev/null || true"
+      - description: "Aguardando pod ficar pronto..."
+        command: "kubectl wait --for=condition=ready pod/nginx --timeout=60s 2>/dev/null || true"
+    teardown:
+      - "kubectl delete pod nginx --ignore-not-found=true"
+      - "rm -f /tmp/nginx.yaml"
+    goals:
+      - description: "Arquivo **/tmp/nginx.yaml** criado com a definição do pod"
+        validation:
+          command: "cat /tmp/nginx.yaml 2>/dev/null | grep -c 'kind: Pod'"
+          expected_contains: "1"
+    explanation: "-o yaml formata a saída como YAML. Redirecionar para um arquivo salva a definição completa do recurso para reutilização ou edição."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/cheatsheet/"
+    doc_section: "kubectl Cheat Sheet"
+
+  - id: cka-lab-010
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Delete o pod **old-pod** sem aguardar o grace period.\n\nO pod já existe. Force a deleção imediata."
+    answer_command: "kubectl delete pod old-pod --grace-period=0 --force"
+    hint: "Use --grace-period=0 --force para deleção imediata."
+    setup:
+      - description: "Criando pod old-pod..."
+        command: "kubectl run old-pod --image=nginx:1.21 --restart=Never 2>/dev/null || true"
+      - description: "Aguardando pod ficar pronto..."
+        command: "kubectl wait --for=condition=ready pod/old-pod --timeout=60s 2>/dev/null || true"
+    goals:
+      - description: "Pod **old-pod** não existe mais no cluster"
+        validation:
+          command: "kubectl get pod old-pod 2>&1"
+          expected_contains: "not found"
+    explanation: "--grace-period=0 --force força a deleção imediata sem aguardar o shutdown gracioso. Use com cautela em produção pois pode deixar recursos pendentes."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination"
+    doc_section: "Concepts → Pods → Lifecycle → Pod Termination"
+
+  - id: cka-lab-011
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Liste todos os pods que têm a label **app=frontend** em todos os namespaces."
+    options:
+      - "kubectl get pods -A --filter app=frontend"
+      - "kubectl get pods -A -l app=frontend"
+      - "kubectl get pods --label app=frontend -A"
+      - "kubectl filter pods app=frontend -A"
+    answer: 1
+    answer_command: "kubectl get pods -A -l app=frontend"
+    explanation: "-l (--selector) filtra por label. Pode usar expressões: -l 'app=frontend,tier!=db' ou -l 'env in (prod,staging)'."
+    doc_url: "https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/"
+    doc_section: "Concepts → Labels and Selectors"
+
+  - id: cka-lab-012
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Copie o arquivo **/etc/passwd** do pod **debug-pod** para o diretório local **/tmp/**."
+    options:
+      - "kubectl get file debug-pod:/etc/passwd /tmp/"
+      - "kubectl cp debug-pod:/etc/passwd /tmp/passwd"
+      - "kubectl download debug-pod /etc/passwd /tmp/"
+      - "kubectl exec debug-pod -- cat /etc/passwd > /tmp/passwd"
+    answer: 1
+    answer_command: "kubectl cp debug-pod:/etc/passwd /tmp/passwd"
+    setup:
+      - description: "Criando pod debug-pod..."
+        command: "kubectl run debug-pod --image=busybox:1.35 --restart=Never --command -- sleep 3600 2>/dev/null || true"
+      - description: "Aguardando pod ficar pronto..."
+        command: "kubectl wait --for=condition=ready pod/debug-pod --timeout=60s 2>/dev/null || true"
+    goals:
+      - description: "Arquivo **/tmp/passwd** copiado do pod com `kubectl cp debug-pod:/etc/passwd /tmp/passwd`"
+        hint: "kubectl cp debug-pod:/etc/passwd /tmp/passwd"
+        validation:
+          command: "cat /tmp/passwd 2>/dev/null | grep -c 'root'"
+          expected_contains: "1"
+    teardown:
+      - "kubectl delete pod debug-pod --ignore-not-found=true"
+      - "rm -f /tmp/passwd"
+    explanation: "kubectl cp copia arquivos de/para pods. Formato: kubectl cp <pod>:<src-path> <dest-path> (do pod para local) ou kubectl cp <src-path> <pod>:<dest-path> (do local para pod)."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/generated/kubectl_cp/"
+    doc_section: "Reference → kubectl cp"
+
+  - id: cka-lab-013
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Encaminhe a porta local **8080** para a porta **80** do pod **web-pod**."
+    options:
+      - "kubectl forward web-pod 8080:80"
+      - "kubectl port-forward web-pod 8080:80"
+      - "kubectl expose pod web-pod --port=8080 --target-port=80"
+      - "kubectl tunnel web-pod --local=8080 --remote=80"
+    answer: 1
+    answer_command: "kubectl port-forward web-pod 8080:80"
+    explanation: "kubectl port-forward cria um túnel da porta local para o pod. Útil para acessar pods sem criar um Service. Formato: <porta-local>:<porta-pod>."
+    doc_url: "https://kubernetes.io/docs/tasks/access-application-cluster/port-forward-access-application-cluster/"
+    doc_section: "Tasks → Access Applications → Port Forward"
+
+  - id: cka-lab-014
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Crie um Pod chamado **busybox-sleep** com a imagem **busybox** que execute **sleep 3600**."
+    options:
+      - "kubectl run busybox-sleep --image=busybox --command sleep 3600"
+      - "kubectl run busybox-sleep --image=busybox -- sleep 3600"
+      - "kubectl create pod busybox-sleep --image=busybox --args='sleep 3600'"
+      - "kubectl run busybox-sleep --image=busybox --exec=sleep 3600"
+    answer: 1
+    hint: "kubectl run busybox-sleep --image=busybox -- sleep 3600"
+    answer_command: "kubectl run busybox-sleep --image=busybox -- sleep 3600"
+    goals:
+      - description: "Pod **busybox-sleep** existe no cluster"
+        hint: "kubectl run busybox-sleep --image=busybox -- sleep 3600"
+        validation:
+          command: "kubectl get pod busybox-sleep -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "busybox-sleep"
+      - description: "Pod está executando o comando **sleep**"
+        validation:
+          command: "kubectl get pod busybox-sleep -o jsonpath='{.spec.containers[0].args}' 2>/dev/null"
+          expected_contains: "sleep"
+    teardown:
+      - "kubectl delete pod busybox-sleep --ignore-not-found=true"
+    explanation: "O '--' separa os argumentos do kubectl do comando do container. Sem ele, sleep 3600 seria interpretado como argumento do kubectl run. '--command' (com --) substitui o entrypoint da imagem."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/generated/kubectl_run/"
+    doc_section: "Reference → kubectl run"
+
+  - id: cka-lab-015
+    cert: CKA
+    topic: Storage
+    difficulty: easy
+    type: lab
+    question: "Crie um ConfigMap chamado **app-config** com a chave **DB_HOST=postgres** e **DB_PORT=5432**."
+    options:
+      - "kubectl create configmap app-config --set DB_HOST=postgres --set DB_PORT=5432"
+      - "kubectl create configmap app-config --from-literal=DB_HOST=postgres --from-literal=DB_PORT=5432"
+      - "kubectl apply configmap app-config DB_HOST=postgres DB_PORT=5432"
+      - "kubectl create configmap app-config --data 'DB_HOST=postgres,DB_PORT=5432'"
+    answer: 1
+    answer_command: "kubectl create configmap app-config --from-literal=DB_HOST=postgres --from-literal=DB_PORT=5432"
+    validation:
+      command: "kubectl get configmap app-config -o jsonpath='{.data.DB_HOST}'"
+      expected_contains: "postgres"
+    teardown:
+      - "kubectl delete configmap app-config --ignore-not-found=true"
+    explanation: "--from-literal aceita múltiplos pares chave=valor. --from-file cria a partir de arquivos. --from-env-file lê um arquivo .env."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/"
+    doc_section: "Tasks → Configure Pod → ConfigMap"
+
+  - id: cka-lab-016
+    cert: CKA
+    topic: Storage
+    difficulty: easy
+    type: lab
+    question: "Crie um Secret genérico chamado **db-secret** com a chave **password=S3cret123**."
+    options:
+      - "kubectl create secret generic db-secret --key=password=S3cret123"
+      - "kubectl create secret generic db-secret --from-literal=password=S3cret123"
+      - "kubectl create secret db-secret password=S3cret123"
+      - "kubectl apply secret generic db-secret --data password=S3cret123"
+    answer: 1
+    answer_command: "kubectl create secret generic db-secret --from-literal=password=S3cret123"
+    validation:
+      command: "kubectl get secret db-secret -o jsonpath='{.data.password}'"
+      expected_contains: "UzNjcmV0MTIz"
+    teardown:
+      - "kubectl delete secret db-secret --ignore-not-found=true"
+    explanation: "Secrets do tipo 'generic' armazenam pares chave-valor com encode base64 automático. Use --from-literal para valores inline ou --from-file para arquivos."
+    doc_url: "https://kubernetes.io/docs/concepts/configuration/secret/"
+    doc_section: "Concepts → Configuration → Secrets"
+
+  - id: cka-lab-017
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Obtenha o IP do pod **api-pod** usando jsonpath."
+    options:
+      - "kubectl get pod api-pod --field=.status.podIP"
+      - "kubectl get pod api-pod -o jsonpath='{.status.podIP}'"
+      - "kubectl describe pod api-pod | grep IP"
+      - "kubectl get pod api-pod --ip"
+    answer: 1
+    answer_command: "kubectl get pod api-pod -o jsonpath='{.status.podIP}'"
+    explanation: "-o jsonpath permite extrair campos específicos do JSON de resposta. Útil em scripts. Alternativa: -o custom-columns=IP:.status.podIP ou -o go-template='{{.status.podIP}}'."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/jsonpath/"
+    doc_section: "Reference → JSONPath Support"
+
+  - id: cka-lab-018
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Liste todos os recursos em todos os namespaces (pods, services, deployments) de uma vez."
+    options:
+      - "kubectl get all -A"
+      - "kubectl list resources -A"
+      - "kubectl get everything -A"
+      - "kubectl get pods,svc,deployments -A"
+    answer: 0
+    answer_command: "kubectl get all -A"
+    explanation: "kubectl get all lista os recursos mais comuns (pods, services, deployments, replicasets, statefulsets, daemonsets, jobs, cronjobs). Não inclui configmaps, secrets, pvc etc."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/cheatsheet/"
+    doc_section: "kubectl Cheat Sheet"
+
+  # ── EASY: Workloads ───────────────────────────────────────
+  - id: cka-lab-019
+    cert: CKA
+    topic: Workloads
+    difficulty: easy
+    type: lab
+    question: "Crie um Deployment chamado **nginx-deploy** com a imagem **nginx:1.21** e **3 réplicas**.\n\nVerifique que o Deployment está pronto e que os pods estão Running."
+    options:
+      - "kubectl run nginx-deploy --image=nginx:1.21 --replicas=3"
+      - "kubectl create deployment nginx-deploy --image=nginx:1.21 --replicas=3"
+      - "kubectl deploy nginx-deploy --image=nginx:1.21 --count=3"
+      - "kubectl new deployment nginx-deploy --image=nginx:1.21 --scale=3"
+    answer: 1
+    hint: "kubectl create deployment <nome> --image=<imagem> --replicas=<n>"
+    answer_command: "kubectl create deployment nginx-deploy --image=nginx:1.21 --replicas=3"
+    goals:
+      - description: "Deployment **nginx-deploy** existe no cluster"
+        hint: "kubectl create deployment nginx-deploy --image=nginx:1.21 --replicas=3"
+        validation:
+          command: "kubectl get deployment nginx-deploy -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "nginx-deploy"
+      - description: "Deployment tem **3 réplicas** configuradas"
+        validation:
+          command: "kubectl get deployment nginx-deploy -o jsonpath='{.spec.replicas}' 2>/dev/null"
+          expected_contains: "3"
+      - description: "Deployment está usando a imagem **nginx:1.21**"
+        validation:
+          command: "kubectl get deployment nginx-deploy -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null"
+          expected_contains: "nginx:1.21"
+    teardown:
+      - "kubectl delete deployment nginx-deploy --ignore-not-found=true"
+    explanation: "kubectl create deployment cria um Deployment gerenciado por um ReplicaSet. --replicas define quantas instâncias do pod são mantidas."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"
+    doc_section: "Concepts → Workloads → Deployments"
+
+  - id: cka-lab-020
+    cert: CKA
+    topic: Workloads
+    difficulty: easy
+    type: lab
+    question: "Verifique o status do rollout do Deployment **api-deploy**."
+    options:
+      - "kubectl get rollout deployment/api-deploy"
+      - "kubectl rollout status deployment/api-deploy"
+      - "kubectl check rollout api-deploy"
+      - "kubectl describe rollout api-deploy"
+    answer: 1
+    answer_command: "kubectl rollout status deployment/api-deploy"
+    setup:
+      - description: "Criando deployment api-deploy..."
+        command: "kubectl create deployment api-deploy --image=nginx:1.21 --replicas=2 2>/dev/null || true"
+      - description: "Aguardando rollout completar..."
+        command: "kubectl rollout status deployment/api-deploy --timeout=60s 2>/dev/null || true"
+    goals:
+      - description: "Execute `kubectl rollout status deployment/api-deploy` — deve mostrar **successfully rolled out**"
+        validation:
+          command: "kubectl rollout status deployment/api-deploy 2>/dev/null"
+          expected_contains: "successfully rolled out"
+    teardown:
+      - "kubectl delete deployment api-deploy --ignore-not-found=true"
+    explanation: "kubectl rollout status monitora o progresso de um rollout. Aguarda até o Deployment estar Available ou retorna erro se travar. Funciona com Deployment, StatefulSet e DaemonSet."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/generated/kubectl_rollout/kubectl_rollout_status/"
+    doc_section: "Reference → kubectl rollout status"
+
+  - id: cka-lab-021
+    cert: CKA
+    topic: Workloads
+    difficulty: easy
+    type: lab
+    question: "Gere o YAML de um Pod com a imagem **redis:7** sem criá-lo no cluster."
+    options:
+      - "kubectl run redis --image=redis:7 --preview -o yaml"
+      - "kubectl run redis --image=redis:7 --dry-run=client -o yaml"
+      - "kubectl generate pod redis --image=redis:7 -o yaml"
+      - "kubectl template pod redis --image=redis:7"
+    answer: 1
+    answer_command: "kubectl run redis --image=redis:7 --dry-run=client -o yaml"
+    explanation: "--dry-run=client simula a criação sem enviar ao servidor. Combinado com -o yaml gera o manifesto para editar antes de aplicar. Útil para criar templates customizados."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/conventions/"
+    doc_section: "Reference → kubectl → Conventions"
+
+  - id: cka-lab-022
+    cert: CKA
+    topic: Workloads
+    difficulty: easy
+    type: lab
+    question: "Liste o histórico de revisões do Deployment **web-deploy**."
+    options:
+      - "kubectl get revisions deployment/web-deploy"
+      - "kubectl rollout history deployment/web-deploy"
+      - "kubectl describe deployment web-deploy --history"
+      - "kubectl log deployment/web-deploy --revisions"
+    answer: 1
+    answer_command: "kubectl rollout history deployment/web-deploy"
+    explanation: "kubectl rollout history mostra as revisões do Deployment. Adicione --revision=N para ver os detalhes de uma revisão específica. Use 'kubectl rollout undo --to-revision=N' para reverter para uma revisão."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#rolling-back-a-deployment"
+    doc_section: "Concepts → Deployments → Rolling Back"
+
+  - id: cka-lab-023
+    cert: CKA
+    topic: Workloads
+    difficulty: easy
+    type: lab
+    question: "Crie um Job chamado **pi-job** que execute **perl -Mbignum=bpi -wle 'print bpi(2000)'** com a imagem **perl:5**."
+    options:
+      - "kubectl create job pi-job --image=perl:5 -- perl -Mbignum=bpi -wle 'print bpi(2000)'"
+      - "kubectl run pi-job --image=perl:5 --restart=OnFailure -- perl -Mbignum=bpi -wle 'print bpi(2000)'"
+      - "kubectl create cronjob pi-job --image=perl:5 -- perl -Mbignum=bpi -wle 'print bpi(2000)'"
+      - "kubectl deploy job pi-job --image=perl:5 -- perl -Mbignum=bpi -wle 'print bpi(2000)'"
+    answer: 0
+    answer_command: "kubectl create job pi-job --image=perl:5 -- perl -Mbignum=bpi -wle 'print bpi(2000)'"
+    teardown:
+      - "kubectl delete job pi-job --ignore-not-found=true"
+    explanation: "kubectl create job cria um Job que executa o comando até completar. Jobs são para tarefas que devem ser executadas até conclusão, não continuamente."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/job/"
+    doc_section: "Concepts → Workloads → Jobs"
+
+  # ── EASY: Services ────────────────────────────────────────
+  - id: cka-lab-024
+    cert: CKA
+    topic: Services
+    difficulty: easy
+    type: lab
+    question: "Exponha o Deployment **web-deploy** como Service **NodePort** na porta **80**."
+    options:
+      - "kubectl expose deployment web-deploy --port=80 --type=NodePort"
+      - "kubectl create service nodeport web-deploy --port=80"
+      - "kubectl expose web-deploy --nodeport=80"
+      - "kubectl service create web-deploy --type=NodePort --port=80"
+    answer: 0
+    answer_command: "kubectl expose deployment web-deploy --port=80 --type=NodePort"
+    setup:
+      - description: "Criando deployment web-deploy..."
+        command: "kubectl create deployment web-deploy --image=nginx:1.21"
+    validation:
+      command: "kubectl get service web-deploy -o jsonpath='{.spec.type}'"
+      expected_contains: "NodePort"
+    teardown:
+      - "kubectl delete service web-deploy --ignore-not-found=true"
+      - "kubectl delete deployment web-deploy --ignore-not-found=true"
+    explanation: "kubectl expose cria um Service para expor recursos. NodePort expõe em uma porta estática (30000-32767) em cada nó do cluster."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/service/"
+    doc_section: "Concepts → Services"
+
+  - id: cka-lab-025
+    cert: CKA
+    topic: Services
+    difficulty: easy
+    type: lab
+    question: "Liste os endpoints do Service **my-service** para verificar se tem pods associados."
+    options:
+      - "kubectl get service my-service --endpoints"
+      - "kubectl describe service my-service | grep Endpoints"
+      - "kubectl get endpoints my-service"
+      - "B ou C estão corretos"
+    answer: 3
+    answer_command: "kubectl get endpoints my-service"
+    explanation: "kubectl get endpoints (ou kubectl get ep) mostra os IPs dos pods selecionados pelo Service. Endpoints vazios indicam que nenhum pod corresponde ao selector do Service."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/service/#endpoints"
+    doc_section: "Concepts → Services → Endpoints"
+
+  - id: cka-lab-026
+    cert: CKA
+    topic: Services
+    difficulty: easy
+    type: lab
+    question: "Obtenha o ClusterIP do Service **redis-svc** usando jsonpath."
+    options:
+      - "kubectl get svc redis-svc --field=.spec.clusterIP"
+      - "kubectl get svc redis-svc -o jsonpath='{.spec.clusterIP}'"
+      - "kubectl describe svc redis-svc | grep IP"
+      - "kubectl get svc redis-svc --ip"
+    answer: 1
+    answer_command: "kubectl get svc redis-svc -o jsonpath='{.spec.clusterIP}'"
+    explanation: "-o jsonpath extrai campos específicos. .spec.clusterIP retorna o IP interno do Service. .spec.ports[0].nodePort retornaria a porta do NodePort."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/jsonpath/"
+    doc_section: "Reference → JSONPath"
+
+  # ── EASY: Scheduling ──────────────────────────────────────
+  - id: cka-lab-027
+    cert: CKA
+    topic: Scheduling
+    difficulty: easy
+    type: lab
+    question: "Adicione o taint **role=infra:NoSchedule** ao nó **node01**."
+    options:
+      - "kubectl annotate node node01 role=infra:NoSchedule"
+      - "kubectl taint node node01 role=infra:NoSchedule"
+      - "kubectl label node node01 role=infra --effect=NoSchedule"
+      - "kubectl cordon node01 --taint=role=infra:NoSchedule"
+    answer: 1
+    hint: "Neste cluster (minikube) o nó se chama **minikube**, não node01. Use: kubectl taint node minikube role=infra:NoSchedule"
+    answer_command: "kubectl taint node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') role=infra:NoSchedule"
+    goals:
+      - description: "Taint **role=infra:NoSchedule** aplicado ao nó do cluster"
+        validation:
+          command: "kubectl get node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') -o jsonpath='{.spec.taints}' 2>/dev/null"
+          expected_contains: "infra"
+    teardown:
+      - "kubectl taint node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') role=infra:NoSchedule- 2>/dev/null || true"
+    explanation: "kubectl taint adiciona um taint a um nó. Formato: key=value:Effect. Efeitos: NoSchedule, PreferNoSchedule, NoExecute. Para remover: kubectl taint node <nó> role=infra:NoSchedule-"
+    doc_url: "https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/"
+    doc_section: "Concepts → Scheduling → Taints and Tolerations"
+
+  - id: cka-lab-028
+    cert: CKA
+    topic: Scheduling
+    difficulty: easy
+    type: lab
+    question: "Adicione a label **disk=ssd** ao nó **node01**."
+    options:
+      - "kubectl taint node node01 disk=ssd"
+      - "kubectl annotate node node01 disk=ssd"
+      - "kubectl label node node01 disk=ssd"
+      - "kubectl tag node node01 disk=ssd"
+    answer: 2
+    hint: "Neste cluster (minikube) o nó se chama **minikube**, não node01. Use: kubectl label node minikube disk=ssd"
+    answer_command: "kubectl label node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') disk=ssd"
+    goals:
+      - description: "Label **disk=ssd** aplicada ao nó do cluster"
+        validation:
+          command: "kubectl get node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') -o jsonpath='{.metadata.labels.disk}' 2>/dev/null"
+          expected_contains: "ssd"
+    teardown:
+      - "kubectl label node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') disk- 2>/dev/null || true"
+    explanation: "Labels em nós são usadas por nodeSelector e nodeAffinity para direcionar pods a nós específicos. kubectl label node <nome> <chave>=<valor>."
+    doc_url: "https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector"
+    doc_section: "Concepts → Scheduling → Assign Pod to Node"
+
+  - id: cka-lab-029
+    cert: CKA
+    topic: Scheduling
+    difficulty: easy
+    type: lab
+    question: "Marque o nó **node02** como **unschedulable** para impedir que novos pods sejam criados nele."
+    options:
+      - "kubectl taint node node02 NoSchedule"
+      - "kubectl cordon node02"
+      - "kubectl drain node02"
+      - "kubectl disable node02"
+    answer: 1
+    hint: "Neste cluster (minikube) o nó se chama **minikube**. Use: kubectl cordon minikube"
+    answer_command: "kubectl cordon $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')"
+    goals:
+      - description: "Nó marcado como **unschedulable** (SchedulingDisabled)"
+        validation:
+          command: "kubectl get node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') -o jsonpath='{.spec.unschedulable}' 2>/dev/null"
+          expected_contains: "true"
+    teardown:
+      - "kubectl uncordon $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') 2>/dev/null || true"
+    explanation: "kubectl cordon marca o nó como 'SchedulingDisabled' (unschedulable). Pods existentes continuam rodando. Use kubectl uncordon para reativar."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/"
+    doc_section: "Tasks → Administer Cluster → Drain Node"
+
+  - id: cka-lab-030
+    cert: CKA
+    topic: Scheduling
+    difficulty: easy
+    type: lab
+    question: "Reative o agendamento de pods no nó **node02** após manutenção."
+    options:
+      - "kubectl enable node02"
+      - "kubectl schedule node02"
+      - "kubectl uncordon node02"
+      - "kubectl taint node node02 NoSchedule-"
+    answer: 2
+    hint: "Neste cluster (minikube) o nó se chama **minikube**. Use: kubectl uncordon minikube"
+    answer_command: "kubectl uncordon $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')"
+    setup:
+      - description: "Marcando nó como unschedulable para o exercício..."
+        command: "kubectl cordon $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') 2>/dev/null || true"
+    goals:
+      - description: "Nó está schedulable novamente (sem **SchedulingDisabled**)"
+        validation:
+          command: "kubectl get nodes --no-headers 2>/dev/null | grep -v 'SchedulingDisabled' | wc -l"
+          expected_contains: "1"
+    explanation: "kubectl uncordon remove a marca 'unschedulable' do nó, permitindo que novos pods sejam agendados nele. Par com kubectl cordon."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/"
+    doc_section: "Tasks → Administer Cluster → Drain Node"
+
+  # ── MID: Workloads ────────────────────────────────────────
+  - id: cka-lab-031
+    cert: CKA
+    topic: Deployments
+    difficulty: mid
+    type: lab
+    question: "Crie um Deployment chamado **web-app** com a imagem **nginx:1.21** e **3 réplicas** no namespace **default**."
+    options:
+      - "kubectl run web-app --image=nginx:1.21 --replicas=3"
+      - "kubectl create deployment web-app --image=nginx:1.21 --count=3"
+      - "kubectl create deployment web-app --image=nginx:1.21 --replicas=3"
+      - "kubectl deploy web-app --image=nginx:1.21 --scale=3"
+    answer: 2
+    hint: "kubectl create deployment <nome> --image=<imagem> --replicas=<n>"
+    answer_command: "kubectl create deployment web-app --image=nginx:1.21 --replicas=3"
+    validation:
+      command: "kubectl get deployment web-app -o jsonpath='{.spec.replicas}'"
+      expected_contains: "3"
+    teardown:
+      - "kubectl delete deployment web-app --ignore-not-found=true"
+    explanation: "kubectl create deployment cria um Deployment com um ReplicaSet gerenciado. --replicas define quantas instâncias do pod são mantidas."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"
+    doc_section: "Concepts → Workloads → Deployments"
+
+  - id: cka-lab-032
+    cert: CKA
+    topic: Deployments
+    difficulty: mid
+    type: lab
+    question: "Escale o Deployment **api-server** para **5 réplicas** sem recriar o Deployment."
+    options:
+      - "kubectl resize deployment api-server --replicas=5"
+      - "kubectl update deployment api-server --replicas=5"
+      - "kubectl scale deployment api-server --replicas=5"
+      - "kubectl set replicas deployment/api-server 5"
+    answer: 2
+    hint: "kubectl scale deployment <nome> --replicas=<n>"
+    answer_command: "kubectl scale deployment api-server --replicas=5"
+    setup:
+      - description: "Criando deployment api-server..."
+        command: "kubectl create deployment api-server --image=nginx:1.21"
+    validation:
+      command: "kubectl get deployment api-server -o jsonpath='{.spec.replicas}'"
+      expected_contains: "5"
+    teardown:
+      - "kubectl delete deployment api-server --ignore-not-found=true"
+    explanation: "kubectl scale altera o número de réplicas sem recriar o Deployment. Para escala automática baseada em CPU/memória, use HorizontalPodAutoscaler (HPA)."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#scaling-a-deployment"
+    doc_section: "Concepts → Deployments → Scaling"
+
+  - id: cka-lab-033
+    cert: CKA
+    topic: Deployments
+    difficulty: mid
+    type: lab
+    question: "O Deployment **broken-app** tem ImagePullBackOff. Corrija a imagem para **nginx:1.21**."
+    options:
+      - "kubectl update image deployment/broken-app broken-app=nginx:1.21"
+      - "kubectl set image deployment/broken-app broken-app=nginx:1.21"
+      - "kubectl patch deployment broken-app --image=nginx:1.21"
+      - "kubectl edit deployment broken-app --set-image=nginx:1.21"
+    answer: 1
+    hint: "kubectl set image deployment/<nome> <container>=<imagem>"
+    answer_command: "kubectl set image deployment/broken-app broken-app=nginx:1.21"
+    setup:
+      - description: "Criando deployment broken-app com imagem inválida..."
+        command: "kubectl create deployment broken-app --image=nginx:INVALID_TAG"
+    validation:
+      command: "kubectl get deployment broken-app -o jsonpath='{.spec.template.spec.containers[0].image}'"
+      expected_contains: "nginx:1.21"
+    teardown:
+      - "kubectl delete deployment broken-app --ignore-not-found=true"
+    explanation: "kubectl set image atualiza a imagem de containers em Deployments, Pods, DaemonSets. Formato: <resource>/<name> <container>=<new-image>. Dispara um rolling update automático."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#updating-a-deployment"
+    doc_section: "Concepts → Deployments → Updating"
+
+  - id: cka-lab-034
+    cert: CKA
+    topic: Deployments
+    difficulty: mid
+    type: lab
+    question: "Faça o rollback do Deployment **frontend** para a versão anterior."
+    options:
+      - "kubectl restore deployment frontend --previous"
+      - "kubectl rollout undo deployment/frontend"
+      - "kubectl revert deployment frontend"
+      - "kubectl rollback deployment frontend"
+    answer: 1
+    answer_command: "kubectl rollout undo deployment/frontend"
+    explanation: "kubectl rollout undo reverte para a revisão anterior. Use --to-revision=N para uma revisão específica. Verifique o histórico com 'kubectl rollout history deployment/frontend'."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#rolling-back-a-deployment"
+    doc_section: "Concepts → Deployments → Rolling Back"
+
+  - id: cka-lab-035
+    cert: CKA
+    topic: Deployments
+    difficulty: mid
+    type: lab
+    question: "Force um restart de todos os pods do Deployment **api** sem mudar a imagem."
+    options:
+      - "kubectl reload deployment/api"
+      - "kubectl delete pods -l app=api"
+      - "kubectl rollout restart deployment/api"
+      - "kubectl scale deployment api --replicas=0 && kubectl scale deployment api --replicas=3"
+    answer: 2
+    answer_command: "kubectl rollout restart deployment/api"
+    explanation: "kubectl rollout restart é a forma recomendada de recriar pods sem alterar a spec. Útil para recarregar ConfigMaps montados como env vars ou fazer flush de caches."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/generated/kubectl_rollout/kubectl_rollout_restart/"
+    doc_section: "Reference → kubectl rollout restart"
+
+  - id: cka-lab-036
+    cert: CKA
+    topic: Services
+    difficulty: mid
+    type: lab
+    question: "O deployment **web-app** já existe. Exponha-o como NodePort na porta **80**."
+    options:
+      - "kubectl expose deployment web-app --port=80"
+      - "kubectl expose deployment web-app --type=NodePort --port=80"
+      - "kubectl create service nodeport web-app --port=80"
+      - "kubectl expose deployment web-app --type=LoadBalancer --port=80"
+    answer: 1
+    hint: "kubectl expose deployment <nome> --type=NodePort --port=<porta>"
+    answer_command: "kubectl expose deployment web-app --type=NodePort --port=80"
+    setup:
+      - description: "Criando deployment web-app..."
+        command: "kubectl create deployment web-app --image=nginx:1.21 --replicas=3"
+    validation:
+      command: "kubectl get service web-app -o jsonpath='{.spec.type}'"
+      expected_contains: "NodePort"
+    teardown:
+      - "kubectl delete service web-app --ignore-not-found=true"
+      - "kubectl delete deployment web-app --ignore-not-found=true"
+    explanation: "kubectl expose cria um Service com o selector baseado nas labels do Deployment. NodePort expõe em uma porta estática (30000-32767) em cada nó."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/service/"
+    doc_section: "Concepts → Services"
+
+  - id: cka-lab-037
+    cert: CKA
+    topic: Storage
+    difficulty: mid
+    type: lab
+    question: "Crie uma PersistentVolumeClaim chamada **data-pvc** solicitando **1Gi** de armazenamento com acesso **ReadWriteOnce**."
+    options:
+      - "kubectl create pvc data-pvc --size=1Gi --access=ReadWriteOnce"
+      - "kubectl apply -f - com spec.resources.requests.storage: 1Gi e spec.accessModes: [ReadWriteOnce]"
+      - "kubectl create persistentvolumeclaim data-pvc --capacity=1Gi --mode=rwo"
+      - "Não é possível criar PVCs via kubectl diretamente; é necessário um YAML"
+    answer: 1
+    answer_command: "kubectl apply -f pvc.yaml"
+    explanation: "PVCs não podem ser criadas diretamente via kubectl create — é necessário um YAML. A spec deve ter accessModes e resources.requests.storage. O controller faz o bind com um PV compatível."
+    doc_url: "https://kubernetes.io/docs/concepts/storage/persistent-volumes/#persistentvolumeclaims"
+    doc_section: "Concepts → Storage → PVC"
+
+  - id: cka-lab-038
+    cert: CKA
+    topic: Security
+    difficulty: mid
+    type: lab
+    question: "Crie uma ServiceAccount chamada **deploy-sa** no namespace **staging**."
+    options:
+      - "kubectl create sa deploy-sa --namespace=staging"
+      - "kubectl new serviceaccount deploy-sa -n staging"
+      - "kubectl apply serviceaccount deploy-sa -n staging"
+      - "kubectl create account deploy-sa -n staging"
+    answer: 0
+    answer_command: "kubectl create sa deploy-sa -n staging"
+    validation:
+      command: "kubectl get serviceaccount deploy-sa -n staging -o jsonpath='{.metadata.name}'"
+      expected_contains: "deploy-sa"
+    teardown:
+      - "kubectl delete serviceaccount deploy-sa -n staging --ignore-not-found=true"
+    explanation: "kubectl create sa (ou serviceaccount) cria uma ServiceAccount. SAs são identidades para pods que precisam acessar a API do Kubernetes. Use com RBAC para controlar permissões."
+    doc_url: "https://kubernetes.io/docs/concepts/security/service-accounts/"
+    doc_section: "Concepts → Security → Service Accounts"
+
+  - id: cka-lab-039
+    cert: CKA
+    topic: Security
+    difficulty: mid
+    type: lab
+    question: "Crie um Role chamado **pod-reader** no namespace **default** com permissão para **get, list, watch** em **pods**."
+    options:
+      - "kubectl create role pod-reader --verb=get,list,watch --resource=pods"
+      - "kubectl create clusterrole pod-reader --verb=get,list,watch --resource=pods"
+      - "kubectl apply role pod-reader --permissions=get,list,watch --on=pods"
+      - "kubectl create role pod-reader --actions=get,list,watch --resource=pods"
+    answer: 0
+    answer_command: "kubectl create role pod-reader --verb=get,list,watch --resource=pods"
+    goals:
+      - description: "Role **pod-reader** existe no namespace default"
+        hint: "kubectl create role pod-reader --verb=get,list,watch --resource=pods"
+        validation:
+          command: "kubectl get role pod-reader -n default -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "pod-reader"
+      - description: "Role tem verbos **get, list, watch** em **pods**"
+        validation:
+          command: "kubectl get role pod-reader -n default -o jsonpath='{.rules[0].verbs}' 2>/dev/null"
+          expected_contains: "get"
+    teardown:
+      - "kubectl delete role pod-reader -n default --ignore-not-found=true"
+    explanation: "kubectl create role cria um Role com escopo de namespace. ClusterRole tem escopo de cluster inteiro. Verbos comuns: get, list, watch, create, update, patch, delete. Recursos: pods, services, deployments, etc."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/"
+    doc_section: "Reference → RBAC"
+
+  - id: cka-lab-040
+    cert: CKA
+    topic: Security
+    difficulty: mid
+    type: lab
+    question: "Vincule o Role **pod-reader** ao usuário **jane** no namespace **default**."
+    options:
+      - "kubectl create rolebinding jane-pod-reader --role=pod-reader --user=jane"
+      - "kubectl create clusterrolebinding jane-pod-reader --role=pod-reader --user=jane"
+      - "kubectl bind role pod-reader --to=user:jane"
+      - "kubectl create rolebinding jane-pod-reader --clusterrole=pod-reader --user=jane"
+    answer: 0
+    answer_command: "kubectl create rolebinding jane-pod-reader --role=pod-reader --user=jane"
+    setup:
+      - description: "Criando Role pod-reader (pré-requisito)..."
+        command: "kubectl create role pod-reader --verb=get,list,watch --resource=pods -n default 2>/dev/null || true"
+    goals:
+      - description: "RoleBinding **jane-pod-reader** existe no namespace default"
+        hint: "kubectl create rolebinding jane-pod-reader --role=pod-reader --user=jane"
+        validation:
+          command: "kubectl get rolebinding jane-pod-reader -n default -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "jane-pod-reader"
+      - description: "RoleBinding referencia o usuário **jane**"
+        validation:
+          command: "kubectl get rolebinding jane-pod-reader -n default -o jsonpath='{.subjects[0].name}' 2>/dev/null"
+          expected_contains: "jane"
+    teardown:
+      - "kubectl delete rolebinding jane-pod-reader -n default --ignore-not-found=true"
+      - "kubectl delete role pod-reader -n default --ignore-not-found=true"
+    explanation: "RoleBinding vincula um Role (namespace-scoped) a um sujeito (usuário, grupo ou ServiceAccount) dentro de um namespace. ClusterRoleBinding tem escopo global. --serviceaccount=ns:name para vincular a uma SA."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/"
+    doc_section: "Reference → RBAC → RoleBinding"
+
+  - id: cka-lab-041
+    cert: CKA
+    topic: Security
+    difficulty: mid
+    type: lab
+    question: "Verifique se o usuário **john** tem permissão para deletar pods no namespace **production**."
+    options:
+      - "kubectl get rbac --user=john -n production"
+      - "kubectl auth can-i delete pods --as=john -n production"
+      - "kubectl describe role --user=john -n production"
+      - "kubectl check permission john pods delete -n production"
+    answer: 1
+    answer_command: "kubectl auth can-i delete pods --as=john -n production"
+    explanation: "kubectl auth can-i verifica permissões. --as impersona um usuário ou SA. Para SA: --as=system:serviceaccount:namespace:name. Use --list para listar todas as permissões."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/authorization/#checking-api-access"
+    doc_section: "Reference → Authorization → Checking API Access"
+
+  # ── MID: Troubleshooting ──────────────────────────────────
+  - id: cka-lab-042
+    cert: CKA
+    topic: Troubleshooting
+    difficulty: mid
+    type: lab
+    question: "O pod **nginx-pod** já está rodando. Visualize seus logs em tempo real (streaming)."
+    options:
+      - "kubectl logs nginx-pod --live"
+      - "kubectl logs nginx-pod -f"
+      - "kubectl watch logs nginx-pod"
+      - "kubectl stream nginx-pod"
+    answer: 1
+    hint: "kubectl logs <pod-name>"
+    answer_command: "kubectl logs nginx-pod -f"
+    setup:
+      - description: "Criando pod nginx-pod..."
+        command: "kubectl run nginx-pod --image=nginx:1.21"
+      - description: "Aguardando pod ficar pronto..."
+        command: "kubectl wait --for=condition=ready pod/nginx-pod --timeout=90s"
+    validation:
+      command: "kubectl logs nginx-pod"
+      expected_contains: "nginx"
+    teardown:
+      - "kubectl delete pod nginx-pod --ignore-not-found=true"
+    explanation: "-f (--follow) ativa o streaming de logs em tempo real. Sem -f, mostra os logs até o momento e encerra. Use --tail=N para ver as últimas N linhas."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/cheatsheet/#interacting-with-running-pods"
+    doc_section: "kubectl Cheat Sheet → Interacting with Pods"
+
+  - id: cka-lab-043
+    cert: CKA
+    topic: Troubleshooting
+    difficulty: mid
+    type: lab
+    question: "O pod **crashed-app** reiniciou várias vezes. Como ver os logs do crash anterior?"
+    options:
+      - "kubectl logs crashed-app --restart"
+      - "kubectl logs crashed-app --previous"
+      - "kubectl describe pod crashed-app --logs"
+      - "kubectl get events --pod=crashed-app"
+    answer: 1
+    answer_command: "kubectl logs crashed-app --previous"
+    explanation: "--previous (ou -p) mostra os logs da execução anterior do container. Essencial para diagnosticar CrashLoopBackOff. Combine com kubectl describe para ver o exit code e os Events."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/"
+    doc_section: "Tasks → Debug → Debug Pods"
+
+  - id: cka-lab-044
+    cert: CKA
+    topic: Troubleshooting
+    difficulty: mid
+    type: lab
+    question: "Liste todos os eventos de erro e warning no namespace **default**, ordenados por tempo."
+    options:
+      - "kubectl get events -n default --sort-by=.lastTimestamp"
+      - "kubectl describe events -n default --type=Warning"
+      - "kubectl logs events -n default"
+      - "kubectl get warnings -n default"
+    answer: 0
+    answer_command: "kubectl get events -n default --sort-by=.lastTimestamp"
+    explanation: "kubectl get events lista eventos do cluster. --sort-by ordena por campo JSONPath. Para filtrar apenas warnings: kubectl get events --field-selector type=Warning. Events são chave para diagnóstico de problemas de scheduling e imagem."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/"
+    doc_section: "Tasks → Debug → Debug Pods"
+
+  - id: cka-lab-045
+    cert: CKA
+    topic: Cluster Maintenance
+    difficulty: mid
+    type: lab
+    question: "O nó **node01** precisa de manutenção. Evacue todos os pods dele de forma segura."
+    options:
+      - "kubectl delete pods --all --node=node01"
+      - "kubectl drain node01 --ignore-daemonsets --delete-emptydir-data"
+      - "kubectl cordon node01 && kubectl delete pods -A --node=node01"
+      - "kubectl taint node node01 maintenance=true:NoExecute"
+    answer: 1
+    hint: "Neste cluster (minikube) o nó se chama **minikube**. Use: kubectl drain minikube --ignore-daemonsets --delete-emptydir-data"
+    answer_command: "kubectl drain $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') --ignore-daemonsets --delete-emptydir-data"
+    goals:
+      - description: "Nó marcado como **SchedulingDisabled** (drain executa cordon automaticamente)"
+        validation:
+          command: "kubectl get nodes --no-headers 2>/dev/null | grep -c 'SchedulingDisabled'"
+          expected_contains: "1"
+    teardown:
+      - "kubectl uncordon $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') 2>/dev/null || true"
+    explanation: "kubectl drain cordon o nó (impede novos pods) E evacua os pods existentes para outros nós. --ignore-daemonsets ignora DaemonSet pods (que não podem ser movidos). --delete-emptydir-data permite remover pods com volumes emptyDir."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/"
+    doc_section: "Tasks → Administer Cluster → Drain Node"
+
+  # ── HARD ──────────────────────────────────────────────────
+  - id: cka-lab-046
+    cert: CKA
+    topic: etcd
+    difficulty: hard
+    type: lab
+    question: "Faça um backup do etcd para **/tmp/etcd-backup.db** em um cluster kubeadm."
+    options:
+      - "kubectl backup etcd --output=/tmp/etcd-backup.db"
+      - "etcdctl snapshot save /tmp/etcd-backup.db --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key"
+      - "cp -r /var/lib/etcd /tmp/etcd-backup"
+      - "kubeadm etcd backup /tmp/etcd-backup.db"
+    answer: 1
+    answer_command: "ETCDCTL_API=3 etcdctl snapshot save /tmp/etcd-backup.db --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key"
+    explanation: "etcdctl snapshot save requer ETCDCTL_API=3 e os certificados TLS (cacert, cert, key). No kubeadm, os certificados ficam em /etc/kubernetes/pki/etcd/. Verifique o backup com 'etcdctl snapshot status'."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/#backing-up-an-etcd-cluster"
+    doc_section: "Tasks → Administer Cluster → Backing up etcd"
+
+  - id: cka-lab-047
+    cert: CKA
+    topic: Security
+    difficulty: hard
+    type: lab
+    question: "Crie um ClusterRole **node-reader** com permissão para **get, list** em **nodes**, e vincule-o à ServiceAccount **monitoring-sa** no namespace **monitoring**."
+    options:
+      - "kubectl create clusterrole node-reader --verb=get,list --resource=nodes && kubectl create clusterrolebinding node-reader-binding --clusterrole=node-reader --serviceaccount=monitoring:monitoring-sa"
+      - "kubectl create role node-reader --verb=get,list --resource=nodes -n monitoring && kubectl create rolebinding node-reader-binding --role=node-reader --serviceaccount=monitoring:monitoring-sa -n monitoring"
+      - "kubectl create clusterrole node-reader --verb=get,list --resource=nodes && kubectl create rolebinding node-reader-binding --clusterrole=node-reader --serviceaccount=monitoring:monitoring-sa"
+      - "kubectl create clusterrole node-reader --permissions=get,list --on=nodes && kubectl create clusterrolebinding node-reader-binding --clusterrole=node-reader --user=monitoring-sa"
+    answer: 0
+    answer_command: "kubectl create clusterrole node-reader --verb=get,list --resource=nodes && kubectl create clusterrolebinding node-reader-binding --clusterrole=node-reader --serviceaccount=monitoring:monitoring-sa"
+    explanation: "Nodes são recursos de cluster (não-namespaced), portanto requerem ClusterRole. ClusterRoleBinding também tem escopo de cluster. O formato de SA no binding é namespace:nome. Role+RoleBinding têm escopo de namespace."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/"
+    doc_section: "Reference → RBAC"
+
+  - id: cka-lab-048
+    cert: CKA
+    topic: Networking
+    difficulty: hard
+    type: lab
+    question: "Crie uma NetworkPolicy que permita apenas que pods com label **tier=frontend** se comuniquem com pods com label **tier=backend** na porta **3306**. Qual é a forma correta de criar essa policy?"
+    options:
+      - "kubectl create networkpolicy allow-frontend --pod-selector=tier=backend --ingress-from=tier=frontend --port=3306"
+      - "Criar via YAML: spec.podSelector={tier:backend}, spec.ingress=[{from:[{podSelector:{tier:frontend}}], ports:[{port:3306}]}]"
+      - "kubectl expose pod backend --from=frontend --port=3306"
+      - "kubectl annotate pod backend allow-from=frontend --port=3306"
+    answer: 1
+    answer_command: "kubectl apply -f networkpolicy.yaml"
+    explanation: "NetworkPolicies não podem ser criadas via kubectl create diretamente — requerem YAML. O podSelector seleciona os pods alvo (backend). ingress.from.podSelector seleciona a origem permitida (frontend). Requer um CNI que suporte NetworkPolicy (Calico, Cilium, etc.)."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/network-policies/"
+    doc_section: "Concepts → Network Policies"
+
+  - id: cka-lab-049
+    cert: CKA
+    topic: Troubleshooting
+    difficulty: hard
+    type: lab
+    question: "O pod **api-pod** tem um container **api** e um sidecar **logger**. Como ver apenas os logs do container **logger**?"
+    options:
+      - "kubectl logs api-pod --sidecar=logger"
+      - "kubectl logs api-pod -c logger"
+      - "kubectl exec api-pod -- cat /var/log/logger"
+      - "kubectl logs api-pod logger"
+    answer: 1
+    answer_command: "kubectl logs api-pod -c logger"
+    explanation: "-c (--container) especifica o container em pods multi-container. Sem -c, kubectl logs usa o container padrão (primeiro na lista). Para streaming: kubectl logs api-pod -c logger -f."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/cheatsheet/#interacting-with-running-pods"
+    doc_section: "kubectl Cheat Sheet → Interacting with Pods"
+
+  - id: cka-lab-050
+    cert: CKA
+    topic: Cluster Maintenance
+    difficulty: hard
+    type: lab
+    question: "Verifique o uso de CPU e memória de todos os pods no namespace **production**. Qual comando usar?"
+    options:
+      - "kubectl get pods -n production --metrics"
+      - "kubectl stats pods -n production"
+      - "kubectl top pods -n production"
+      - "kubectl describe pods -n production | grep CPU"
+    answer: 2
+    answer_command: "kubectl top pods -n production"
+    explanation: "kubectl top pods usa o Metrics Server para mostrar uso atual de CPU (em millicores) e memória (MiB). Requer o Metrics Server instalado. kubectl top nodes mostra métricas dos nós."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-cluster/resource-metrics-pipeline/"
+    doc_section: "Tasks → Debug → Resource Metrics Pipeline"
+
+  - id: cka-lab-051
+    cert: CKA
+    topic: Security
+    difficulty: hard
+    type: lab
+    question: "Como criar um Secret TLS chamado **tls-secret** a partir dos arquivos **tls.crt** e **tls.key**?"
+    options:
+      - "kubectl create secret generic tls-secret --from-file=tls.crt --from-file=tls.key"
+      - "kubectl create secret tls tls-secret --cert=tls.crt --key=tls.key"
+      - "kubectl apply secret tls tls-secret --certificate=tls.crt --private-key=tls.key"
+      - "kubectl create secret tls tls-secret --from-cert=tls.crt --from-key=tls.key"
+    answer: 1
+    answer_command: "kubectl create secret tls tls-secret --cert=tls.crt --key=tls.key"
+    explanation: "Secret do tipo 'tls' tem campos específicos tls.crt e tls.key. Usado por Ingress para terminação HTTPS. --cert aponta para o certificado, --key para a chave privada."
+    doc_url: "https://kubernetes.io/docs/concepts/configuration/secret/#tls-secrets"
+    doc_section: "Concepts → Configuration → Secrets → TLS"
+
+  - id: cka-lab-052
+    cert: CKA
+    topic: Networking
+    difficulty: hard
+    type: lab
+    question: "Diagnostique por que o Service **api-svc** não está recebendo tráfego. Qual sequência de comandos mais eficaz?"
+    options:
+      - "kubectl delete service api-svc e recriar"
+      - "kubectl get endpoints api-svc → verificar selector do svc com kubectl describe svc api-svc → verificar labels dos pods com kubectl get pods --show-labels"
+      - "kubectl logs service/api-svc"
+      - "kubectl restart service api-svc"
+    answer: 1
+    answer_command: "kubectl get endpoints api-svc && kubectl describe svc api-svc && kubectl get pods --show-labels"
+    explanation: "Diagnóstico de Service: (1) endpoints vazios = selector não corresponde a pods, (2) kubectl describe svc mostra o selector configurado, (3) kubectl get pods --show-labels mostra as labels dos pods. Se o selector não combinar com as labels dos pods, endpoints ficam vazios."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/"
+    doc_section: "Tasks → Debug → Debug Services"
+
+  - id: cka-lab-053
+    cert: CKA
+    topic: Cluster Maintenance
+    difficulty: hard
+    type: lab
+    question: "Verifique a expiração dos certificados do cluster kubeadm."
+    options:
+      - "kubectl get certificates -n kube-system --expiry"
+      - "kubeadm certs check-expiration"
+      - "openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -dates"
+      - "B e C fornecem informações complementares e ambos devem ser usados"
+    answer: 3
+    answer_command: "kubeadm certs check-expiration"
+    explanation: "'kubeadm certs check-expiration' lista todos os certificados e expirações de forma organizada. Para verificar um certificado específico: 'openssl x509 -in <cert> -noout -dates'. Certificados kubeadm expiram em 1 ano. Renove com 'kubeadm certs renew all'."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/"
+    doc_section: "Tasks → Administer Cluster → kubeadm → Certificates"
+
+  - id: cka-lab-054
+    cert: CKA
+    topic: Scheduling
+    difficulty: hard
+    type: lab
+    question: "Crie um HorizontalPodAutoscaler para o Deployment **api** que mantenha entre **2 e 10** réplicas com target de **80%** de CPU."
+    options:
+      - "kubectl autoscale deployment api --min=2 --max=10 --cpu-percent=80"
+      - "kubectl scale deployment api --min=2 --max=10 --cpu=80%"
+      - "kubectl create hpa api --deployment=api --min=2 --max=10 --cpu=80"
+      - "kubectl apply hpa api deployment/api 2 10 80%"
+    answer: 0
+    answer_command: "kubectl autoscale deployment api --min=2 --max=10 --cpu-percent=80"
+    explanation: "kubectl autoscale cria um HPA. Requer Metrics Server instalado e resources.requests.cpu definido no Deployment. O HPA monitora o uso de CPU e escala o número de réplicas para manter o target."
+    doc_url: "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/"
+    doc_section: "Tasks → Run Application → Horizontal Pod Autoscale"
+
+  - id: cka-lab-055
+    cert: CKA
+    topic: Storage
+    difficulty: hard
+    type: lab
+    question: "Verifique por que o pod **data-pod** está em estado Pending. Qual é o conjunto de comandos mais eficaz?"
+    options:
+      - "kubectl restart pod data-pod"
+      - "kubectl describe pod data-pod para ver Events → se PVC Pending, kubectl describe pvc <pvc-name> para ver o motivo"
+      - "kubectl logs pod data-pod"
+      - "kubectl get pod data-pod --verbose"
+    answer: 1
+    answer_command: "kubectl describe pod data-pod && kubectl get pvc"
+    explanation: "Pod Pending geralmente indica: (1) recursos insuficientes → Events mostram 'insufficient cpu/memory', (2) PVC não bound → Events mostram 'waiting for PVC to bind', (3) nodeSelector/affinity incompatível → Events mostram 'nodes don't match'. kubectl describe pod é sempre o primeiro passo."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/"
+    doc_section: "Tasks → Debug → Debug Pods"

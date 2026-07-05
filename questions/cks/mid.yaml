@@ -1,0 +1,240 @@
+questions:
+  - id: cks-mid-001
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: mid
+    type: multiple_choice
+    question: "Como verificar se um usuário 'dev-user' tem permissão para listar pods no namespace 'production'?"
+    options:
+      - "kubectl get rbac --user=dev-user -n production"
+      - "kubectl auth can-i list pods --as=dev-user -n production"
+      - "kubectl describe role --user=dev-user -n production"
+      - "kubectl check permissions dev-user list pods -n production"
+    answer: 1
+    explanation: "'kubectl auth can-i' verifica permissões de acesso. Com '--as' você impersona um usuário ou ServiceAccount. Retorna 'yes' ou 'no'. Combine com '--list' para ver todas as permissões: 'kubectl auth can-i --list --as=dev-user -n production'."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/authorization/#checking-api-access"
+    doc_section: "Reference → Authorization → Checking API Access"
+
+  - id: cks-mid-002
+    cert: CKS
+    topic: Network Security
+    difficulty: mid
+    type: multiple_choice
+    question: "Como implementar uma política 'default deny all ingress' para todos os pods em um namespace?"
+    options:
+      - "kubectl apply networkpolicy deny-all --namespace=production"
+      - "Criar uma NetworkPolicy com podSelector: {} (seleciona todos os pods) e nenhuma regra ingress definida"
+      - "Adicionar a annotation 'network.kubernetes.io/deny: all' no namespace"
+      - "Configurar o kube-proxy para bloquear tráfego de entrada"
+    answer: 1
+    explanation: "Uma NetworkPolicy com spec.podSelector: {} seleciona todos os pods do namespace. Sem spec.ingress definido, todo o tráfego de entrada é bloqueado. Para o default-deny-all funcionar, é necessário um CNI que suporte NetworkPolicies (Calico, Cilium, etc.)."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-deny-all-ingress-traffic"
+    doc_section: "Concepts → Network Policies → Default Deny All Ingress"
+
+  - id: cks-mid-003
+    cert: CKS
+    topic: Supply Chain Security
+    difficulty: mid
+    type: multiple_choice
+    question: "O que é o conceito de SBOM (Software Bill of Materials) em segurança de containers?"
+    options:
+      - "Uma lista de todos os processos rodando em um container"
+      - "Um inventário formal de componentes, bibliotecas e dependências em uma imagem de container"
+      - "Um relatório de uso de memória e CPU de containers"
+      - "Uma política de segurança de rede para containers"
+    answer: 1
+    explanation: "SBOM é um inventário detalhado de todos os componentes de software em uma imagem: bibliotecas, versões, licenças, origem. Permite rastrear rapidamente quais imagens são afetadas por uma nova CVE (ex: Log4Shell). Ferramentas: Syft, Trivy com '--format cyclonedx' ou '--format spdx'."
+    doc_url: "https://kubernetes.io/docs/concepts/security/supply-chain-security/"
+    doc_section: "Concepts → Security → Supply Chain Security"
+
+  - id: cks-mid-004
+    cert: CKS
+    topic: Runtime Security
+    difficulty: mid
+    type: multiple_choice
+    question: "Um atacante ganhou acesso a um pod. Como o campo 'capabilities' no SecurityContext limita o dano potencial?"
+    options:
+      - "Capabilities não afetam pods comprometidos"
+      - "Remover capabilities Linux (ex: NET_RAW, SYS_ADMIN) limita o que o processo pode fazer no kernel mesmo com acesso root no container"
+      - "Capabilities bloqueiam o acesso do pod à rede"
+      - "Capabilities criptografam os dados do container"
+    answer: 1
+    explanation: "Linux capabilities dividem os privilégios de root em unidades menores. No SecurityContext: 'capabilities.drop: [ALL]' remove todas; 'capabilities.add: [NET_BIND_SERVICE]' adiciona apenas as necessárias. Princípio: menor superfície de ataque mesmo se o container for comprometido."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-capabilities-for-a-container"
+    doc_section: "Tasks → Configure Security Context → Capabilities"
+
+  - id: cks-mid-005
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: mid
+    type: multiple_choice
+    question: "O que é o modo de auditoria do kube-apiserver e quais eventos ele pode registrar?"
+    options:
+      - "Um modo especial de debug que expõe todas as configurações internas do cluster"
+      - "Um sistema que registra requisições à API com metadados de quem, o quê, quando e o resultado para análise de segurança"
+      - "Um modo que registra apenas erros e falhas de autenticação"
+      - "Um sistema de monitoramento de performance da API"
+    answer: 1
+    explanation: "Audit Logging registra: Stage (RequestReceived, ResponseStarted, ResponseComplete, Panic), verb, resource, namespace, user, sourceIP, response code. Configurado via AuditPolicy com níveis: None, Metadata, Request, RequestResponse. Essencial para compliance e investigação de incidentes."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/"
+    doc_section: "Tasks → Debug → Auditing"
+
+  - id: cks-mid-006
+    cert: CKS
+    topic: Minimizing Microservice Vulnerabilities
+    difficulty: mid
+    type: multiple_choice
+    question: "Como usar OPA/Gatekeeper para bloquear a criação de pods sem limits de recursos?"
+    options:
+      - "Configurar um LimitRange para rejeitar pods sem resources"
+      - "Criar um ConstraintTemplate (Rego policy) e um Constraint que valide se resources.limits está definido no container"
+      - "Usar ResourceQuota para bloquear pods sem limits"
+      - "Adicionar uma annotation 'require-limits: true' no namespace"
+    answer: 1
+    explanation: "OPA/Gatekeeper usa ConstraintTemplates (políticas Rego) e Constraints (instâncias das políticas). O Admission Webhook do Gatekeeper intercepta requisições CREATE/UPDATE e as valida contra as políticas. Rejeita (ou avisa) se não conformes. Mais flexível que LimitRange ou PSA."
+    doc_url: "https://kubernetes.io/docs/concepts/security/cloud-native-security/"
+    doc_section: "Concepts → Security → Cloud Native Security"
+
+  - id: cks-mid-007
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: mid
+    type: multiple_choice
+    question: "Por que é importante habilitar 'Encryption at Rest' para Secrets no etcd?"
+    options:
+      - "Melhora a performance de leitura dos Secrets"
+      - "Secrets são armazenados como base64 (não criptografados) no etcd por padrão; encryption at rest garante que estejam criptografados no disco"
+      - "Permite que apenas administradores leiam Secrets via kubectl"
+      - "Criptografa a comunicação entre pods e o etcd"
+    answer: 1
+    explanation: "Por padrão, Secrets são armazenados em base64 no etcd (não criptografados). Com EncryptionConfiguration ativada no kube-apiserver, os dados são criptografados antes de serem gravados no etcd (usando aescbc, aesgcm, secretbox etc.). Acesso direto ao etcd não revela os dados."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/"
+    doc_section: "Tasks → Administer Cluster → Encrypt Data at Rest"
+
+  - id: cks-mid-008
+    cert: CKS
+    topic: Network Security
+    difficulty: mid
+    type: multiple_choice
+    question: "O que é um Service Mesh (ex: Istio, Linkerd) e qual benefício de segurança ele oferece além das NetworkPolicies?"
+    options:
+      - "Um proxy de rede que substitui o kube-proxy"
+      - "Uma camada de infraestrutura que fornece mTLS automático entre serviços, observabilidade e controle de tráfego"
+      - "Um sistema de firewall baseado em IP para bloquear tráfego externo"
+      - "Uma ferramenta de load balancing que substitui o Ingress Controller"
+    answer: 1
+    explanation: "Service Meshes injetam sidecars (Envoy) em cada pod e gerenciam o tráfego: mTLS automático (autenticação mútua entre serviços), políticas de autorização granulares (AuthorizationPolicy), circuit breaking, retry, telemetria. NetworkPolicies operam na camada 3/4 (IP/port); Service Meshes na camada 7 (HTTP/gRPC)."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/"
+    doc_section: "Concepts → Services and Networking"
+
+  - id: cks-mid-009
+    cert: CKS
+    topic: Supply Chain Security
+    difficulty: mid
+    type: multiple_choice
+    question: "Como verificar a assinatura de uma imagem com cosign antes de fazer deploy?"
+    options:
+      - "kubectl verify image nginx:latest"
+      - "cosign verify --key cosign.pub registry.io/myimage:tag"
+      - "docker inspect --signature registry.io/myimage:tag"
+      - "trivy image --verify registry.io/myimage:tag"
+    answer: 1
+    explanation: "Cosign (Sigstore) assina e verifica imagens de container. Fluxo: (1) cosign generate-key-pair para criar par de chaves, (2) cosign sign --key cosign.key image:tag para assinar, (3) cosign verify --key cosign.pub image:tag para verificar. Integrate com Kyverno ou Connaisseur para enforce no cluster."
+    doc_url: "https://kubernetes.io/docs/concepts/security/supply-chain-security/"
+    doc_section: "Concepts → Security → Supply Chain Security"
+
+  - id: cks-mid-010
+    cert: CKS
+    topic: Runtime Security
+    difficulty: mid
+    type: multiple_choice
+    question: "O que o AppArmor faz quando aplicado a um container Kubernetes?"
+    options:
+      - "Monitorar o uso de memória do container"
+      - "Aplicar um perfil de segurança do kernel que define quais ações o container pode executar (arquivos, rede, capabilities)"
+      - "Criptografar os dados em disco do container"
+      - "Controlar o acesso do container à rede externa"
+    answer: 1
+    explanation: "AppArmor é um LSM (Linux Security Module) que usa perfis para restringir ações de processos. Um perfil AppArmor para um container pode: bloquear acesso a certos arquivos/diretórios, limitar capabilities de rede, impedir execução de binários. Configure via annotation: container.apparmor.security.beta.kubernetes.io/<container>: localhost/<profile>."
+    doc_url: "https://kubernetes.io/docs/tutorials/security/apparmor/"
+    doc_section: "Tutorials → Security → AppArmor"
+
+  - id: cks-mid-011
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: mid
+    type: multiple_choice
+    question: "Qual é o risco de ter o endpoint do kubelet (/debug/pprof, /metrics) acessível sem autenticação?"
+    options:
+      - "Nenhum risco — essas APIs são somente leitura"
+      - "Um atacante pode obter informações sensíveis do nó, listar pods e até executar comandos via /exec sem autenticação"
+      - "Apenas métricas são expostas, sem risco de execução de código"
+      - "O endpoint só é acessível via kubectl, sem acesso direto"
+    answer: 1
+    explanation: "O kubelet expõe uma API na porta 10250 (e 10255 read-only). Sem autenticação: um atacante pode listar pods, obter logs, e via /exec executar comandos em qualquer container no nó. Configure --authentication-token-webhook=true e --authorization-mode=Webhook no kubelet para proteger."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/kubelet-authn-authz/"
+    doc_section: "Reference → Kubelet Authentication and Authorization"
+
+  - id: cks-mid-012
+    cert: CKS
+    topic: Minimizing Microservice Vulnerabilities
+    difficulty: mid
+    type: multiple_choice
+    question: "Como configurar um namespace para enforçar o Pod Security Standard 'Restricted' em modo 'enforce'?"
+    options:
+      - "kubectl apply -f pss-restricted.yaml no namespace"
+      - "kubectl label namespace production pod-security.kubernetes.io/enforce=restricted"
+      - "kubectl annotate namespace production pod-security=restricted"
+      - "kubectl create rolebinding pss-restricted --namespace=production"
+    answer: 1
+    explanation: "PSA é configurado via labels no namespace. Modos: enforce (bloqueia violações), audit (registra mas permite), warn (retorna aviso). Versão da política também deve ser especificada: kubectl label ns production pod-security.kubernetes.io/enforce=restricted pod-security.kubernetes.io/enforce-version=v1.28"
+    doc_url: "https://kubernetes.io/docs/concepts/security/pod-security-admission/"
+    doc_section: "Concepts → Security → Pod Security Admission"
+
+  - id: cks-mid-013
+    cert: CKS
+    topic: Network Security
+    difficulty: mid
+    type: multiple_choice
+    question: "Como criar uma NetworkPolicy que permita apenas ingress de pods com label 'tier=frontend' para pods com label 'tier=backend' na porta 3306?"
+    options:
+      - "Criar ingress no Service com from: tier=frontend"
+      - "NetworkPolicy com spec.podSelector: {tier: backend}, spec.ingress: [{from: [{podSelector: {tier: frontend}}], ports: [{port: 3306}]}]"
+      - "Configurar iptables rule no nó para filtrar por label"
+      - "Adicionar annotation 'allow-from: frontend' no pod backend"
+    answer: 1
+    explanation: "NetworkPolicy: podSelector seleciona os pods alvo (backend). ingress.from.podSelector seleciona quem pode conectar (frontend). ingress.ports define a porta permitida. O CNI (Calico, Cilium etc.) implementa essas regras. Sem uma NetworkPolicy, o tráfego é permitido por padrão."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/network-policies/"
+    doc_section: "Concepts → Network Policies"
+
+  - id: cks-mid-014
+    cert: CKS
+    topic: Runtime Security
+    difficulty: mid
+    type: multiple_choice
+    question: "O que é um Admission Webhook e como ele se diferencia de Validating e Mutating Admission Controllers?"
+    options:
+      - "Admission Webhooks são webhooks de notificação que informam sobre criação de recursos, sem bloquear"
+      - "Validating Webhooks validam e podem rejeitar recursos; Mutating Webhooks modificam o recurso antes de persistir; ambos são chamados pelo kube-apiserver via HTTP"
+      - "Admission Webhooks só funcionam com CustomResourceDefinitions"
+      - "Mutating Webhooks são executados após o recurso ser criado; Validating antes"
+    answer: 1
+    explanation: "Mutating Admission Webhooks são chamados primeiro e podem modificar o objeto (ex: injetar sidecar, adicionar labels). Validating Admission Webhooks são chamados depois e apenas validam (aprovam/rejeitam). Ambos recebem um AdmissionReview e retornam approved/denied com patch opcional."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/"
+    doc_section: "Reference → Admission Controllers"
+
+  - id: cks-mid-015
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: mid
+    type: multiple_choice
+    question: "Como auditar quais permissões uma ServiceAccount 'app-sa' tem no namespace 'default'?"
+    options:
+      - "kubectl describe serviceaccount app-sa -n default"
+      - "kubectl auth can-i --list --as=system:serviceaccount:default:app-sa -n default"
+      - "kubectl get rolebinding -n default | grep app-sa"
+      - "B e C fornecem informações complementares e ambos devem ser usados"
+    answer: 3
+    explanation: "'kubectl auth can-i --list' mostra todas as permissões efetivas da SA. 'kubectl get rolebinding' + 'kubectl get clusterrolebinding' mostra os bindings. Para auditoria completa, use ambos. Também útil: 'kubectl get rolebinding -A -o yaml | grep -A 5 app-sa' para visualizar todos os bindings do cluster."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/"
+    doc_section: "Reference → RBAC"

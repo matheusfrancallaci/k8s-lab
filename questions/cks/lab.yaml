@@ -1,0 +1,871 @@
+questions:
+  # ── EASY: Cluster Hardening ───────────────────────────────
+  - id: cks-lab-001
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: easy
+    type: lab
+    question: "Crie um Role **pod-reader** no namespace **default** que permita apenas **get** e **list** em **pods**."
+    options:
+      - "kubectl create role pod-reader --verb=get,list --resource=pods"
+      - "kubectl create clusterrole pod-reader --verb=get,list --resource=pods"
+      - "kubectl apply role pod-reader --permissions=get,list --on=pods"
+      - "kubectl create role pod-reader --actions=get,list --kind=pods"
+    answer: 0
+    answer_command: "kubectl create role pod-reader --verb=get,list --resource=pods"
+    validation:
+      command: "kubectl get role pod-reader -o jsonpath='{.rules[0].verbs}'"
+      expected_contains: "get"
+    teardown:
+      - "kubectl delete role pod-reader --ignore-not-found=true"
+    explanation: "O princípio do menor privilégio (PoLP) é fundamental em CKS. Roles têm escopo de namespace. ClusterRoles têm escopo de cluster. Sempre conceda apenas os verbos e recursos necessários — nunca use wildcards ('*') em produção."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/"
+    doc_section: "Reference → RBAC"
+
+  - id: cks-lab-002
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: easy
+    type: lab
+    question: "Crie uma ServiceAccount **minimal-sa** no namespace **production** com automount de token **desabilitado**."
+    options:
+      - "kubectl create sa minimal-sa -n production --no-token"
+      - "kubectl create sa minimal-sa -n production e depois kubectl patch sa minimal-sa -p '{\"automountServiceAccountToken\":false}' -n production"
+      - "kubectl create sa minimal-sa -n production --automount=false"
+      - "kubectl create sa minimal-sa -n production --disable-token"
+    answer: 1
+    answer_command: "kubectl create sa minimal-sa -n production && kubectl patch sa minimal-sa -p '{\"automountServiceAccountToken\":false}' -n production"
+    setup:
+      - description: "Criando namespace production..."
+        command: "kubectl create namespace production 2>/dev/null || true"
+    goals:
+      - description: "ServiceAccount **minimal-sa** existe no namespace **production**"
+        hint: "kubectl create sa minimal-sa -n production"
+        validation:
+          command: "kubectl get sa minimal-sa -n production -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "minimal-sa"
+      - description: "automountServiceAccountToken está **false**"
+        hint: "kubectl patch sa minimal-sa -n production -p '{\"automountServiceAccountToken\":false}'"
+        validation:
+          command: "kubectl get sa minimal-sa -n production -o jsonpath='{.automountServiceAccountToken}' 2>/dev/null"
+          expected_contains: "false"
+    teardown:
+      - "kubectl delete sa minimal-sa -n production --ignore-not-found=true"
+    explanation: "automountServiceAccountToken: false impede que o token da SA seja montado automaticamente nos pods — reduz a superfície de ataque se o pod for comprometido. Por padrão é true. Pode ser desabilitado na SA ou no Pod spec."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#opt-out-of-api-credential-automounting"
+    doc_section: "Tasks → Configure Pod → Service Account → Opt-out automount"
+
+  - id: cks-lab-003
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: easy
+    type: lab
+    question: "Verifique se o usuário **developer** tem permissão para criar deployments no namespace **prod**."
+    options:
+      - "kubectl get rbac --user=developer -n prod"
+      - "kubectl auth can-i create deployments --as=developer -n prod"
+      - "kubectl describe role --user=developer -n prod"
+      - "kubectl check auth developer deployments create -n prod"
+    answer: 1
+    answer_command: "kubectl auth can-i create deployments --as=developer -n prod"
+    explanation: "kubectl auth can-i verifica permissões sem necessitar das credenciais do usuário. --as impersona o sujeito. Para listar todas as permissões: kubectl auth can-i --list --as=developer -n prod. Útil para auditoria de RBAC."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/authorization/#checking-api-access"
+    doc_section: "Reference → Authorization → Checking API Access"
+
+  - id: cks-lab-004
+    cert: CKS
+    topic: Minimizing Microservice Vulnerabilities
+    difficulty: easy
+    type: lab
+    question: "Execute um pod com **securityContext** que proíba execução como root e adicione apenas a capability **NET_BIND_SERVICE**."
+    options:
+      - "kubectl run secure --image=nginx --security=no-root --cap-add=NET_BIND_SERVICE"
+      - "Criar via YAML com securityContext.runAsNonRoot: true e securityContext.capabilities.add: [NET_BIND_SERVICE] e capabilities.drop: [ALL]"
+      - "kubectl run secure --image=nginx --no-root --capabilities=NET_BIND_SERVICE"
+      - "kubectl create pod secure --image=nginx --cap=NET_BIND_SERVICE --no-root"
+    answer: 1
+    answer_command: "kubectl apply -f secure-pod.yaml"
+    explanation: "Drop ALL e add apenas o necessário é a prática recomendada (PoLP). NET_BIND_SERVICE permite binding em portas < 1024. Capabilities são recursos do Linux Kernel que substituem o modelo todo-ou-nada do root. runAsNonRoot força UID != 0."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-capabilities-for-a-container"
+    doc_section: "Tasks → Configure Pod → Security Context → Capabilities"
+
+  - id: cks-lab-005
+    cert: CKS
+    topic: Minimizing Microservice Vulnerabilities
+    difficulty: easy
+    type: lab
+    question: "Crie um pod com **readOnlyRootFilesystem: true** e monte um emptyDir em **/tmp** para permitir escrita temporária."
+    options:
+      - "kubectl run ro-pod --image=nginx --read-only --tmpdir=/tmp"
+      - "Criar via YAML: securityContext.readOnlyRootFilesystem: true + volume emptyDir montado em /tmp"
+      - "kubectl create pod ro-pod --image=nginx --no-write --write-tmpdir=/tmp"
+      - "kubectl annotate pod ro-pod readOnly=true tmpdir=/tmp"
+    answer: 1
+    answer_command: "kubectl apply -f readonly-pod.yaml"
+    explanation: "readOnlyRootFilesystem impede modificações no filesystem do container — proteção contra ataques que tentam alterar binários ou criar arquivos. Monte emptyDir nos diretórios que precisam de escrita (/tmp, /var/run). nginx precisa de /var/cache/nginx e /run montados."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/security-context/"
+    doc_section: "Tasks → Configure Pod → Security Context"
+
+  - id: cks-lab-006
+    cert: CKS
+    topic: Supply Chain Security
+    difficulty: easy
+    type: lab
+    question: "Qual prática de segurança é mais importante ao escolher imagens de container para produção?"
+    options:
+      - "Usar sempre a tag :latest para ter as correções mais recentes automaticamente"
+      - "Usar imagens baseadas em distroless ou scratch com tags SHA256 pinadas"
+      - "Usar imagens do Docker Hub sem restrições de pull rate limit"
+      - "Fazer pull de imagens direto do Dockerfile sem usar registries privados"
+    answer: 1
+    answer_command: "kubectl run app --image=gcr.io/distroless/static@sha256:<digest>"
+    explanation: "Imagens distroless/scratch minimizam a superfície de ataque (sem shell, sem package manager). Tags SHA256 garantem imutabilidade (ao contrário de tags mutáveis como :latest ou :1.21). Use um registry privado com scanning de vulnerabilidades (Trivy, Grype)."
+    doc_url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
+    doc_section: "Concepts → Security → Pod Security Standards"
+
+  - id: cks-lab-007
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: easy
+    type: lab
+    question: "Audit Log: qual flag do API Server ativa o audit logging e especifica o arquivo de policy?"
+    options:
+      - "--enable-audit=true --audit-log-path=/var/log/audit.log"
+      - "--audit-policy-file=/etc/kubernetes/audit-policy.yaml --audit-log-path=/var/log/audit/audit.log"
+      - "--audit=true --policy=/etc/kubernetes/audit-policy.yaml"
+      - "--logging-audit-policy=/etc/kubernetes/audit-policy.yaml"
+    answer: 1
+    answer_command: "# Editar /etc/kubernetes/manifests/kube-apiserver.yaml e adicionar as flags"
+    explanation: "O API Server suporta audit logging com --audit-policy-file (define quais eventos logar) e --audit-log-path (onde salvar). Flags adicionais: --audit-log-maxage, --audit-log-maxbackup, --audit-log-maxsize. A policy define regras de nível: None, Metadata, Request, RequestResponse."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/"
+    doc_section: "Tasks → Debug → Audit"
+
+  - id: cks-lab-008
+    cert: CKS
+    topic: Network Security
+    difficulty: easy
+    type: lab
+    question: "Crie uma NetworkPolicy **default-deny-ingress** no namespace **default** que bloqueie todo o tráfego de entrada para todos os pods."
+    options:
+      - "kubectl create networkpolicy default-deny-ingress --deny-all"
+      - "Criar via YAML: spec.podSelector: {} (todos os pods), spec.policyTypes: [Ingress], sem regras ingress"
+      - "kubectl annotate namespace default deny=all-ingress"
+      - "kubectl taint namespace default ingress=blocked:NoSchedule"
+    answer: 1
+    hint: |
+      NetworkPolicy via YAML:
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        metadata: {name: default-deny-ingress}
+        spec:
+          podSelector: {}
+          policyTypes: [Ingress]
+    answer_command: "kubectl apply -f default-deny-ingress.yaml"
+    goals:
+      - description: "NetworkPolicy **default-deny-ingress** existe no namespace **default**"
+        hint: "Crie o YAML com podSelector: {} e policyTypes: [Ingress] sem regras ingress"
+        validation:
+          command: "kubectl get networkpolicy default-deny-ingress -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "default-deny-ingress"
+      - description: "Policy aplica-se a **todos os pods** (podSelector vazio)"
+        validation:
+          command: "kubectl get networkpolicy default-deny-ingress -o jsonpath='{.spec.podSelector}' 2>/dev/null"
+          expected_contains: "{}"
+      - description: "policyTypes inclui **Ingress**"
+        validation:
+          command: "kubectl get networkpolicy default-deny-ingress -o jsonpath='{.spec.policyTypes[0]}' 2>/dev/null"
+          expected_contains: "Ingress"
+    teardown:
+      - "kubectl delete networkpolicy default-deny-ingress --ignore-not-found=true"
+    explanation: "podSelector: {} seleciona TODOS os pods no namespace. policyTypes: [Ingress] sem regras de ingress = deny all ingress. Aplique primeiro, depois adicione NetworkPolicies específicas para tráfego permitido. Requer CNI com suporte (Calico, Cilium, Weave)."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-deny-all-ingress-traffic"
+    doc_section: "Concepts → Network Policies → Default Deny"
+
+  - id: cks-lab-009
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: easy
+    type: lab
+    question: "Visualize os certificados do cluster kubeadm e suas datas de expiração."
+    options:
+      - "kubectl get certificates -n kube-system"
+      - "kubeadm certs check-expiration"
+      - "openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -dates"
+      - "B e C estão corretos"
+    answer: 3
+    answer_command: "kubeadm certs check-expiration"
+    explanation: "kubeadm certs check-expiration lista todos os certificados gerenciados pelo kubeadm. Para verificar certificados individuais: openssl x509 -in <cert.crt> -noout -enddate. Certificados expiram em 1 ano por padrão. Renove com: kubeadm certs renew all."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/"
+    doc_section: "Tasks → Administer → kubeadm → Certificates"
+
+  - id: cks-lab-010
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: easy
+    type: lab
+    question: "Restrinja o acesso anônimo ao API Server. Qual flag do kube-apiserver desabilita o acesso anônimo?"
+    options:
+      - "--disable-anonymous=true"
+      - "--anonymous-auth=false"
+      - "--no-anonymous-access=true"
+      - "--require-auth=true"
+    answer: 1
+    answer_command: "# Editar /etc/kubernetes/manifests/kube-apiserver.yaml: --anonymous-auth=false"
+    explanation: "--anonymous-auth=false desabilita requisições não autenticadas ao API Server. Por padrão é true (permite acesso anônimo a alguns endpoints como /healthz). Após desabilitar, /healthz pode precisar de autenticação — use --anonymous-auth-exempt-prefixes ou LoadBalancer health check alternativo."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/authentication/#anonymous-requests"
+    doc_section: "Reference → Authentication → Anonymous Requests"
+
+  - id: cks-lab-011
+    cert: CKS
+    topic: Minimizing Microservice Vulnerabilities
+    difficulty: easy
+    type: lab
+    question: "Verifique vulnerabilidades conhecidas em uma imagem Docker usando **Trivy** antes de fazer deploy."
+    options:
+      - "docker scan --security nginx:1.21"
+      - "trivy image nginx:1.21"
+      - "kubectl scan image nginx:1.21 --check-cves"
+      - "kubeadm verify image nginx:1.21"
+    answer: 1
+    answer_command: "trivy image nginx:1.21"
+    explanation: "Trivy é um scanner de vulnerabilidades open-source da Aqua Security. Verifica CVEs no OS, linguagens e dependências. Use em CI/CD antes de push. trivy image --exit-code 1 --severity HIGH,CRITICAL falha o build se encontrar vulnerabilidades críticas."
+    doc_url: "https://aquasecurity.github.io/trivy/"
+    doc_section: "Supply Chain Security → Image Scanning"
+
+  - id: cks-lab-012
+    cert: CKS
+    topic: Supply Chain Security
+    difficulty: easy
+    type: lab
+    question: "Configure um **ImagePullPolicy: Always** para garantir que imagens sejam sempre verificadas no registry. Em qual campo da spec do container isso é definido?"
+    options:
+      - "spec.containers[].pullPolicy: Always"
+      - "spec.containers[].imagePullPolicy: Always"
+      - "spec.imagePullPolicy: Always"
+      - "spec.containers[].image.policy: Always"
+    answer: 1
+    answer_command: "kubectl set image deployment/app container=nginx:latest && kubectl patch deployment app -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"container\",\"imagePullPolicy\":\"Always\"}]}}}}'"
+    explanation: "imagePullPolicy: Always garante pull do registry a cada restart (verifica digest). :latest tag usa Always por padrão. Tags específicas (nginx:1.21) usam IfNotPresent por padrão (usa cache local). Em CKS, Always garante que imagens comprometidas no cache sejam detectadas."
+    doc_url: "https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy"
+    doc_section: "Concepts → Containers → Images → Pull Policy"
+
+  - id: cks-lab-013
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: easy
+    type: lab
+    question: "Liste todos os ClusterRoleBindings que referenciam usuários (subjects com kind=User) no cluster."
+    options:
+      - "kubectl get clusterrolebindings --subjects-type=User"
+      - "kubectl get clusterrolebindings -o json | jq '.items[] | select(.subjects[]?.kind==\"User\")'"
+      - "kubectl describe clusterrolebindings | grep -A2 'User'"
+      - "B ou C estão corretos"
+    answer: 1
+    answer_command: "kubectl get clusterrolebindings -o json | jq '.items[] | select(.subjects[]?.kind==\"User\") | .metadata.name'"
+    explanation: "kubectl não tem filtro nativo para subjects — é necessário usar jq ou -o jsonpath para filtrar. Auditoria de RBAC é essencial no CKS: identifique bindings desnecessários, especialmente os que concedem cluster-admin. Remova usuários que não precisam de acesso."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/#referring-to-subjects"
+    doc_section: "Reference → RBAC → Subjects"
+
+  - id: cks-lab-014
+    cert: CKS
+    topic: Network Security
+    difficulty: easy
+    type: lab
+    question: "Crie uma NetworkPolicy que permita tráfego de saída (egress) apenas para o namespace **database** na porta **5432** para os pods com label **tier=backend**."
+    options:
+      - "kubectl create networkpolicy backend-egress --pod-selector=tier=backend --egress-to=namespace:database --port=5432"
+      - "Criar via YAML: podSelector={tier:backend}, policyTypes:[Egress], egress:[{to:[{namespaceSelector:{match:database}}], ports:[{port:5432}]}]"
+      - "kubectl annotate pods -l tier=backend egress=database:5432"
+      - "kubectl taint namespace backend egress=database:5432:NoSchedule"
+    answer: 1
+    answer_command: "kubectl apply -f backend-egress-policy.yaml"
+    explanation: "policyTypes: [Egress] sem regras = bloqueia todo egress. Com regras egress, apenas o tráfego especificado é permitido. Para permitir DNS (53/UDP) junto: adicione outra regra egress para kube-dns. namespaceSelector seleciona o namespace destino."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/network-policies/#the-networkpolicy-resource"
+    doc_section: "Concepts → Network Policies"
+
+  - id: cks-lab-015
+    cert: CKS
+    topic: Cluster Setup
+    difficulty: easy
+    type: lab
+    question: "Verifique o benchmark CIS para a configuração atual do kube-apiserver usando **kube-bench**."
+    options:
+      - "kubectl bench --cis kube-apiserver"
+      - "kube-bench run --targets apiserver"
+      - "kubeadm audit --cis"
+      - "kube-bench --check apiserver"
+    answer: 1
+    answer_command: "kube-bench run --targets apiserver"
+    explanation: "kube-bench verifica a conformidade com o CIS Kubernetes Benchmark. Flags principais: --targets (apiserver, node, etcd, policies). Executa como Job no cluster: kubectl apply -f https://raw.githubusercontent.com/aquasecurity/kube-bench/main/job.yaml. Analise as falhas [FAIL] e [WARN]."
+    doc_url: "https://github.com/aquasecurity/kube-bench"
+    doc_section: "Supply Chain Security → CIS Benchmark"
+
+  # ── MID: Cluster Hardening & Runtime Security ─────────────
+  - id: cks-lab-016
+    cert: CKS
+    topic: System Hardening
+    difficulty: mid
+    type: lab
+    question: "Configure um perfil **seccomp** restritivo (RuntimeDefault) para um pod. Qual campo e valor usar na spec do pod?"
+    options:
+      - "spec.securityContext.seccompProfile.type: RuntimeDefault"
+      - "kubectl annotate pod <name> seccomp.security.alpha.kubernetes.io/pod=runtime/default"
+      - "spec.containers[].securityContext.seccompProfile: runtime/default"
+      - "A e B ambas são formas válidas (A é a moderna, B é a deprecated)"
+    answer: 0
+    answer_command: "kubectl apply -f seccomp-pod.yaml"
+    explanation: "seccompProfile.type: RuntimeDefault usa o perfil seccomp padrão do container runtime (Docker/containerd), que bloqueia syscalls perigosas. Alternativas: Unconfined (sem restrições — não recomendado), Localhost (perfil customizado). A anotação beta foi depreciada no K8s 1.19."
+    doc_url: "https://kubernetes.io/docs/tutorials/security/seccomp/"
+    doc_section: "Tutorials → Security → Seccomp"
+
+  - id: cks-lab-017
+    cert: CKS
+    topic: System Hardening
+    difficulty: mid
+    type: lab
+    question: "Aplique um perfil **AppArmor** ao container **web** de um pod existente. Qual é o campo de annotation correto (K8s < 1.30)?"
+    options:
+      - "spec.containers[].securityContext.appArmorProfile.type: RuntimeDefault"
+      - "container.apparmor.security.beta.kubernetes.io/<container-name>: localhost/<profile-name>"
+      - "spec.securityContext.appArmor: <profile-name>"
+      - "kubectl annotate pod <name> apparmor=<profile-name>"
+    answer: 1
+    answer_command: "kubectl annotate pod <name> container.apparmor.security.beta.kubernetes.io/web=localhost/custom-profile"
+    explanation: "AppArmor é aplicado via annotation no Pod (pré-K8s 1.30). O perfil deve estar carregado no nó (apparmor_parser -r profile). No K8s 1.30+: spec.containers[].securityContext.appArmorProfile. Perfis: runtime/default (padrão runtime), localhost/<name> (customizado), unconfined."
+    doc_url: "https://kubernetes.io/docs/tutorials/security/apparmor/"
+    doc_section: "Tutorials → Security → AppArmor"
+
+  - id: cks-lab-018
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: mid
+    type: lab
+    question: "Identifique todas as ServiceAccounts com permissões de cluster-admin (via ClusterRoleBinding). Qual comando usar?"
+    options:
+      - "kubectl get sa --with-role=cluster-admin"
+      - "kubectl get clusterrolebindings -o json | jq '.items[] | select(.roleRef.name==\"cluster-admin\") | .subjects'"
+      - "kubectl auth can-i --list --as=system:serviceaccount:default:default"
+      - "kubectl describe clusterrole cluster-admin"
+    answer: 1
+    answer_command: "kubectl get clusterrolebindings -o json | jq '.items[] | select(.roleRef.name==\"cluster-admin\") | {binding: .metadata.name, subjects: .subjects}'"
+    explanation: "Identificar SAs com cluster-admin é crítico para CKS. cluster-admin concede acesso irrestrito ao cluster. SAs com cluster-admin comprometidas = comprometimento total do cluster. Substitua por ClusterRoles específicas com PoLP."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/#user-facing-roles"
+    doc_section: "Reference → RBAC → User-Facing Roles"
+
+  - id: cks-lab-019
+    cert: CKS
+    topic: Runtime Security
+    difficulty: mid
+    type: lab
+    question: "O **Falco** detectou atividade suspeita em um pod. Como verificar os alertas do Falco em tempo real?"
+    options:
+      - "kubectl logs -n falco -l app=falco -f"
+      - "kubectl get alerts --from=falco"
+      - "kubectl describe pod falco -n falco"
+      - "kubectl exec -n falco falco-pod -- falco --list-alerts"
+    answer: 0
+    answer_command: "kubectl logs -n falco -l app=falco -f"
+    explanation: "Falco é um runtime security tool que detecta anomalias baseado em syscalls. Alertas vão para stdout → visíveis via kubectl logs. Também pode enviar para Slack, syslog, gRPC. Regras customizadas em /etc/falco/falco_rules.yaml. Prioridades: ERROR, WARNING, NOTICE, INFO, DEBUG."
+    doc_url: "https://falco.org/docs/"
+    doc_section: "Runtime Security → Falco"
+
+  - id: cks-lab-020
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: mid
+    type: lab
+    question: "Restrinja a criação de pods privilegiados no namespace **secured** usando **Pod Security Admission** no nível **restricted**."
+    options:
+      - "kubectl label namespace secured security=restricted"
+      - "kubectl label namespace secured pod-security.kubernetes.io/enforce=restricted"
+      - "kubectl annotate namespace secured pod-security=restricted"
+      - "kubectl taint namespace secured privileged=denied:NoSchedule"
+    answer: 1
+    answer_command: "kubectl label namespace secured pod-security.kubernetes.io/enforce=restricted"
+    setup:
+      - description: "Criando namespace secured..."
+        command: "kubectl create namespace secured 2>/dev/null || true"
+    goals:
+      - description: "Namespace **secured** existe"
+        hint: "kubectl create namespace secured"
+        validation:
+          command: "kubectl get namespace secured -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "secured"
+      - description: "Label **pod-security.kubernetes.io/enforce=restricted** aplicado"
+        hint: "kubectl label namespace secured pod-security.kubernetes.io/enforce=restricted"
+        validation:
+          command: "kubectl get namespace secured -o jsonpath='{.metadata.labels.pod-security\\.kubernetes\\.io/enforce}' 2>/dev/null"
+          expected_contains: "restricted"
+    teardown:
+      - "kubectl delete namespace secured --ignore-not-found=true"
+    explanation: "Pod Security Admission (PSA) substituiu PodSecurityPolicy no K8s 1.25. Labels: pod-security.kubernetes.io/enforce (bloqueia), /warn (avisa), /audit (loga). Níveis: privileged (sem restrição), baseline (previne escaladas), restricted (hardened, segue melhores práticas)."
+    doc_url: "https://kubernetes.io/docs/concepts/security/pod-security-admission/"
+    doc_section: "Concepts → Security → Pod Security Admission"
+
+  - id: cks-lab-021
+    cert: CKS
+    topic: Supply Chain Security
+    difficulty: mid
+    type: lab
+    question: "Configure um **Admission Webhook** (OPA/Gatekeeper) para bloquear pods com imagens sem digest SHA256. Qual recurso do Gatekeeper define a política?"
+    options:
+      - "NetworkPolicy com selector de imagem"
+      - "ConstraintTemplate (define a política em Rego) + Constraint (aplica a política)"
+      - "ValidatingWebhookConfiguration diretamente com a lógica de verificação"
+      - "ResourceQuota com spec.hard.images.without-digest=0"
+    answer: 1
+    answer_command: "kubectl apply -f constraint-template.yaml && kubectl apply -f constraint.yaml"
+    explanation: "OPA Gatekeeper usa ConstraintTemplate (código Rego que define a política) e Constraint (aplica o template a recursos específicos com parâmetros). O Gatekeeper é um ValidatingAdmissionWebhook — bloqueia recursos que violam políticas antes de persistir no etcd."
+    doc_url: "https://open-policy-agent.github.io/gatekeeper/website/docs/"
+    doc_section: "Supply Chain Security → OPA Gatekeeper"
+
+  - id: cks-lab-022
+    cert: CKS
+    topic: Network Security
+    difficulty: mid
+    type: lab
+    question: "Habilite **mTLS** entre serviços usando Istio. Como verificar se o tráfego entre dois pods está sendo criptografado?"
+    options:
+      - "kubectl get secret -n istio-system -l app=istio-citadel"
+      - "kubectl exec <pod> -c istio-proxy -- openssl s_client -connect <service>:80"
+      - "istioctl authn tls-check <pod> <service>"
+      - "kubectl describe virtualservice --mtls=true"
+    answer: 2
+    answer_command: "istioctl authn tls-check <pod-name> <service-name>.<namespace>.svc.cluster.local"
+    explanation: "istioctl authn tls-check verifica se mTLS está configurado corretamente entre os serviços. Status OK indica criptografia. Para habilitar mTLS strict: aplicar PeerAuthentication com mode: STRICT no namespace. mTLS garante autenticação mútua e criptografia de transporte sem mudanças na aplicação."
+    doc_url: "https://istio.io/latest/docs/tasks/security/authentication/mtls-migration/"
+    doc_section: "Runtime Security → mTLS"
+
+  - id: cks-lab-023
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: mid
+    type: lab
+    question: "Configure o **API Server** para usar um arquivo de política de autorização ABAC. Qual flag usar e por que RBAC é preferível em clusters modernos?"
+    options:
+      - "--authorization-mode=ABAC --authorization-policy-file=/etc/kubernetes/policy.json (mas RBAC é preferível por ser dinâmico e não requer restart)"
+      - "--abac-policy=/etc/kubernetes/policy.json (suportado em todas as versões)"
+      - "--authorization-mode=Webhook --webhook-policy=/etc/kubernetes/policy.json"
+      - "--policy=abac:/etc/kubernetes/policy.json"
+    answer: 0
+    answer_command: "# Editar kube-apiserver.yaml: --authorization-mode=ABAC,RBAC --authorization-policy-file=/etc/kubernetes/policy.json"
+    explanation: "ABAC requer restart do apiserver para cada mudança de política. RBAC é dinâmico (mudanças em tempo real via API) e mais granular. Em produção, prefira RBAC. Para compatibilidade: --authorization-mode=Node,RBAC (Node para kubelets, RBAC para o resto). Evite ABAC em clusters CKS."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/abac/"
+    doc_section: "Reference → Authorization → ABAC"
+
+  - id: cks-lab-024
+    cert: CKS
+    topic: Minimizing Microservice Vulnerabilities
+    difficulty: mid
+    type: lab
+    question: "Scan do namespace **production** para identificar pods rodando como root. Qual comando/ferramenta usar?"
+    options:
+      - "kubectl get pods -n production -o json | jq '.items[] | select(.spec.securityContext.runAsUser == 0)'"
+      - "kubectl get pods -n production --security-context=root"
+      - "kubectl audit pods -n production --check=root"
+      - "kubectl describe pods -n production | grep 'Run As User'"
+    answer: 0
+    answer_command: "kubectl get pods -n production -o json | jq '.items[] | select(.spec.securityContext.runAsUser == 0 or .spec.containers[].securityContext.runAsUser == 0) | .metadata.name'"
+    explanation: "jq com -o json é a forma mais eficaz de filtrar campos de segurança. Também verifique: runAsNonRoot, privileged, allowPrivilegeEscalation, capabilities. Ferramenta automatizada: kubectl-who-can, Polaris, Starboard. Pods sem securityContext rodam como root por padrão (UID 0)."
+    doc_url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
+    doc_section: "Concepts → Security → Pod Security Standards"
+
+  - id: cks-lab-025
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: mid
+    type: lab
+    question: "Rotacione os certificados do kubeadm antes da expiração."
+    options:
+      - "kubectl rotate certificates --all"
+      - "kubeadm certs renew all"
+      - "openssl genrsa -out new.key 2048 && openssl req -new -key new.key -out new.csr"
+      - "kubeadm upgrade apply --renew-certs"
+    answer: 1
+    answer_command: "kubeadm certs renew all"
+    explanation: "kubeadm certs renew all renova todos os certificados do control plane por mais 1 ano. Após renovar, reinicie os componentes: kube-apiserver, kube-controller-manager, kube-scheduler, etcd. Use 'kubeadm certs check-expiration' para verificar antes e depois."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/#manual-certificate-renewal"
+    doc_section: "Tasks → Administer → kubeadm → Manual Certificate Renewal"
+
+  # ── HARD: Advanced Security ───────────────────────────────
+  - id: cks-lab-026
+    cert: CKS
+    topic: Runtime Security
+    difficulty: hard
+    type: lab
+    question: "Crie uma regra **Falco** customizada que detecte quando alguém executa **kubectl exec** em um pod do namespace **production**."
+    options:
+      - "kubectl create rule falco-exec-detection --namespace=production"
+      - "Adicionar em /etc/falco/falco_rules.local.yaml: rule com condition: ka.verb=exec e ka.target.namespace=production"
+      - "kubectl annotate namespace production falco.io/detect-exec=true"
+      - "falco --create-rule exec-detection --namespace=production"
+    answer: 1
+    answer_command: "# Editar /etc/falco/falco_rules.local.yaml e adicionar a regra customizada"
+    explanation: "Falco rules.local.yaml é o arquivo para regras customizadas (não sobrescreve na atualização). A condição usa campos ka.* para API audit events. Para syscall: evt.type=execve. Campos úteis: ka.verb, ka.target.name, ka.target.namespace, ka.user.name. Depois reinicie o Falco."
+    doc_url: "https://falco.org/docs/rules/"
+    doc_section: "Runtime Security → Falco Rules"
+
+  - id: cks-lab-027
+    cert: CKS
+    topic: Cluster Setup
+    difficulty: hard
+    type: lab
+    question: "Crie uma **Audit Policy** que registre todos os acessos de nível **RequestResponse** para secrets, e nível **Metadata** para o resto."
+    options:
+      - "kubectl create auditpolicy --secrets=full --default=metadata"
+      - "Criar /etc/kubernetes/audit-policy.yaml com rules: [{level: RequestResponse, resources: [{group:'',resources:['secrets']}]}, {level: Metadata}]"
+      - "kubectl annotate apiserver audit.policy=secrets:full,default:metadata"
+      - "kubeadm audit configure --secrets=RequestResponse --default=Metadata"
+    answer: 1
+    answer_command: "# Criar o arquivo de policy e referenciar com --audit-policy-file no apiserver"
+    explanation: "Audit Policy rules são avaliadas em ordem (primeiro match vence). Níveis: None (sem log), Metadata (headers/user/verb), Request (+ request body), RequestResponse (+ response body). Secrets requerem RequestResponse para debug de problemas de acesso. A policy deve ser passada via --audit-policy-file ao kube-apiserver."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/#audit-policy"
+    doc_section: "Tasks → Debug → Audit → Audit Policy"
+
+  - id: cks-lab-028
+    cert: CKS
+    topic: Supply Chain Security
+    difficulty: hard
+    type: lab
+    question: "Configure o **ImagePolicyWebhook** para que imagens sem scan aprovado sejam rejeitadas. Qual admission plugin ativar no kube-apiserver?"
+    options:
+      - "--enable-admission-plugins=ImagePolicyWebhook"
+      - "--admission-control=ImageScanner"
+      - "--enable-admission-plugins=ImagePolicyWebhook e configurar --admission-control-config-file"
+      - "--image-policy=webhook --webhook-url=https://scanner.example.com"
+    answer: 2
+    answer_command: "# kube-apiserver: --enable-admission-plugins=ImagePolicyWebhook --admission-control-config-file=/etc/kubernetes/admission-config.yaml"
+    explanation: "ImagePolicyWebhook é um admission plugin que chama um webhook externo para aprovar/rejeitar imagens. Requer: --enable-admission-plugins=ImagePolicyWebhook e --admission-control-config-file apontando para um arquivo de config que especifica o webhook URL, certificados e defaultAllow."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#imagepolicywebhook"
+    doc_section: "Reference → Admission Controllers → ImagePolicyWebhook"
+
+  - id: cks-lab-029
+    cert: CKS
+    topic: Minimizing Microservice Vulnerabilities
+    difficulty: hard
+    type: lab
+    question: "Implemente o princípio de containers imutáveis: qual combinação de configurações garante que o filesystem não pode ser modificado e o processo não pode elevar privilégios?"
+    options:
+      - "imagePullPolicy: Always e runAsNonRoot: true"
+      - "readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, capabilities.drop: [ALL]"
+      - "seccompProfile.type: RuntimeDefault e runAsUser: 1000"
+      - "privileged: false e hostPID: false"
+    answer: 1
+    answer_command: "kubectl apply -f immutable-container.yaml"
+    explanation: "Imutabilidade de container: (1) readOnlyRootFilesystem impede escrita no FS, (2) allowPrivilegeEscalation: false bloqueia setuid/setgid e capabilities elevation, (3) capabilities.drop: [ALL] remove todas as capabilities Linux. Juntos: o container não pode modificar arquivos, não pode escalar privilégios e não tem acesso a syscalls privilegiadas."
+    doc_url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted"
+    doc_section: "Concepts → Security → Pod Security Standards → Restricted"
+
+  - id: cks-lab-030
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: hard
+    type: lab
+    question: "Configure o **etcd** com criptografia de dados em repouso para Secrets. Qual recurso da API do kube-apiserver controla isso?"
+    options:
+      - "kubectl create encryptionconfig --resource=secrets --provider=aescbc"
+      - "Criar EncryptionConfiguration YAML e passar via --encryption-provider-config ao kube-apiserver"
+      - "kubectl encrypt secrets --all -n default"
+      - "etcdctl encrypt --resource=secrets"
+    answer: 1
+    answer_command: "# Criar encryption-config.yaml com EncryptionConfiguration e referenciar com --encryption-provider-config"
+    explanation: "EncryptionConfiguration define providers por recurso. Providers: identity (sem criptografia), aescbc (AES-CBC), aesgcm (mais moderno), kms (chave gerenciada por KMS externo). O primeiro provider é usado para escrita. Execute 'kubectl get secrets --all-namespaces -o json | kubectl replace -f -' para re-criptografar segredos existentes."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/"
+    doc_section: "Tasks → Administer → Encrypt Data at Rest"
+
+  - id: cks-lab-031
+    cert: CKS
+    topic: System Hardening
+    difficulty: hard
+    type: lab
+    question: "Configure um perfil seccomp **customizado** (Localhost) que bloqueie a syscall **chmod**. Em que diretório do nó o perfil deve estar localizado?"
+    options:
+      - "/etc/seccomp/profiles/"
+      - "/var/lib/kubelet/seccomp/ (configurável via --seccomp-profile-root)"
+      - "/etc/kubernetes/security/seccomp/"
+      - "/usr/share/seccomp/"
+    answer: 1
+    answer_command: "# Copiar perfil para /var/lib/kubelet/seccomp/ e referenciar no pod: seccompProfile.type: Localhost, localhostProfile: 'my-profile.json'"
+    explanation: "Perfis seccomp Localhost ficam em /var/lib/kubelet/seccomp/ (diretório configurável via --seccomp-profile-root no kubelet). O YAML do pod referencia o perfil relativo a esse diretório. Formato JSON com defaultAction e syscalls. Teste com seccomp-bpf antes de aplicar em produção."
+    doc_url: "https://kubernetes.io/docs/tutorials/security/seccomp/#create-a-pod-with-a-seccomp-profile-for-syscall-auditing"
+    doc_section: "Tutorials → Security → Seccomp → Custom Profile"
+
+  - id: cks-lab-032
+    cert: CKS
+    topic: Runtime Security
+    difficulty: hard
+    type: lab
+    question: "Identifique um container em execução que está fazendo chamadas de sistema suspeitas usando **strace** ou ferramentas similares. Qual é a abordagem correta no Kubernetes?"
+    options:
+      - "kubectl exec <pod> -- strace -p 1"
+      - "Usar um debug container: kubectl debug <pod> --image=nicolaka/netshoot --share-processes -- strace -p <pid>"
+      - "kubectl strace pod <pod-name>"
+      - "kubectl exec <pod> -- cat /proc/1/syscall"
+    answer: 1
+    answer_command: "kubectl debug <pod> --image=nicolaka/netshoot --share-processes -it"
+    explanation: "kubectl debug --share-processes injeta um container de debug que compartilha o namespace de PID do pod alvo. Isso permite usar strace, gdb ou outras ferramentas de diagnóstico sem instalá-las na imagem de produção. Requer shareProcessNamespace: true ou --share-processes."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/#ephemeral-container"
+    doc_section: "Tasks → Debug → Debug Running Pod → Ephemeral Containers"
+
+  - id: cks-lab-033
+    cert: CKS
+    topic: Supply Chain Security
+    difficulty: hard
+    type: lab
+    question: "Assine uma imagem com **cosign** e configure o cluster para verificar assinaturas antes de fazer pull. Qual admission controller implementa isso?"
+    options:
+      - "ImagePolicyWebhook com backend de verificação de assinatura (como sigstore/policy-controller)"
+      - "ValidatingAdmissionPolicy nativo do Kubernetes"
+      - "kubectl create image-signing-policy --tool=cosign"
+      - "kube-apiserver flag --verify-image-signatures=true"
+    answer: 0
+    answer_command: "cosign sign --key cosign.key <image> && kubectl apply -f sigstore-policy.yaml"
+    explanation: "cosign (Sigstore) assina imagens com chave pública/privada ou certificados OIDC (keyless). Para enforcement no cluster: sigstore/policy-controller como ValidatingWebhook verifica assinaturas antes do scheduling. Alternativa: Kyverno com verifyImages. Garante supply chain integrity: imagem não foi adulterada após build."
+    doc_url: "https://docs.sigstore.dev/"
+    doc_section: "Supply Chain Security → Image Signing"
+
+  - id: cks-lab-034
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: hard
+    type: lab
+    question: "Configure o kube-apiserver para usar **OIDC** como provider de autenticação para usuários externos."
+    options:
+      - "--auth-mode=OIDC --oidc-issuer=https://accounts.google.com"
+      - "--oidc-issuer-url=https://accounts.google.com --oidc-client-id=k8s-app --oidc-username-claim=email"
+      - "--oauth-provider=google --oauth-client=k8s-app"
+      - "--authentication-mode=OIDC --provider=https://accounts.google.com"
+    answer: 1
+    answer_command: "# Editar kube-apiserver.yaml: --oidc-issuer-url=... --oidc-client-id=... --oidc-username-claim=..."
+    explanation: "OIDC permite usar provedores de identidade externos (Google, Okta, Dex). Flags principais: --oidc-issuer-url (discovery URL), --oidc-client-id, --oidc-username-claim (campo do JWT como username), --oidc-groups-claim, --oidc-ca-file (para issuers com CA customizada). O JWT é validado contra o issuer a cada requisição."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/authentication/#openid-connect-tokens"
+    doc_section: "Reference → Authentication → OIDC"
+
+  - id: cks-lab-035
+    cert: CKS
+    topic: Runtime Security
+    difficulty: hard
+    type: lab
+    question: "Detecte e responda a um incidente de segurança onde um container está tentando escrever em **/etc**. Qual é a sequência correta de resposta a incidentes?"
+    options:
+      - "Deletar o pod imediatamente para parar o ataque"
+      - "Isolar o pod (NetworkPolicy deny-all) → capturar evidências (logs, describe, events) → notificar equipe → investigar → remediar"
+      - "Fazer backup do container e restartar o pod"
+      - "Aumentar resource limits do pod para reduzir o problema"
+    answer: 1
+    answer_command: "kubectl get networkpolicies && kubectl logs <pod> && kubectl describe pod <pod>"
+    explanation: "Resposta a incidentes: (1) Contenção: isolar com NetworkPolicy antes de deletar, (2) Evidências: logs, describe, kubectl get events, copiar filesystem com kubectl cp, (3) Notificação, (4) Eradicação: deletar o pod comprometido, (5) Recuperação, (6) Lessons learned. Deletar sem coletar evidências perde informações forenses."
+    doc_url: "https://kubernetes.io/docs/concepts/security/"
+    doc_section: "Concepts → Security → Runtime Security"
+
+  # ── NOVOS LABS INTERATIVOS (CKS) ──────────────────────────
+  - id: cks-lab-036
+    cert: CKS
+    topic: Minimizing Microservice Vulnerabilities
+    difficulty: easy
+    type: lab
+    question: "Crie um Pod **secure-pod** (nginx:1.21) com **securityContext**: runAsNonRoot, readOnlyRootFilesystem, allowPrivilegeEscalation=false e capabilities.drop=[ALL]."
+    options:
+      - "kubectl run secure-pod --image=nginx:1.21 --no-root --read-only"
+      - "Criar via YAML com securityContext completo no container"
+      - "kubectl create pod secure-pod --image=nginx:1.21 --security=restricted"
+      - "kubectl run secure-pod --image=nginx:1.21 --security-context=strict"
+    answer: 1
+    hint: |
+      Gere o YAML e edite:
+        kubectl run secure-pod --image=busybox --dry-run=client -o yaml > secure-pod.yaml
+      Use busybox sleep 3600 para evitar problemas com nginx e readOnlyRootFilesystem.
+      Adicione ao container:
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+    answer_command: "kubectl apply -f secure-pod.yaml"
+    goals:
+      - description: "Pod **secure-pod** existe"
+        hint: "Crie via YAML com busybox e sleep 3600 (mais fácil com readOnlyRootFilesystem)"
+        validation:
+          command: "kubectl get pod secure-pod -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "secure-pod"
+      - description: "**readOnlyRootFilesystem** está habilitado"
+        validation:
+          command: "kubectl get pod secure-pod -o jsonpath='{.spec.containers[0].securityContext.readOnlyRootFilesystem}' 2>/dev/null"
+          expected_contains: "true"
+      - description: "**allowPrivilegeEscalation** está desabilitado"
+        validation:
+          command: "kubectl get pod secure-pod -o jsonpath='{.spec.containers[0].securityContext.allowPrivilegeEscalation}' 2>/dev/null"
+          expected_contains: "false"
+    teardown:
+      - "kubectl delete pod secure-pod --ignore-not-found=true"
+    explanation: "Combinação mínima de segurança para containers: (1) readOnlyRootFilesystem impede escrita no FS, (2) allowPrivilegeEscalation: false bloqueia setuid/setgid, (3) capabilities.drop: [ALL] remove todos os privilégios Linux, (4) runAsNonRoot impede execução como root."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/security-context/"
+    doc_section: "Tasks → Configure Pod → Security Context"
+
+  - id: cks-lab-037
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: easy
+    type: lab
+    question: "Crie um **ClusterRole** chamado **readonly-cluster** que permita apenas **get**, **list** e **watch** em **pods**, **services** e **deployments** em qualquer namespace."
+    options:
+      - "kubectl create clusterrole readonly-cluster --verb=get,list,watch --resource=pods,services,deployments"
+      - "kubectl create role readonly-cluster --verb=get,list --resource=pods,services,deployments"
+      - "kubectl create clusterrole readonly-cluster --action=read --kind=pods,services,deployments"
+      - "kubectl create clusterrole readonly-cluster --read-only --resource=pods,services,deployments"
+    answer: 0
+    answer_command: "kubectl create clusterrole readonly-cluster --verb=get,list,watch --resource=pods,services,deployments"
+    goals:
+      - description: "ClusterRole **readonly-cluster** existe"
+        hint: "kubectl create clusterrole readonly-cluster --verb=get,list,watch --resource=pods,services,deployments"
+        validation:
+          command: "kubectl get clusterrole readonly-cluster -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "readonly-cluster"
+      - description: "ClusterRole permite verb **get** em pods"
+        validation:
+          command: "kubectl get clusterrole readonly-cluster -o jsonpath='{.rules[*].verbs}' 2>/dev/null"
+          expected_contains: "get"
+      - description: "ClusterRole inclui recurso **services**"
+        validation:
+          command: "kubectl get clusterrole readonly-cluster -o jsonpath='{.rules[*].resources}' 2>/dev/null"
+          expected_contains: "services"
+    teardown:
+      - "kubectl delete clusterrole readonly-cluster --ignore-not-found=true"
+    explanation: "ClusterRoles têm escopo de cluster (todos os namespaces). Roles são limitadas a um namespace. Para auditoria de segurança, prefira ClusterRoles com verbos mínimos. Evite wildcards ('*') em produção — sempre especifique os verbos e recursos exatos necessários."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/#clusterrole-example"
+    doc_section: "Reference → RBAC → ClusterRole"
+
+  - id: cks-lab-038
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: mid
+    type: lab
+    question: "Crie uma ServiceAccount **app-sa**, um Role **app-role** que permita get/list em pods, e um RoleBinding **app-binding** que associe a SA ao Role — tudo no namespace **default**."
+    options:
+      - "kubectl create sa app-sa && kubectl create role app-role --verb=get,list --resource=pods && kubectl create rolebinding app-binding --role=app-role --serviceaccount=default:app-sa"
+      - "kubectl create serviceaccount app-sa --role=app-role --verb=get,list --resource=pods"
+      - "kubectl create rbac app-sa --role=pods-reader"
+      - "kubectl create sa app-sa && kubectl bind app-sa --role=app-role"
+    answer: 0
+    hint: |
+      Execute em sequência:
+        kubectl create serviceaccount app-sa
+        kubectl create role app-role --verb=get,list --resource=pods
+        kubectl create rolebinding app-binding --role=app-role --serviceaccount=default:app-sa
+    answer_command: "kubectl create sa app-sa && kubectl create role app-role --verb=get,list --resource=pods && kubectl create rolebinding app-binding --role=app-role --serviceaccount=default:app-sa"
+    goals:
+      - description: "ServiceAccount **app-sa** existe"
+        hint: "kubectl create serviceaccount app-sa"
+        validation:
+          command: "kubectl get sa app-sa -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "app-sa"
+      - description: "Role **app-role** existe e permite get em pods"
+        hint: "kubectl create role app-role --verb=get,list --resource=pods"
+        validation:
+          command: "kubectl get role app-role -o jsonpath='{.rules[0].verbs}' 2>/dev/null"
+          expected_contains: "get"
+      - description: "RoleBinding **app-binding** associa app-sa ao app-role"
+        hint: "kubectl create rolebinding app-binding --role=app-role --serviceaccount=default:app-sa"
+        validation:
+          command: "kubectl get rolebinding app-binding -o jsonpath='{.subjects[0].name}' 2>/dev/null"
+          expected_contains: "app-sa"
+    teardown:
+      - "kubectl delete rolebinding app-binding --ignore-not-found=true"
+      - "kubectl delete role app-role --ignore-not-found=true"
+      - "kubectl delete sa app-sa --ignore-not-found=true"
+    explanation: "Triade RBAC: ServiceAccount (identidade do pod), Role (permissões no namespace), RoleBinding (associa SA ao Role). Para cluster-wide: ClusterRole + ClusterRoleBinding. O formato de --serviceaccount é namespace:nome. Verifique com: kubectl auth can-i get pods --as=system:serviceaccount:default:app-sa."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/"
+    doc_section: "Reference → RBAC"
+
+  - id: cks-lab-039
+    cert: CKS
+    topic: Network Security
+    difficulty: mid
+    type: lab
+    question: "Crie um namespace **backend**, rotule-o com **team=backend**, crie uma NetworkPolicy **allow-from-frontend** no namespace **backend** que permita ingress na porta **8080** apenas de pods com label **app=frontend** do namespace com label **team=frontend**."
+    options:
+      - "Criar via YAML com namespaceSelector.matchLabels.team=frontend e podSelector.matchLabels.app=frontend"
+      - "kubectl create networkpolicy --from-namespace=frontend --from-label=app=frontend --port=8080"
+      - "kubectl annotate namespace backend allow-from=frontend"
+      - "kubectl create np allow-from-frontend -n backend --ingress=team=frontend/app=frontend:8080"
+    answer: 0
+    hint: |
+      1. kubectl create namespace backend && kubectl label namespace backend team=backend
+      2. kubectl create namespace frontend && kubectl label namespace frontend team=frontend
+      3. Crie o YAML da NetworkPolicy com namespaceSelector + podSelector
+    answer_command: "kubectl apply -f allow-from-frontend-policy.yaml"
+    setup:
+      - description: "Criando namespace backend..."
+        command: "kubectl create namespace backend 2>/dev/null || true"
+      - description: "Adicionando label team=backend..."
+        command: "kubectl label namespace backend team=backend --overwrite 2>/dev/null || true"
+      - description: "Criando namespace frontend..."
+        command: "kubectl create namespace frontend 2>/dev/null || true"
+      - description: "Adicionando label team=frontend..."
+        command: "kubectl label namespace frontend team=frontend --overwrite 2>/dev/null || true"
+    goals:
+      - description: "Namespace **backend** tem label **team=backend**"
+        hint: "kubectl label namespace backend team=backend"
+        validation:
+          command: "kubectl get namespace backend -o jsonpath='{.metadata.labels.team}' 2>/dev/null"
+          expected_contains: "backend"
+      - description: "NetworkPolicy **allow-from-frontend** existe no namespace **backend**"
+        hint: "Crie via YAML com namespaceSelector e podSelector"
+        validation:
+          command: "kubectl get networkpolicy allow-from-frontend -n backend -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "allow-from-frontend"
+      - description: "Policy filtra por namespace com label **team=frontend**"
+        validation:
+          command: "kubectl get networkpolicy allow-from-frontend -n backend -o jsonpath='{.spec.ingress[0].from[0].namespaceSelector}' 2>/dev/null"
+          expected_contains: "frontend"
+    teardown:
+      - "kubectl delete networkpolicy allow-from-frontend -n backend --ignore-not-found=true"
+      - "kubectl delete namespace backend --ignore-not-found=true"
+      - "kubectl delete namespace frontend --ignore-not-found=true"
+    explanation: "namespaceSelector + podSelector no mesmo elemento 'from' são AND (namespace E label do pod). Para OR: use elementos separados na lista from[]. O namespace deve ter o label para que namespaceSelector funcione. Rotule namespaces antecipadamente em clusters reais."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/network-policies/#networkpolicy-with-podnamespaceselectors"
+    doc_section: "Concepts → Network Policies → Pod and Namespace Selectors"
+
+  - id: cks-lab-040
+    cert: CKS
+    topic: Minimizing Microservice Vulnerabilities
+    difficulty: hard
+    type: lab
+    question: "Crie um Pod **immutable-pod** (busybox, sleep 3600) com securityContext totalmente restritivo: runAsUser=65534, runAsGroup=65534, fsGroup=65534, readOnlyRootFilesystem=true, allowPrivilegeEscalation=false, capabilities.drop=[ALL], seccompProfile.type=RuntimeDefault."
+    options:
+      - "kubectl run immutable-pod --image=busybox --security-context=all-restricted -- sleep 3600"
+      - "Criar via YAML com todos os campos de securityContext no nível do pod e do container"
+      - "kubectl create pod immutable-pod --image=busybox --restricted"
+      - "kubectl run immutable-pod --image=busybox --no-root --no-caps -- sleep 3600"
+    answer: 1
+    hint: |
+      Crie o YAML com securityContext em dois níveis:
+      Pod-level: runAsUser, runAsGroup, fsGroup, seccompProfile
+      Container-level: readOnlyRootFilesystem, allowPrivilegeEscalation, capabilities.drop
+      Use UID 65534 (nobody) que existe no busybox.
+    answer_command: "kubectl apply -f immutable-pod.yaml"
+    goals:
+      - description: "Pod **immutable-pod** existe e está Running"
+        hint: "Crie via YAML com todos os campos de securityContext"
+        validation:
+          command: "kubectl get pod immutable-pod -o jsonpath='{.status.phase}' 2>/dev/null"
+          expected_contains: "Running"
+      - description: "runAsUser está configurado (não root)"
+        validation:
+          command: "kubectl get pod immutable-pod -o jsonpath='{.spec.securityContext.runAsUser}' 2>/dev/null"
+          expected_contains: "65534"
+      - description: "readOnlyRootFilesystem está habilitado"
+        validation:
+          command: "kubectl get pod immutable-pod -o jsonpath='{.spec.containers[0].securityContext.readOnlyRootFilesystem}' 2>/dev/null"
+          expected_contains: "true"
+      - description: "allowPrivilegeEscalation está desabilitado"
+        validation:
+          command: "kubectl get pod immutable-pod -o jsonpath='{.spec.containers[0].securityContext.allowPrivilegeEscalation}' 2>/dev/null"
+          expected_contains: "false"
+    teardown:
+      - "kubectl delete pod immutable-pod --ignore-not-found=true"
+    explanation: "Container imutável segue o perfil 'restricted' do Pod Security Standards: sem root, sem escrita no FS, sem privilege escalation, sem capabilities extras, com seccomp RuntimeDefault. UID 65534 (nobody) é convencional para processos sem privilégios."
+    doc_url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted"
+    doc_section: "Concepts → Security → Pod Security Standards → Restricted"

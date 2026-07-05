@@ -1,0 +1,126 @@
+questions:
+    - id: custom-9da8c405
+      cert: CKA
+      topic: Custom
+      difficulty: mid
+      type: lab
+      question: |-
+        Da documentação: execute a operação abaixo e confira o resultado.
+
+        `kubectl label namespace frontend namespace=frontend`
+
+        Dica: leia cada flag antes de rodar.
+      options: []
+      answer: 0
+      explanation: Exercício gerado da sua documentação. Pratique até reproduzir sem olhar a dica.
+      doc_url: ""
+      doc_section: ""
+      hint: kubectl label namespace frontend namespace=frontend
+      answer_command: kubectl label namespace frontend namespace=frontend
+      validation: null
+      goals:
+        - description: '**namespace/frontend** tem a label **namespace=frontend**'
+          hint: kubectl label ...
+          validation:
+            command: kubectl get namespace frontend -o jsonpath='{.metadata.labels.namespace}' 2>/dev/null
+            expected_contains: frontend
+            expected_output: ""
+      setup:
+        - description: 'Preparando o ambiente: criando namespace/frontend...'
+          command: kubectl create namespace frontend 2>/dev/null || true
+      teardown:
+        - kubectl delete namespace frontend --ignore-not-found=true 2>/dev/null || true
+    - id: custom-15bf9507
+      cert: CKA
+      topic: Custom
+      difficulty: mid
+      type: lab
+      question: |-
+        Da documentação: execute a operação abaixo e confira o resultado.
+
+        `kubectl label namespace backend namespace=backend`
+
+        Dica: leia cada flag antes de rodar.
+      options: []
+      answer: 0
+      explanation: Exercício gerado da sua documentação. Pratique até reproduzir sem olhar a dica.
+      doc_url: ""
+      doc_section: ""
+      hint: kubectl label namespace backend namespace=backend
+      answer_command: kubectl label namespace backend namespace=backend
+      validation: null
+      goals:
+        - description: '**namespace/backend** tem a label **namespace=backend**'
+          hint: kubectl label ...
+          validation:
+            command: kubectl get namespace backend -o jsonpath='{.metadata.labels.namespace}' 2>/dev/null
+            expected_contains: backend
+            expected_output: ""
+      setup:
+        - description: 'Preparando o ambiente: criando namespace/backend...'
+          command: kubectl create namespace backend 2>/dev/null || true
+      teardown:
+        - kubectl delete namespace backend --ignore-not-found=true 2>/dev/null || true
+    - id: custom-4950cead
+      cert: CKA
+      topic: Custom
+      difficulty: mid
+      type: lab
+      question: |-
+        Da documentação que você forneceu: crie o **NetworkPolicy/test-network-policy**.
+
+        Dica: monte o YAML e aplique com `kubectl apply -f`.
+      options: []
+      answer: 0
+      explanation: Manifest extraído da sua documentação. O kind NetworkPolicy foi criado de forma declarativa — compare o resultado (kubectl get -o yaml) com o manifest original.
+      doc_url: ""
+      doc_section: ""
+      hint: |-
+        kubectl apply -f - <<EOF
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        metadata:
+          name: test-network-policy
+          namespace: default
+        spec:
+          podSelector:
+            matchLabels:
+              role: db
+          policyTypes:
+          - Ingress
+          - Egress
+          ingress:
+          - from:
+            - ipBlock:
+                cidr: 172.17.0.0/16
+                except:
+                - 172.17.1.0/24
+            - namespaceSelector:
+                matchLabels:
+                  project: myproject
+            - podSelector:
+                matchLabels:
+                  role: frontend
+            ports:
+            - protocol: TCP
+              port: 6379
+          egress:
+          - to:
+            - ipBlock:
+                cidr: 10.0.0.0/24
+            ports:
+            - protocol: TCP
+              port: 5978
+        EOF
+      answer_command: 'kubectl apply -f manifest.yaml  # NetworkPolicy/test-network-policy da documentação'
+      validation: null
+      goals:
+        - description: '**NetworkPolicy/test-network-policy** existe no cluster'
+          hint: kubectl apply -f com o manifest da doc.
+          validation:
+            command: kubectl get networkpolicy test-network-policy -o name 2>/dev/null
+            expected_contains: test-network-policy
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete networkpolicy test-network-policy --ignore-not-found=true

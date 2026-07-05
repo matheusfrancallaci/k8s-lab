@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wsl.exe -- kubectl config use-context minikube)",
+      "Bash(wsl.exe -- bash -c \"kubectl get nodes --no-headers --request-timeout=10s 2>&1 | head -2\")",
+      "Bash(wsl.exe -u root -- systemctl start minikube --no-block)",
+      "Bash(go build *)",
+      "Bash(go vet *)",
+      "Bash(wsl.exe -- bash -c \"kubectl get nodes --no-headers --request-timeout=5s 2>/dev/null | grep -q Ready\")",
+      "Bash(wsl.exe -- bash -c \"kubectl config current-context; kubectl get nodes --no-headers\")",
+      "Bash(wsl.exe -- bash -c \"systemctl status minikube --no-pager 2>&1 | head -8; echo '---'; minikube status 2>&1 | head -6; echo '---docker---'; systemctl is-active docker 2>&1\")"
+    ]
+  }
+}

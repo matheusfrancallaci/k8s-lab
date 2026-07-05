@@ -1,0 +1,73 @@
+questions:
+    - id: custom-237ff576
+      cert: CKA
+      topic: Custom
+      difficulty: mid
+      type: multiple_choice
+      question: Qual é o objetivo principal do Pod em Kubernetes?
+      options:
+        - Execução de uma aplicação
+        - Gerenciamento de recursos
+        - Isolamento de processos
+        - Armazenamento de dados
+      answer: 2
+      explanation: |-
+        O Pod é um recurso fundamental em Kubernetes que fornece isolamento de processos e garantia que todas as contêineres dentro do mesmo Pod compartilham os mesmos recursos.
+
+        (gerada pela IA local a partir da sua documentação)
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-61e98890
+      cert: CKA
+      topic: Custom
+      difficulty: mid
+      type: multiple_choice
+      question: Qual é o comando para criar uma rede de serviço no Kubernetes?
+      options:
+        - kubectl create service
+        - kubectl expose pod
+        - kubectl apply -f
+        - kubectl get svc
+      answer: 3
+      explanation: |-
+        O comando corretto é 'kubectl apply -f' quando se está trabalhando com um arquivo YAML ou JSON que define a rede de serviço.
+
+        (gerada pela IA local a partir da sua documentação)
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-9acba91d
+      cert: CKA
+      topic: Custom
+      difficulty: mid
+      type: multiple_choice
+      question: Qual é o termo usado para descrever a capacidade de um cluster de Kubernetes de se recuperar automaticamente após uma falha?
+      options:
+        - High Availability
+        - Load Balancing
+        - Autoscaling
+        - Self-healing
+      answer: 3
+      explanation: |-
+        O termo 'self-healing' é usado para descrever a capacidade do cluster de se recuperar automaticamente após uma falha, garantindo que as aplicações permaneçam disponíveis.
+
+        (gerada pela IA local a partir da sua documentação)
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []

@@ -1,0 +1,120 @@
+{{define "content"}}
+<style>
+.info-card {
+    background:var(--surface-2); border:1px solid var(--border); border-radius:12px;
+    padding:20px; margin-bottom:14px;
+}
+.info-card-title {
+    font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--text-3); margin-bottom:12px;
+}
+</style>
+
+<div class="shell">
+{{template "sidebar" .}}
+<div class="shell-main" style="background:var(--bg);">
+
+<div class="page-head">
+    <div class="ph-title"><span class="ph-ico">🖥</span> On-premise <span class="ph-sub">· cluster local, custo zero</span></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+        <div id="op-dot" style="width:6px;height:6px;border-radius:50%;background:var(--text-4);"></div>
+        <span id="op-label" class="mono" style="font-size:11px;color:var(--text-3);">verificando...</span>
+    </div>
+</div>
+
+<div style="max-width:720px;margin:0 auto;padding:32px 20px;width:100%;">
+
+    <div class="info-card">
+        <p class="info-card-title">Cluster local — minikube</p>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+            <div id="mk-dot" style="width:10px;height:10px;border-radius:50%;background:var(--text-4);"></div>
+            <span id="mk-text" style="font-size:13px;color:var(--text-3);">Verificando...</span>
+        </div>
+        <p style="font-size:12px;color:var(--text-2);line-height:1.6;margin-bottom:14px;">
+            Roda dentro do WSL na sua máquina — <strong style="color:var(--green);">grátis e offline</strong>.
+            Sobe automaticamente quando você abre um lab. Ideal para o dia a dia de estudo;
+            quando quiser um cluster real, use a página <a href="/cloud" style="color:var(--violet);">Cloud</a>.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-ghost" onclick="useLocal()">Usar como alvo dos labs</button>
+            <button class="btn btn-outline" onclick="resetLocal()" title="Remove recursos de exercícios anteriores">↺ Limpar cluster</button>
+        </div>
+        <div id="op-steps" style="margin-top:14px;"></div>
+    </div>
+
+    <div class="info-card">
+        <p class="info-card-title">Quick Reference — minikube</p>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="background:var(--surface);border-radius:6px;padding:10px 12px;border:1px solid var(--border);">
+                <p style="font-size:10px;color:var(--text-3);margin-bottom:4px;">Status do cluster</p>
+                <code class="mono" style="font-size:11.5px;color:var(--violet);">minikube status</code>
+            </div>
+            <div style="background:var(--surface);border-radius:6px;padding:10px 12px;border:1px solid var(--border);">
+                <p style="font-size:10px;color:var(--text-3);margin-bottom:4px;">Iniciar / parar</p>
+                <code class="mono" style="font-size:11.5px;color:var(--violet);">minikube start --driver=docker · minikube stop</code>
+            </div>
+            <div style="background:var(--surface);border-radius:6px;padding:10px 12px;border:1px solid var(--border);">
+                <p style="font-size:10px;color:var(--text-3);margin-bottom:4px;">Voltar o kubectl para o local</p>
+                <code class="mono" style="font-size:11.5px;color:var(--violet);">kubectl config use-context minikube</code>
+            </div>
+        </div>
+    </div>
+
+</div>
+</div>
+</div>
+
+<script>
+async function refreshOp() {
+    try {
+        const r = await fetch('/api/cluster-status');
+        const d = await r.json();
+        const isTarget = d.context === 'minikube';
+        const dot = document.getElementById('mk-dot');
+        const txt = document.getElementById('mk-text');
+        dot.style.background = d.running ? 'var(--green)' : 'var(--red)';
+        txt.style.color = d.running ? 'var(--green)' : 'var(--red)';
+        txt.textContent = (d.running ? 'minikube rodando' : 'minikube parado — inicia automático ao abrir um lab')
+            + (isTarget ? ' · alvo ativo ✓' : '');
+        const hdot = document.getElementById('op-dot');
+        const hlbl = document.getElementById('op-label');
+        hdot.style.background = isTarget ? 'var(--green)' : 'var(--text-4)';
+        hlbl.textContent = isTarget ? 'alvo ativo' : 'alvo: ' + (d.context || '?');
+    } catch(e) {}
+}
+
+async function useLocal() {
+    try {
+        await fetch('/api/context', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target: 'local' })
+        });
+    } catch(e) {}
+    refreshOp();
+}
+
+function resetLocal() {
+    const box = document.getElementById('op-steps');
+    box.innerHTML = '';
+    const es = new EventSource('/api/cluster/reset');
+    es.onmessage = e => {
+        const m = JSON.parse(e.data);
+        if (m.type === 'step') {
+            let el = document.getElementById('op-r' + m.index);
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'op-r' + m.index;
+                el.style.cssText = 'display:flex;gap:10px;align-items:center;padding:8px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);margin-bottom:5px;font-size:12px;color:var(--text-2);';
+                box.appendChild(el);
+            }
+            const ico = m.status === 'running' ? '⟳' : '✓';
+            el.textContent = ico + ' ' + m.desc;
+        } else if (m.type === 'done') { es.close(); refreshOp(); }
+    };
+    es.onerror = () => es.close();
+}
+
+refreshOp();
+setInterval(refreshOp, 8000);
+</script>
+{{end}}

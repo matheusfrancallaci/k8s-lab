@@ -1,0 +1,322 @@
+{{define "content"}}
+<style>
+.argocd-root { min-height:100vh; background:var(--bg); }
+.step-item {
+    display:flex; align-items:flex-start; gap:12px;
+    padding:10px 14px; border-radius:8px; background:var(--surface-2);
+    border:1px solid var(--border); margin-bottom:6px;
+}
+.step-icon { width:20px; text-align:center; font-size:14px; flex-shrink:0; margin-top:1px; }
+.step-desc { font-size:12.5px; color:var(--text-2); flex:1; line-height:1.4; }
+.step-out  { font-size:10.5px; color:var(--text-3); font-family:'JetBrains Mono',monospace;
+             margin-top:4px; white-space:pre-wrap; }
+.info-card {
+    background:var(--surface-2); border:1px solid var(--border); border-radius:12px;
+    padding:20px; margin-bottom:14px;
+}
+.info-card-title {
+    font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--text-3); margin-bottom:12px;
+}
+.mono { font-family:'JetBrains Mono',monospace; }
+.copy-btn {
+    padding:3px 10px; border-radius:4px; font-size:10px; font-weight:600;
+    background:#1e2e3e; color:#38bdf8; border:1px solid rgba(56,189,248,.2);
+    cursor:pointer; transition:opacity .15s;
+}
+.copy-btn:hover { opacity:.75; }
+@keyframes spin { to { transform:rotate(360deg); } }
+</style>
+
+<div class="shell">
+{{template "sidebar" .}}
+<div class="shell-main argocd-root">
+
+<div class="page-head">
+    <div class="ph-title"><span class="ph-ico">🐙</span> ArgoCD</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+        <div id="status-dot" style="width:6px;height:6px;border-radius:50%;background:var(--muted2);"></div>
+        <span id="status-label" style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;">verificando...</span>
+    </div>
+</div>
+
+<div style="max-width:720px;margin:0 auto;padding:32px 20px;">
+
+    <!-- Hero -->
+    <div style="margin-bottom:28px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">
+            <img src="https://raw.githubusercontent.com/cncf/artwork/main/projects/argo/icon/color/argo-icon-color.png"
+                 style="width:48px;height:48px;border-radius:8px;" alt="ArgoCD">
+            <div>
+                <h1 style="font-size:20px;font-weight:800;color:var(--text);margin-bottom:2px;">ArgoCD</h1>
+                <p style="font-size:12px;color:var(--text-3);">GitOps Continuous Delivery para Kubernetes</p>
+            </div>
+        </div>
+        <p style="font-size:13px;color:var(--text-2);line-height:1.6;">
+            Instale o ArgoCD no seu cluster minikube e acesse a interface gráfica diretamente pelo navegador.
+            Após a instalação, a UI estará disponível em <strong style="color:#f87c35;">http://localhost:{{.Port}}</strong>.
+        </p>
+    </div>
+
+    <!-- Status card -->
+    <div class="info-card" id="status-card">
+        <p class="info-card-title">Status do ArgoCD</p>
+        <div id="status-content" style="display:flex;align-items:center;gap:10px;">
+            <div style="width:10px;height:10px;border-radius:50%;background:var(--text-4);" id="sc-dot"></div>
+            <span style="font-size:13px;color:var(--text-3);" id="sc-text">Verificando cluster...</span>
+        </div>
+
+        <!-- Running state -->
+        <div id="running-panel" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:14px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+                <div style="background:var(--surface);border-radius:8px;padding:12px;border:1px solid var(--border);">
+                    <p style="font-size:10px;color:var(--text-3);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">URL</p>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span class="mono" style="font-size:12px;color:#f87c35;" id="argocd-url">-</span>
+                        <button class="copy-btn" onclick="copyText('argocd-url')">copy</button>
+                    </div>
+                </div>
+                <div style="background:var(--surface);border-radius:8px;padding:12px;border:1px solid var(--border);">
+                    <p style="font-size:10px;color:var(--text-3);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Senha admin</p>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span class="mono" style="font-size:12px;color:#4ade80;" id="argocd-pwd">-</span>
+                        <button class="copy-btn" onclick="copyText('argocd-pwd')">copy</button>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <a id="open-ui-btn" href="#" target="_blank" rel="noopener"
+                   style="display:inline-flex;align-items:center;gap:8px;padding:9px 20px;border-radius:8px;
+                          font-size:12px;font-weight:700;background:#f87c35;color:#fff;text-decoration:none;
+                          transition:opacity .15s;"
+                   onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+                   ↗ Abrir Interface ArgoCD
+                </a>
+                <button onclick="restartPF()"
+                    style="padding:9px 16px;border-radius:8px;font-size:12px;font-weight:600;
+                           background:var(--border);color:var(--text-2);border:1px solid var(--border-2);cursor:pointer;"
+                    onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text-2)'">
+                    ↺ Reiniciar Port-Forward
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Install card -->
+    <div class="info-card" id="install-card" style="display:none;">
+        <p class="info-card-title">Instalação</p>
+        <p style="font-size:12px;color:var(--text-2);margin-bottom:14px;">
+            O ArgoCD não está instalado neste cluster. Clique abaixo para instalá-lo automaticamente.<br>
+            <span style="color:var(--text-3);">A instalação completa leva ~3-5 minutos.</span>
+        </p>
+        <button id="install-btn" onclick="startInstall()"
+            style="padding:10px 24px;border-radius:8px;font-size:12px;font-weight:700;
+                   background:linear-gradient(135deg,#f87c35,#ef4444);color:#fff;border:none;cursor:pointer;
+                   transition:opacity .15s;display:flex;align-items:center;gap:8px;"
+            onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+            <span>⎈</span> Instalar ArgoCD no Cluster
+        </button>
+
+        <!-- Progress -->
+        <div id="install-progress" style="display:none;margin-top:16px;">
+            <div id="install-steps"></div>
+            <div id="install-done" style="display:none;margin-top:14px;text-align:center;">
+                <div style="font-size:28px;color:#f87c35;margin-bottom:6px;">✓</div>
+                <p style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">ArgoCD instalado!</p>
+                <p style="font-size:11px;color:var(--text-3);margin-bottom:14px;">Acesse a interface abaixo.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reconnect card (installed but PF down) -->
+    <div class="info-card" id="reconnect-card" style="display:none;">
+        <p class="info-card-title">Acesso à Interface</p>
+        <p style="font-size:12px;color:var(--text-2);margin-bottom:14px;">
+            ArgoCD está instalado mas a conexão externa não está ativa.
+        </p>
+        <button onclick="restartPF()" class="btn-primary" style="padding:9px 20px;font-size:12px;">
+            ↺ Ativar Port-Forward
+        </button>
+    </div>
+
+    <!-- Quick reference -->
+    <div class="info-card">
+        <p class="info-card-title">Quick Reference — ArgoCD CLI</p>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+            {{range .CLIExamples}}
+            <div style="background:var(--surface);border-radius:6px;padding:10px 12px;border:1px solid var(--border);">
+                <p style="font-size:10px;color:var(--text-3);margin-bottom:4px;">{{.Desc}}</p>
+                <code style="font-size:11.5px;color:var(--violet);font-family:'JetBrains Mono',monospace;">{{.Cmd}}</code>
+            </div>
+            {{end}}
+        </div>
+    </div>
+
+    <!-- Login instructions -->
+    <div class="info-card">
+        <p class="info-card-title">Como fazer login</p>
+        <ol style="font-size:12.5px;color:var(--text-2);line-height:1.8;padding-left:20px;margin:0;">
+            <li>Abra a interface ArgoCD no navegador</li>
+            <li>Usuário: <code class="mono" style="color:var(--violet);background:#1e293b;padding:1px 5px;border-radius:3px;">admin</code></li>
+            <li>Senha: use o valor exibido em "Senha admin" acima</li>
+            <li>No terminal do lab: <code class="mono" style="color:#4ade80;background:#0d1f0d;padding:1px 5px;border-radius:3px;">argocd login localhost:{{.Port}} --username admin --password &lt;senha&gt; --insecure</code></li>
+        </ol>
+    </div>
+
+</div>
+</div>
+</div>
+
+<script>
+let argoCDPort = {{.Port}};
+let pollInterval = null;
+
+// ── Status polling ──────────────────────────────────────────
+async function checkStatus() {
+    try {
+        const r = await fetch('/api/argocd/status');
+        const d = await r.json();
+        applyStatus(d);
+    } catch(e) {
+        updateStatusBar(false, 'Erro ao verificar status');
+    }
+}
+
+function applyStatus(d) {
+    const dot = document.getElementById('sc-dot');
+    const text = document.getElementById('sc-text');
+    const installCard = document.getElementById('install-card');
+    const reconnectCard = document.getElementById('reconnect-card');
+    const runningPanel = document.getElementById('running-panel');
+
+    if (!d.installed) {
+        dot.style.background = 'var(--text-3)';
+        text.style.color = 'var(--text-3)';
+        text.textContent = 'Não instalado';
+        installCard.style.display = 'block';
+        reconnectCard.style.display = 'none';
+        runningPanel.style.display = 'none';
+        updateStatusBar(false, 'ArgoCD não instalado');
+        return;
+    }
+
+    if (!d.ready) {
+        dot.style.background = '#fbbf24';
+        text.style.color = '#fbbf24';
+        text.textContent = 'Instalado — aguardando pods ficarem prontos...';
+        updateStatusBar(false, 'Inicializando...');
+        return;
+    }
+
+    // Installed and ready
+    if (!d.pf_active) {
+        dot.style.background = '#f87171';
+        text.style.color = '#f87171';
+        text.textContent = 'Instalado — port-forward inativo';
+        installCard.style.display = 'none';
+        reconnectCard.style.display = 'block';
+        runningPanel.style.display = 'none';
+        updateStatusBar(false, 'Port-forward inativo');
+        return;
+    }
+
+    // Fully running
+    dot.style.background = '#f87c35';
+    text.style.color = '#f87c35';
+    text.textContent = 'ArgoCD rodando ✓';
+    installCard.style.display = 'none';
+    reconnectCard.style.display = 'none';
+    runningPanel.style.display = 'block';
+    updateStatusBar(true, 'ArgoCD rodando');
+
+    const url = d.url || `http://localhost:${argoCDPort}`;
+    document.getElementById('argocd-url').textContent = url;
+    document.getElementById('argocd-pwd').textContent = d.password || '(verificando...)';
+    document.getElementById('open-ui-btn').href = url;
+}
+
+function updateStatusBar(ok, label) {
+    const dot = document.getElementById('status-dot');
+    const lbl = document.getElementById('status-label');
+    dot.style.background = ok ? '#f87c35' : 'var(--text-3)';
+    lbl.style.color = ok ? '#f87c35' : 'var(--text-3)';
+    lbl.textContent = label;
+}
+
+// ── Install via SSE ─────────────────────────────────────────
+function startInstall() {
+    document.getElementById('install-btn').disabled = true;
+    document.getElementById('install-btn').style.opacity = '.5';
+    document.getElementById('install-progress').style.display = 'block';
+    document.getElementById('install-steps').innerHTML = '';
+    document.getElementById('install-done').style.display = 'none';
+
+    const es = new EventSource('/api/argocd/install');
+    es.onmessage = e => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'step') {
+            renderStep(msg.index, msg.desc, msg.status, msg.output || '');
+        } else if (msg.type === 'done') {
+            es.close();
+            document.getElementById('install-done').style.display = 'block';
+            // Re-check status to refresh panels
+            if (msg.status) {
+                try { applyStatus(JSON.parse(msg.status)); } catch(ex) { checkStatus(); }
+            } else {
+                checkStatus();
+            }
+        }
+    };
+    es.onerror = () => { es.close(); checkStatus(); };
+}
+
+function renderStep(index, desc, status, output) {
+    let el = document.getElementById('install-step-' + index);
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'install-step-' + index;
+        el.className = 'step-item';
+        document.getElementById('install-steps').appendChild(el);
+    }
+    let icon = '';
+    if (status === 'running') icon = '<div style="color:#38bdf8;animation:spin 1s linear infinite;display:inline-block;">⟳</div>';
+    else if (status === 'done') icon = '<span style="color:#4ade80;">✓</span>';
+    else if (status === 'warn') icon = '<span style="color:#fbbf24;">⚠</span>';
+
+    const outHtml = output
+        ? `<div class="step-out">${escHtml(output.slice(0, 200))}</div>`
+        : '';
+    el.innerHTML = `<div class="step-icon">${icon}</div><div class="step-desc">${escHtml(desc)}${outHtml}</div>`;
+}
+
+// ── Port-forward ────────────────────────────────────────────
+async function restartPF() {
+    updateStatusBar(false, 'Ativando port-forward...');
+    try {
+        const r = await fetch('/api/argocd/portforward', { method: 'POST' });
+        const d = await r.json();
+        if (d.success) { checkStatus(); }
+    } catch(e) {}
+}
+
+// ── Utilities ───────────────────────────────────────────────
+function copyText(id) {
+    const txt = document.getElementById(id).textContent;
+    navigator.clipboard.writeText(txt).then(() => {
+        const btn = event.target;
+        const orig = btn.textContent;
+        btn.textContent = '✓';
+        setTimeout(() => btn.textContent = orig, 1200);
+    });
+}
+
+function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Init ────────────────────────────────────────────────────
+checkStatus();
+pollInterval = setInterval(checkStatus, 8000);
+</script>
+{{end}}

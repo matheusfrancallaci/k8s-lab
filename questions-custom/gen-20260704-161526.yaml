@@ -1,0 +1,164 @@
+questions:
+    - id: custom-96f3604f
+      cert: CKS
+      topic: Custom
+      difficulty: mid
+      type: lab
+      question: |-
+        Da documentação que você forneceu: execute a operação abaixo e confira o resultado.
+
+        `kubectl get pods`
+
+        Dica: leia cada flag antes de rodar.
+      options: []
+      answer: 0
+      explanation: Exercício gerado da sua documentação. Pratique até conseguir reproduzir sem olhar a dica.
+      doc_url: ""
+      doc_section: ""
+      hint: kubectl get pods
+      answer_command: kubectl get pods
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-005b5ccb
+      cert: CKS
+      topic: Custom
+      difficulty: mid
+      type: lab
+      question: |-
+        Da documentação que você forneceu: execute a operação abaixo e confira o resultado.
+
+        `kubectl delete pod static-web-my-node1`
+
+        Dica: leia cada flag antes de rodar.
+      options: []
+      answer: 0
+      explanation: Exercício gerado da sua documentação. Pratique até conseguir reproduzir sem olhar a dica.
+      doc_url: ""
+      doc_section: ""
+      hint: kubectl delete pod static-web-my-node1
+      answer_command: kubectl delete pod static-web-my-node1
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-33aac986
+      cert: CKS
+      topic: Custom
+      difficulty: mid
+      type: lab
+      question: |-
+        Da documentação que você forneceu: crie o **Pod/static-web**.
+
+        Dica: monte o YAML e aplique com `kubectl apply -f`.
+      options: []
+      answer: 0
+      explanation: Manifest extraído da sua documentação. O kind Pod foi criado de forma declarativa — compare o resultado (kubectl get -o yaml) com o manifest original.
+      doc_url: ""
+      doc_section: ""
+      hint: |-
+        kubectl apply -f - <<EOF
+        # Run this command on the node where kubelet is running
+        mkdir -p /etc/kubernetes/manifests/
+        cat /etc/kubernetes/manifests/static-web.yaml
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: static-web
+          labels:
+            role: myrole
+        spec:
+          containers:
+            - name: web
+              image: nginx
+              ports:
+                - name: web
+                  containerPort: 80
+                  protocol: TCP
+        EOF
+        EOF
+      answer_command: 'kubectl apply -f manifest.yaml  # Pod/static-web da documentação'
+      validation: null
+      goals:
+        - description: '**Pod/static-web** existe no cluster'
+          hint: kubectl apply -f com o manifest da doc.
+          validation:
+            command: kubectl get pod static-web -o name 2>/dev/null
+            expected_contains: static-web
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete pod static-web --ignore-not-found=true
+    - id: custom-3f98a6c5
+      cert: CKS
+      topic: Custom
+      difficulty: easy
+      type: multiple_choice
+      question: |-
+        Este conceito apareceu na sua documentação. Qual termo corresponde à definição?
+
+        "Banco chave-valor que armazena todo o estado do cluster"
+      options:
+        - Ingress
+        - livenessProbe
+        - etcd
+        - ReplicaSet
+      answer: 2
+      explanation: 'etcd: Banco chave-valor que armazena todo o estado do cluster.'
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-c7989348
+      cert: CKS
+      topic: Custom
+      difficulty: easy
+      type: multiple_choice
+      question: |-
+        Este conceito apareceu na sua documentação. Qual termo corresponde à definição?
+
+        "Porta de entrada do control plane: valida e persiste todos os objetos"
+      options:
+        - kube-apiserver
+        - Role
+        - ReplicaSet
+        - Ingress
+      answer: 0
+      explanation: 'kube-apiserver: Porta de entrada do control plane: valida e persiste todos os objetos.'
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-4785ce2f
+      cert: CKS
+      topic: Custom
+      difficulty: easy
+      type: multiple_choice
+      question: |-
+        Este conceito apareceu na sua documentação. Qual termo corresponde à definição?
+
+        "A menor unidade implantável: um ou mais containers que compartilham rede e storage"
+      options:
+        - ConfigMap
+        - Secret
+        - Pod
+        - Job
+      answer: 2
+      explanation: 'Pod: A menor unidade implantável: um ou mais containers que compartilham rede e storage.'
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []

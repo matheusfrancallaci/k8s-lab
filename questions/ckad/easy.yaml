@@ -1,0 +1,245 @@
+questions:
+  # ── Application Design and Build ─────────────────────────
+  - id: ckad-easy-001
+    cert: CKAD
+    topic: Application Design
+    difficulty: easy
+    type: multiple_choice
+    question: "Como criar um Deployment chamado 'webapp' com a imagem 'nginx:1.25' e 3 réplicas via linha de comando?"
+    options:
+      - "kubectl run webapp --image=nginx:1.25 --replicas=3"
+      - "kubectl create deployment webapp --image=nginx:1.25 --replicas=3"
+      - "kubectl deploy webapp --image=nginx:1.25 --count=3"
+      - "kubectl new deployment webapp --image=nginx:1.25 --scale=3"
+    answer: 1
+    explanation: "'kubectl create deployment' é o comando correto. 'kubectl run' cria um Pod simples sem gerenciamento de réplicas. A flag --replicas define o número de réplicas desejadas."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"
+    doc_section: "Concepts → Workloads → Deployments"
+
+  - id: ckad-easy-002
+    cert: CKAD
+    topic: Configuration
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual recurso Kubernetes é usado para armazenar dados de configuração não sensíveis como pares chave-valor?"
+    options:
+      - "Secret"
+      - "ConfigMap"
+      - "Volume"
+      - "Annotation"
+    answer: 1
+    explanation: "ConfigMap armazena dados de configuração não confidenciais. Para dados sensíveis como senhas, usa-se Secret. ConfigMaps podem ser injetados como variáveis de ambiente ou montados como arquivos em volumes."
+    doc_url: "https://kubernetes.io/docs/concepts/configuration/configmap/"
+    doc_section: "Concepts → Configuration → ConfigMap"
+
+  - id: ckad-easy-003
+    cert: CKAD
+    topic: Observability
+    difficulty: easy
+    type: multiple_choice
+    question: "Como verificar os logs de um container específico em um pod com múltiplos containers?"
+    options:
+      - "kubectl logs <pod> --all"
+      - "kubectl logs <pod> -c <container>"
+      - "kubectl logs <pod> --container-name=<container>"
+      - "kubectl describe pod <pod> --logs"
+    answer: 1
+    explanation: "A flag -c (ou --container) especifica qual container do pod você quer ver os logs. Sem essa flag, kubectl logs mostra os logs do primeiro container (ou único) do pod."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/cheatsheet/#interacting-with-running-pods"
+    doc_section: "kubectl Cheat Sheet → Interacting with Pods"
+
+  - id: ckad-easy-004
+    cert: CKAD
+    topic: Application Design
+    difficulty: easy
+    type: multiple_choice
+    question: "O que é um Init Container?"
+    options:
+      - "Um container que reinicia automaticamente quando falha"
+      - "Um container que roda antes dos containers principais e deve completar com sucesso"
+      - "Um container para inicializar o cluster Kubernetes"
+      - "Um container que monitora os outros containers do pod"
+    answer: 1
+    explanation: "Init containers rodam antes dos containers da aplicação e devem concluir com sucesso. São usados para inicializar dados, aguardar serviços ficarem prontos ou configurar permissões antes da aplicação principal iniciar."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/pods/init-containers/"
+    doc_section: "Concepts → Pods → Init Containers"
+
+  - id: ckad-easy-005
+    cert: CKAD
+    topic: Services
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual campo do Service define para qual porta do pod o tráfego é encaminhado?"
+    options:
+      - "port"
+      - "targetPort"
+      - "nodePort"
+      - "containerPort"
+    answer: 1
+    explanation: "'targetPort' é a porta no pod/container para onde o tráfego é enviado. 'port' é a porta exposta pelo Service. Exemplo: port:80 e targetPort:8080 — o Service recebe na 80 e encaminha para 8080 no pod."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/service/"
+    doc_section: "Concepts → Services"
+
+  # ── Configuration ─────────────────────────────────────────
+  - id: ckad-easy-006
+    cert: CKAD
+    topic: Configuration
+    difficulty: easy
+    type: multiple_choice
+    question: "Como injetar todas as chaves de um ConfigMap 'app-config' como variáveis de ambiente em um pod?"
+    options:
+      - "spec.env: [{name: APP_CONFIG, configMap: app-config}]"
+      - "spec.envFrom: [{configMapRef: {name: app-config}}]"
+      - "spec.volumes: [{configMap: {name: app-config}}]"
+      - "spec.config: [{from: app-config}]"
+    answer: 1
+    explanation: "'envFrom' com 'configMapRef' injeta TODAS as chaves do ConfigMap como variáveis de ambiente no container. Para injetar chaves específicas, use 'env' com 'valueFrom.configMapKeyRef'. Para montar como arquivo, use volume com configMap."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/#configure-all-key-value-pairs-in-a-configmap-as-container-environment-variables"
+    doc_section: "Tasks → Configure Pod → ConfigMap → All Key-Value as Env Vars"
+
+  - id: ckad-easy-007
+    cert: CKAD
+    topic: Configuration
+    difficulty: easy
+    type: multiple_choice
+    question: "Como criar um Secret do tipo 'generic' com a chave 'password=mysecret123'?"
+    options:
+      - "kubectl create secret generic db-secret --key=password=mysecret123"
+      - "kubectl create secret generic db-secret --from-literal=password=mysecret123"
+      - "kubectl create secret db-secret password=mysecret123"
+      - "kubectl apply secret generic db-secret --set password=mysecret123"
+    answer: 1
+    explanation: "A flag '--from-literal' cria um Secret com valores inline. O Kubernetes automaticamente faz encode em base64. Use '--from-file' para criar a partir de arquivos. Nunca armazene secrets em texto puro em repositórios."
+    doc_url: "https://kubernetes.io/docs/tasks/configmap-secret/managing-secret-using-kubectl/"
+    doc_section: "Tasks → Manage Secrets → Using kubectl"
+
+  - id: ckad-easy-008
+    cert: CKAD
+    topic: Configuration
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual campo no spec do container define os recursos de CPU e memória MÍNIMOS necessários para o container iniciar?"
+    options:
+      - "resources.limits"
+      - "resources.requests"
+      - "resources.minimum"
+      - "resources.guaranteed"
+    answer: 1
+    explanation: "'resources.requests' define os recursos mínimos que o scheduler usa para alocar o pod em um nó adequado. 'resources.limits' define o máximo que o container pode usar. Se o container ultrapassa o limit de memória, é OOMKilled."
+    doc_url: "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
+    doc_section: "Concepts → Configuration → Managing Resources"
+
+  # ── Pod Design ────────────────────────────────────────────
+  - id: ckad-easy-009
+    cert: CKAD
+    topic: Pod Design
+    difficulty: easy
+    type: multiple_choice
+    question: "O que é um sidecar container no padrão de multi-container pods?"
+    options:
+      - "Um container que inicializa o pod e encerra antes dos outros iniciarem"
+      - "Um container auxiliar que complementa o container principal (ex: log shipper, proxy)"
+      - "Um container de monitoramento que reinicia os outros containers"
+      - "Um container reserva que substitui o principal em caso de falha"
+    answer: 1
+    explanation: "Sidecar é um container auxiliar que compartilha a mesma rede e volumes do container principal. Exemplos comuns: agentes de log (Fluent Bit), service meshes (Envoy/Istio), proxies de autenticação, sync de configuração."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/"
+    doc_section: "Concepts → Pods → Sidecar Containers"
+
+  - id: ckad-easy-010
+    cert: CKAD
+    topic: Pod Design
+    difficulty: easy
+    type: multiple_choice
+    question: "Como gerar um arquivo YAML de um Deployment sem criá-lo no cluster (dry run)?"
+    options:
+      - "kubectl create deployment nginx --image=nginx --preview"
+      - "kubectl create deployment nginx --image=nginx --dry-run=client -o yaml"
+      - "kubectl generate deployment nginx --image=nginx -o yaml"
+      - "kubectl template deployment nginx --image=nginx"
+    answer: 1
+    explanation: "'--dry-run=client' simula a criação sem enviar ao servidor. Combinado com '-o yaml' gera o manifesto YAML. Útil para criar templates para editar antes de aplicar. '--dry-run=server' valida com o servidor mas não persiste."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/conventions/#generators"
+    doc_section: "Reference → kubectl → Generators"
+
+  # ── Observability ─────────────────────────────────────────
+  - id: ckad-easy-011
+    cert: CKAD
+    topic: Observability
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual tipo de probe verifica se um container está saudável e o reinicia se falhar?"
+    options:
+      - "readinessProbe"
+      - "startupProbe"
+      - "livenessProbe"
+      - "healthProbe"
+    answer: 2
+    explanation: "livenessProbe verifica se o container está vivo. Se falhar, o kubelet reinicia o container (respeitando a restartPolicy). readinessProbe controla se o pod recebe tráfego (não reinicia). startupProbe permite tempo extra para aplicações lentas inicializarem."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/"
+    doc_section: "Tasks → Configure Probes"
+
+  - id: ckad-easy-012
+    cert: CKAD
+    topic: Observability
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual probe garante que o pod só recebe tráfego quando a aplicação está pronta para atender requisições?"
+    options:
+      - "livenessProbe"
+      - "startupProbe"
+      - "readinessProbe"
+      - "trafficProbe"
+    answer: 2
+    explanation: "readinessProbe controla quando um pod entra no pool de balanceamento de carga do Service. Enquanto a probe falha, o pod é removido dos Endpoints do Service e não recebe tráfego. Não reinicia o container — apenas controla o recebimento de tráfego."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/#define-readiness-probes"
+    doc_section: "Tasks → Configure Probes → Readiness Probes"
+
+  # ── Services & State ──────────────────────────────────────
+  - id: ckad-easy-013
+    cert: CKAD
+    topic: Services
+    difficulty: easy
+    type: multiple_choice
+    question: "Como criar um Service ClusterIP para um Deployment 'frontend' na porta 80?"
+    options:
+      - "kubectl expose deployment frontend --port=80 --type=ClusterIP"
+      - "kubectl create service frontend --port=80"
+      - "kubectl expose frontend --port=80 --internal"
+      - "kubectl service frontend --clusterip --port=80"
+    answer: 0
+    explanation: "'kubectl expose deployment' cria um Service apontando para o Deployment. A flag '--type=ClusterIP' (opcional, é o padrão) cria um Service interno. O kubectl detecta automaticamente as labels do Deployment para criar o selector."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/generated/kubectl_expose/"
+    doc_section: "Reference → kubectl expose"
+
+  - id: ckad-easy-014
+    cert: CKAD
+    topic: State Persistence
+    difficulty: easy
+    type: multiple_choice
+    question: "Como montar um Volume de um PersistentVolumeClaim 'data-pvc' em '/data' dentro de um container?"
+    options:
+      - "spec.volumes: [{name: data, pvc: data-pvc}] e spec.containers[].mountPath: /data"
+      - "spec.volumes: [{name: data, persistentVolumeClaim: {claimName: data-pvc}}] e spec.containers[].volumeMounts: [{name: data, mountPath: /data}]"
+      - "spec.storage: [{pvc: data-pvc, path: /data}]"
+      - "spec.containers[].volumes: [{pvc: data-pvc, mountPath: /data}]"
+    answer: 1
+    explanation: "Volumes são declarados em spec.volumes com um nome e a fonte (persistentVolumeClaim). Em spec.containers[].volumeMounts, você referencia o nome do volume e define o mountPath. O claimName deve corresponder ao PVC existente."
+    doc_url: "https://kubernetes.io/docs/concepts/storage/persistent-volumes/#claims-as-volumes"
+    doc_section: "Concepts → Storage → Claims as Volumes"
+
+  - id: ckad-easy-015
+    cert: CKAD
+    topic: Application Design
+    difficulty: easy
+    type: multiple_choice
+    question: "Como criar um CronJob que executa o comando 'echo hello' a cada 5 minutos?"
+    options:
+      - "kubectl create cronjob hello --schedule='*/5 * * * *' --image=busybox -- echo hello"
+      - "kubectl create job hello --cron='5min' --image=busybox -- echo hello"
+      - "kubectl schedule job hello --every=5m --image=busybox -- echo hello"
+      - "kubectl create cronjob hello --interval=5m --image=busybox -- echo hello"
+    answer: 0
+    explanation: "CronJob usa formato cron padrão (minuto hora dia mês dia-semana). '*/5 * * * *' significa 'a cada 5 minutos'. O '--' separa os argumentos do kubectl dos argumentos do container. CronJobs criam Jobs que por sua vez criam Pods."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/"
+    doc_section: "Concepts → Workloads → CronJobs"

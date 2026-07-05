@@ -1,0 +1,135 @@
+{{define "content"}}
+<div class="shell">
+{{template "sidebar" .}}
+<div class="shell-main" style="background:var(--bg);">
+
+<!-- Centered configurator -->
+<div style="flex:1;overflow-y:auto;display:flex;align-items:center;justify-content:center;padding:32px 20px;">
+    <div style="width:100%;max-width:520px;">
+
+        <!-- Heading -->
+        <div style="text-align:center;margin-bottom:22px;">
+            <div class="term-prompt" style="justify-content:center;margin-bottom:12px;">
+                <span class="sym">❯</span><span>k8s-lab practice --new</span><span class="term-cursor"></span>
+            </div>
+            <h1 style="font-size:26px;font-weight:900;letter-spacing:-.5px;color:var(--text);" data-i18n="practice.title">Prova Teórica</h1>
+            <p class="comment" style="margin-top:5px;" data-i18n="practice.sub">// questões de teoria — configure e inicie</p>
+        </div>
+
+        <!-- Config card -->
+        <div style="background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--r-lg);padding:24px;box-shadow:0 16px 50px rgba(0,0,0,.35);">
+            <form action="/quiz/start" method="POST">
+
+                <!-- Certificação -->
+                <div style="margin-bottom:20px;">
+                    <div class="form-section-header" style="margin-bottom:9px;">
+                        <span class="section-label">certificação</span>
+                        <button type="button" onclick="toggleAll()"
+                            style="font-size:10px;font-weight:700;color:var(--violet);background:none;border:none;cursor:pointer;font-family:var(--mono);letter-spacing:.05em;">
+                            marcar todas
+                        </button>
+                    </div>
+                    <div class="cert-grid" id="cert-grid">
+
+                        <label class="cert-toggle">
+                            <input type="checkbox" name="cert" value="CKA" class="sr-only">
+                            <div class="cert-inner">
+                                <div class="cert-icon" style="background:rgba(91,95,239,.1);border:1px solid rgba(91,95,239,.18);">
+                                    <img src="/static/vendor/kubernetes.svg" alt="">
+                                </div>
+                                <div>
+                                    <div class="cert-name">CKA</div>
+                                    <div class="cert-sub">Administrator</div>
+                                </div>
+                            </div>
+                        </label>
+
+                        <label class="cert-toggle">
+                            <input type="checkbox" name="cert" value="CKAD" class="sr-only">
+                            <div class="cert-inner">
+                                <div class="cert-icon" style="background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.16);">
+                                    <img src="/static/vendor/kubernetes.svg" alt="">
+                                </div>
+                                <div>
+                                    <div class="cert-name">CKAD</div>
+                                    <div class="cert-sub">Developer</div>
+                                </div>
+                            </div>
+                        </label>
+
+                        <label class="cert-toggle">
+                            <input type="checkbox" name="cert" value="CKS" class="sr-only">
+                            <div class="cert-inner">
+                                <div class="cert-icon" style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.16);">
+                                    <img src="/static/vendor/kubernetes.svg" alt="">
+                                </div>
+                                <div>
+                                    <div class="cert-name">CKS</div>
+                                    <div class="cert-sub">Security</div>
+                                </div>
+                            </div>
+                        </label>
+
+                        <label class="cert-toggle">
+                            <input type="checkbox" name="cert" value="ArgoCD" class="sr-only">
+                            <div class="cert-inner">
+                                <div class="cert-icon" style="background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.16);">
+                                    <img src="https://raw.githubusercontent.com/cncf/artwork/main/projects/argo/icon/color/argo-icon-color.png" style="width:18px;height:18px;border-radius:2px;" alt="">
+                                </div>
+                                <div>
+                                    <div class="cert-name">ArgoCD</div>
+                                    <div class="cert-sub">GitOps</div>
+                                </div>
+                            </div>
+                        </label>
+
+                    </div>
+                    {{if .ExtraCerts}}<div class="chip-row" style="margin-top:8px;">{{range .ExtraCerts}}<label class="filter-chip"><input type="checkbox" name="cert" value="{{.}}" class="sr-only">✦ {{.}}</label>{{end}}</div>{{end}}
+                    <p class="comment" style="margin-top:7px;">// vazio = todas as certificações</p>
+                </div>
+
+                <!-- Dificuldade -->
+                <div style="margin-bottom:20px;">
+                    <p class="section-label" style="margin-bottom:9px;">dificuldade</p>
+                    <div class="chip-row">
+                        <label class="filter-chip"><input type="radio" name="difficulty" value="" class="sr-only" checked>todas</label>
+                        <label class="filter-chip"><input type="radio" name="difficulty" value="easy" class="sr-only">easy</label>
+                        <label class="filter-chip"><input type="radio" name="difficulty" value="mid" class="sr-only">medium</label>
+                        <label class="filter-chip"><input type="radio" name="difficulty" value="hard" class="sr-only">hard</label>
+                    </div>
+                </div>
+
+                <!-- Questões -->
+                <div style="margin-bottom:22px;">
+                    <p class="section-label" style="margin-bottom:9px;">quantidade de questões</p>
+                    <div class="chip-row">
+                        {{range .Limits}}
+                        <label class="filter-chip">
+                            <input type="radio" name="limit" value="{{.}}" class="sr-only" {{if eq . 10}}checked{{end}}>
+                            {{if eq . 0}}todas{{else}}{{.}}{{end}}
+                        </label>
+                        {{end}}
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-full" style="padding:13px;font-size:13px;letter-spacing:.06em;">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.3 2.84A1.5 1.5 0 0 0 4 4.11v15.78a1.5 1.5 0 0 0 2.3 1.27l12.57-7.89a1.5 1.5 0 0 0 0-2.54L6.3 2.84Z"/></svg>
+                    <span data-i18n="practice.start">INICIAR PROVA TEÓRICA</span>
+                </button>
+            </form>
+        </div>
+
+        <p class="comment" style="text-align:center;margin-top:16px;">// para labs práticos, veja <a href="/lab" style="color:var(--green);">/lab</a></p>
+    </div>
+</div>
+</div>
+</div>
+
+<script>
+function toggleAll() {
+    const boxes = document.querySelectorAll('#cert-grid input');
+    const allOn = [...boxes].every(b => b.checked);
+    boxes.forEach(b => b.checked = !allOn);
+}
+</script>
+{{end}}

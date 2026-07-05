@@ -1,0 +1,409 @@
+package handlers
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os/exec"
+	"runtime"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"estudo-app/internal/tutor"
+
+	"github.com/UserExistsError/conpty"
+	"github.com/gorilla/websocket"
+)
+
+// activeTerminals conta sessões de terminal abertas — enquanto houver uma,
+// o auto-stop do cluster cloud não pode disparar (usuário está estudando).
+var activeTerminals int32
+
+func ActiveTerminals() int { return int(atomic.LoadInt32(&activeTerminals)) }
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  4096,
+	WriteBufferSize: 4096,
+	CheckOrigin:     func(r *http.Request) bool { return true },
+}
+
+type wsMsg struct {
+	Type string `json:"type"`
+	Cols uint16 `json:"cols,omitempty"`
+	Rows uint16 `json:"rows,omitempty"`
+}
+
+var (
+	wslUserOnce  sync.Once
+	wslUserValue string
+)
+
+func getWslUser() string {
+	if runtime.GOOS != "windows" {
+		return ""
+	}
+	wslUserOnce.Do(func() {
+		out, err := exec.Command("wsl.exe", "--", "id", "-un", "1000").Output()
+		if err == nil {
+			u := strings.TrimSpace(string(out))
+			if u != "" && u != "root" {
+				wslUserValue = u
+			}
+		}
+	})
+	return wslUserValue
+}
+
+func wslArgs(name string, args ...string) []string {
+	user := getWslUser()
+	if user != "" {
+		return append([]string{"-u", user, "--", name}, args...)
+	}
+	return append([]string{"--", name}, args...)
+}
+
+func wslCmd(name string, args ...string) *exec.Cmd {
+	if runtime.GOOS == "windows" {
+		return exec.Command("wsl.exe", wslArgs(name, args...)...)
+	}
+	return exec.Command(name, args...)
+}
+
+func wslCmdCtx(ctx context.Context, name string, args ...string) *exec.Cmd {
+	if runtime.GOOS == "windows" {
+		return exec.CommandContext(ctx, "wsl.exe", wslArgs(name, args...)...)
+	}
+	return exec.CommandContext(ctx, name, args...)
+}
+
+func wslShell(cmdStr string) *exec.Cmd {
+	if runtime.GOOS == "windows" {
+		return exec.Command("wsl.exe", append(wslArgs("bash"), "-c", cmdStr)...)
+	}
+	return exec.Command("sh", "-c", cmdStr)
+}
+
+func wslShellCtx(ctx context.Context, cmdStr string) *exec.Cmd {
+	if runtime.GOOS == "windows" {
+		return exec.CommandContext(ctx, "wsl.exe", append(wslArgs("bash"), "-c", cmdStr)...)
+	}
+	return exec.CommandContext(ctx, "sh", "-c", cmdStr)
+}
+
+var labRCOnce sync.Once
+
+// labRCScript is a custom bash init file that gives the lab terminal a clean,
+// branded prompt (no user@host, no ugly /mnt/c path) while still loading the
+// user's real bashrc so kubectl completion, aliases, etc. keep working.
+const labRCScript = `# k8s-lab terminal init (auto-generated)
+[ -f /etc/profile ] && . /etc/profile
+[ -f ~/.bashrc ] && source ~/.bashrc
+unset PROMPT_COMMAND
+PS1='\[\e[38;2;129;140;248m\]\[\e[1m\]⎈ k8s\[\e[0m\] \[\e[38;2;52;211;153m\]\w\[\e[0m\] \[\e[38;2;129;140;248m\]❯\[\e[0m\] '
+cd ~ 2>/dev/null
+clear
+`
+
+// ensureLabRC writes ~/.k8slab_rc inside WSL (idempotent, runs once).
+func ensureLabRC() {
+	labRCOnce.Do(func() {
+		script := "cat > \"$HOME/.k8slab_rc\" <<'K8SLABEOF'\n" + labRCScript + "K8SLABEOF\n"
+		if err := wslShell(script).Run(); err != nil {
+			log.Printf("[terminal] could not write lab rcfile: %v", err)
+		}
+	})
+}
+
+func ClusterInfoCmd() *exec.Cmd {
+	return wslCmd("kubectl", "cluster-info", "--request-timeout=3s")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cloud shell — terminal DENTRO do cluster AKS (pod administrativo)
+// O control plane do AKS é gerenciado (sem SSH), então o padrão é dar shell em
+// um pod com kubectl + service account cluster-admin, como nos simuladores.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const (
+	cloudShellNS  = "lab-system"
+	cloudShellPod = "lab-shell"
+)
+
+// alpine/k8s: bash, kubectl, helm, vim, jq — ideal p/ treino de certificação.
+// Sobrescreva com CLOUD_SHELL_IMAGE se a tag não existir mais.
+func cloudShellImage() string { return envOr("CLOUD_SHELL_IMAGE", "alpine/k8s:1.33.4") }
+
+// cloudShellRC é o rcfile do bash dentro do pod.
+// Três responsabilidades críticas:
+//  1. kubeconfig próprio com namespace=default — o in-cluster config usaria o
+//     ns do ServiceAccount (lab-system), fazendo terminal e validação divergirem;
+//  2. tokenFile (não token estático) — tokens de SA expiram, o arquivo é rotacionado;
+//  3. completion de verdade: exige o pacote bash-completion (instalado no provisionamento).
+const cloudShellRC = `# kubeconfig alinhado com as validações do lab (namespace default)
+if [ ! -f /tmp/.labkube ]; then
+cat > /tmp/.labkube <<'KCFG'
+apiVersion: v1
+kind: Config
+clusters:
+- name: incluster
+  cluster:
+    server: https://kubernetes.default.svc
+    certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+users:
+- name: sa
+  user:
+    tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+contexts:
+- name: incluster
+  context:
+    cluster: incluster
+    user: sa
+    namespace: default
+current-context: incluster
+KCFG
+fi
+export KUBECONFIG=/tmp/.labkube
+# completion (kubectl + alias k) — precisa do pacote bash-completion
+[ -f /usr/share/bash-completion/bash_completion ] && . /usr/share/bash-completion/bash_completion
+source <(kubectl completion bash) 2>/dev/null
+alias k=kubectl
+complete -o default -F __start_kubectl k 2>/dev/null
+export KUBE_EDITOR=vim
+PS1='\[\e[38;2;56;189;248m\]\[\e[1m\]☁ aks\[\e[0m\]\[\e[38;2;107;114;128m\]·default\[\e[0m\] \[\e[38;2;52;211;153m\]\w\[\e[0m\] \[\e[38;2;56;189;248m\]❯\[\e[0m\] '
+cd 2>/dev/null
+`
+
+// ensureCloudShellPod garante ns + service account + pod prontos no cluster
+// ativo (AKS). Idempotente; o report envia progresso ao terminal do usuário.
+func ensureCloudShellPod(report func(string)) error {
+	// Prova de vida real: exec de verdade, não o phase do etcd. Após um
+	// stop/start do AKS o pod pode ficar órfão (preso a um nó que foi
+	// desalocado) com phase=Running stale — e aí todo exec falha com
+	// "unable to upgrade connection".
+	alive := wslShell(fmt.Sprintf(
+		"kubectl -n %s exec %s --request-timeout=10s -- true 2>/dev/null",
+		cloudShellNS, cloudShellPod)).Run() == nil
+
+	if !alive {
+		// Remove um eventual pod órfão antes de recriar (o nó dele já era).
+		wslShell(fmt.Sprintf(
+			"kubectl -n %s delete pod %s --force --grace-period=0 --ignore-not-found --wait=false 2>/dev/null",
+			cloudShellNS, cloudShellPod)).Run()
+
+		report("provisionando shell dentro do cluster (primeira vez leva ~1-2 min)...")
+		script := fmt.Sprintf(
+			`kubectl create namespace %[1]s 2>/dev/null; `+
+				`kubectl -n %[1]s create serviceaccount lab-admin 2>/dev/null; `+
+				`kubectl create clusterrolebinding lab-shell-admin --clusterrole=cluster-admin --serviceaccount=%[1]s:lab-admin 2>/dev/null; `+
+				`kubectl -n %[1]s get pod %[2]s >/dev/null 2>&1 || `+
+				`kubectl -n %[1]s run %[2]s --image=%[3]s --overrides='{"spec":{"serviceAccountName":"lab-admin"}}' --command -- sleep infinity; `+
+				`kubectl -n %[1]s wait --for=condition=Ready pod/%[2]s --timeout=180s`,
+			cloudShellNS, cloudShellPod, cloudShellImage())
+		if out, err := wslShell(script).CombinedOutput(); err != nil {
+			return fmt.Errorf("pod do shell não ficou pronto: %s", strings.TrimSpace(string(out)))
+		}
+	}
+
+	// Sempre garante rcfile + vim + bash-completion — idempotente e barato;
+	// cobre pod recém-criado E pod de sessão anterior (fast path).
+	// Nenhum dos dois vem na imagem alpine/k8s; sem bash-completion o
+	// autocomplete do kubectl simplesmente não funciona.
+	wslShell(fmt.Sprintf(
+		"kubectl -n %s exec %s -- sh -c 'which vim >/dev/null 2>&1 && [ -f /usr/share/bash-completion/bash_completion ] || apk add --no-cache vim bash-completion >/dev/null 2>&1' &",
+		cloudShellNS, cloudShellPod)).Run()
+
+	// Grava o rcfile dentro do pod via base64 (evita inferno de escaping).
+	b64 := base64.StdEncoding.EncodeToString([]byte(cloudShellRC))
+	wslShell(fmt.Sprintf(
+		"echo %s | base64 -d | kubectl -n %s exec -i %s -- sh -c 'cat > /tmp/.labrc'",
+		b64, cloudShellNS, cloudShellPod)).Run()
+	return nil
+}
+
+var clusterMu sync.Mutex
+
+func clusterIsUp() bool {
+	out, err := wslShell("kubectl cluster-info --request-timeout=5s 2>/dev/null").Output()
+	return err == nil && len(out) > 0
+}
+
+func EnsureCluster() {
+	if !clusterMu.TryLock() {
+		return
+	}
+	defer clusterMu.Unlock()
+
+	// Se o contexto ativo é um cluster de nuvem (não o minikube local), não subir
+	// o minikube — o usuário está estudando contra o AKS. Exceção: se o cluster
+	// cloud foi EXCLUÍDO na Azure, o contexto aponta para um alvo morto e trava
+	// tudo — nesse caso, voltamos ao local automaticamente.
+	if ctx := currentContext(); ctx != "" && ctx != localContext {
+		if ctx == aksName() && azInstalled() && azSubscription() != "" && !aksExists() {
+			log.Printf("[cluster] contexto '%s' aponta para cluster excluído — voltando ao minikube", ctx)
+			wslShell("kubectl config use-context " + localContext + " 2>/dev/null").Run()
+		} else {
+			log.Printf("[cluster] contexto ativo é '%s' (nuvem) — pulando auto-start do minikube", ctx)
+			return
+		}
+	}
+
+	if _, err := wslCmd("which", "kubectl").Output(); err != nil {
+		log.Println("[cluster] kubectl not found in WSL — skipping auto-start")
+		return
+	}
+
+	for i := 0; i < 3; i++ {
+		if clusterIsUp() {
+			log.Println("[cluster] already running")
+			return
+		}
+		if i < 2 {
+			time.Sleep(3 * time.Second)
+		}
+	}
+
+	// --keep-context: nunca sequestrar o contexto ativo do kubectl — se o usuário
+	// estiver usando a nuvem (AKS), o start do minikube não pode trocar o alvo.
+	args := []string{"start", "--driver=docker", "--keep-context"}
+	if getWslUser() == "" {
+		args = append(args, "--force")
+	}
+
+	wslShell("service docker status >/dev/null 2>&1 || service docker start >/dev/null 2>&1").Run()
+
+	log.Println("[cluster] starting minikube...")
+	out, err := wslCmd("minikube", args...).CombinedOutput()
+	if err != nil {
+		log.Printf("[cluster] minikube start failed: %v\n%s", err, string(out))
+	} else {
+		// Com --keep-context, um kubeconfig recém-criado fica sem contexto ativo.
+		// Só nesse caso apontamos para o minikube.
+		if currentContext() == "" {
+			wslShell("kubectl config use-context minikube 2>/dev/null").Run()
+		}
+		log.Println("[cluster] ready")
+	}
+}
+
+// TerminalWS opens a real PTY-backed terminal via Windows ConPTY running WSL bash.
+// This gives the user a full interactive shell: VIM, tab completion, colors, etc.
+func TerminalWS(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	touchActivity()
+	atomic.AddInt32(&activeTerminals, 1)
+	defer atomic.AddInt32(&activeTerminals, -1)
+
+	// Make sure the branded rcfile exists before spawning the shell.
+	ensureLabRC()
+
+	// Alvo cloud (AKS)? Então o terminal deve rodar DENTRO do cluster,
+	// não no WSL local — igual aos ambientes de prova.
+	isCloud := false
+	if ctx := currentContext(); ctx != "" && ctx != localContext {
+		isCloud = true
+		conn.WriteMessage(websocket.TextMessage, []byte(
+			"\x1b[38;2;56;189;248m☁ conectando ao cluster AKS ("+ctx+")...\x1b[0m\r\n"))
+		if err := ensureCloudShellPod(func(msg string) {
+			conn.WriteMessage(websocket.TextMessage, []byte("\x1b[38;2;107;114;128m"+msg+"\x1b[0m\r\n")) //nolint:errcheck
+		}); err != nil {
+			conn.WriteMessage(websocket.TextMessage, []byte( //nolint:errcheck
+				"\x1b[1;31mNão foi possível abrir o shell no cluster: "+err.Error()+"\x1b[0m\r\n"+
+					"\x1b[38;2;107;114;128mO cluster está ligado? Caindo para o terminal local (kubectl ainda aponta para o AKS).\x1b[0m\r\n"))
+			isCloud = false
+		}
+	}
+
+	// Build the PTY command line.
+	// - cloud: bash interativo dentro do pod lab-shell (kubectl exec)
+	// - local: bash do WSL com o rcfile custom (prompt limpo, env real do usuário)
+	var shellCmd string
+	if isCloud {
+		shellCmd = fmt.Sprintf("kubectl exec -it -n %s %s -- bash --rcfile /tmp/.labrc -i",
+			cloudShellNS, cloudShellPod)
+	} else {
+		shellCmd = "bash -c \"exec bash --rcfile ~/.k8slab_rc -i\""
+	}
+	var ptyCmd string
+	if user := getWslUser(); user != "" {
+		ptyCmd = fmt.Sprintf("wsl.exe -u %s -- %s", user, shellCmd)
+	} else {
+		ptyCmd = fmt.Sprintf("wsl.exe -- %s", shellCmd)
+	}
+
+	// Create ConPTY with initial size (will be resized on first message)
+	cpty, err := conpty.Start(ptyCmd, conpty.ConPtyDimensions(220, 50))
+	if err != nil {
+		log.Printf("[terminal] ConPTY start failed: %v", err)
+		conn.WriteMessage(websocket.TextMessage, []byte(
+			"\x1b[1;31mFalha ao iniciar terminal PTY: "+err.Error()+"\x1b[0m\r\n",
+		))
+		return
+	}
+	defer cpty.Close()
+
+	// Ensure cluster is up in background
+	go EnsureCluster()
+
+	// PTY output → WebSocket (binary frames, raw ANSI)
+	// De passagem, o tutor observa o output em busca de erros de comando —
+	// sinal de dificuldade prática no tópico ativo (tudo local).
+	go func() {
+		buf := make([]byte, 4096)
+		var lastErrAt time.Time
+		for {
+			n, err := cpty.Read(buf)
+			if n > 0 {
+				chunk := string(buf[:n])
+				if time.Since(lastErrAt) > 2*time.Second &&
+					(strings.Contains(chunk, "command not found") ||
+						strings.Contains(chunk, "Error from server") ||
+						strings.Contains(chunk, "error: unknown command") ||
+						strings.Contains(chunk, "error: exactly one") ||
+						strings.Contains(chunk, "Error: unknown flag")) {
+					tutor.RecordTermError()
+					lastErrAt = time.Now()
+				}
+				if wErr := conn.WriteMessage(websocket.BinaryMessage, buf[:n]); wErr != nil {
+					break
+				}
+			}
+			if err != nil {
+				break
+			}
+		}
+	}()
+
+	// WebSocket → PTY
+	// Text frames = JSON control (resize); Binary frames = raw input
+	for {
+		msgType, data, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+
+		if msgType == websocket.TextMessage {
+			var msg wsMsg
+			if json.Unmarshal(data, &msg) == nil && msg.Type == "resize" && msg.Cols > 0 && msg.Rows > 0 {
+				if rErr := cpty.Resize(int(msg.Cols), int(msg.Rows)); rErr != nil {
+					log.Printf("[terminal] resize error: %v", rErr)
+				}
+			}
+		} else {
+			// Raw keystrokes / paste → PTY
+			touchActivity()
+			if _, wErr := cpty.Write(data); wErr != nil {
+				break
+			}
+		}
+	}
+}

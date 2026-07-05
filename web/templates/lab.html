@@ -1,0 +1,1153 @@
+{{define "content"}}
+<div class="lab-shell">
+
+    <!-- ── Top bar ─────────────────────────────────────────────── -->
+    <div class="lab-topbar">
+        <div class="lab-crumb">
+            <img src="/static/vendor/kubernetes.svg" style="width:18px;height:18px;" alt="">
+            <a href="/">k8s-lab</a>
+            <span class="sep">/</span>
+            <a href="/lab">labs</a>
+            <span class="sep">/</span>
+            <span class="current">{{.Question.Topic}}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+            {{if eq .Question.Cert "ArgoCD"}}
+            <a href="/argocd" target="_blank" rel="noopener" class="badge badge-orange" style="text-decoration:none;">
+                <img src="https://raw.githubusercontent.com/cncf/artwork/main/projects/argo/icon/color/argo-icon-color.png" style="width:11px;height:11px;border-radius:2px;" alt="">
+                ArgoCD UI ↗
+            </a>
+            {{end}}
+            <span class="badge badge-primary">{{.Question.Cert}}</span>
+            <span class="badge {{if eq .Question.Difficulty "easy"}}badge-green{{else if eq .Question.Difficulty "mid"}}badge-yellow{{else}}badge-red{{end}}">
+                {{if eq .Question.Difficulty "easy"}}easy{{else if eq .Question.Difficulty "mid"}}medium{{else}}hard{{end}}
+            </span>
+
+            <!-- Ambiente ativo (local/cloud) -->
+            <div style="position:relative;" id="env-wrap">
+                <button class="env-chip" id="env-chip" onclick="toggleEnvMenu(event)">
+                    <span class="env-dot"></span>
+                    <span id="env-chip-label">local</span>
+                    <span class="env-caret">▾</span>
+                </button>
+                <div class="env-menu" id="env-menu">
+                    <div class="env-menu-head">
+                        <span class="k">ambiente ativo</span>
+                        <span class="v" id="env-menu-name">minikube (local)</span>
+                    </div>
+                    <div id="env-menu-cloud-actions" style="display:none;">
+                        <button class="env-menu-item danger" onclick="showStopClusterOverlay()">
+                            <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                            Parar cluster AKS
+                        </button>
+                        <p class="env-menu-note">parar pausa o faturamento — o alvo volta para o local.</p>
+                    </div>
+                    <a class="env-menu-item" href="/cloud">
+                        <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9Z"/></svg>
+                        Gerenciar ambientes →
+                    </a>
+                </div>
+            </div>
+
+            <div class="mono" style="font-size:12px;font-weight:700;color:var(--violet);" id="timer">00:00</div>
+            <button onclick="showEndLabOverlay()" class="btn btn-danger btn-sm">Encerrar</button>
+        </div>
+    </div>
+
+    <!-- ── Session progress strip ────────────────────────────── -->
+    {{if .SessionID}}
+    <div style="background:var(--green-dim);border-bottom:1px solid var(--border);padding:7px 20px;display:flex;align-items:center;gap:12px;">
+        <span class="mono" style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--green);flex-shrink:0;">sessão</span>
+        <div style="flex:1;background:var(--surface-4);height:4px;border-radius:2px;overflow:hidden;">
+            <div style="background:var(--green);height:100%;width:{{.SessionPct}}%;border-radius:2px;transition:width .4s;"></div>
+        </div>
+        <span class="mono" style="font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;">{{.SessionIndex}}<span style="color:var(--text-3);"> / {{.SessionTotal}}</span></span>
+    </div>
+    {{end}}
+
+    <!-- ── Tab bar ─────────────────────────────────────────────── -->
+    <div class="lab-tabbar">
+        <button class="lab-tab active" id="tab-task" onclick="showTab('task')">TASK</button>
+        <button class="lab-tab" id="tab-hint" onclick="showTab('hint')">HINT</button>
+        <button class="lab-tab" id="tab-solution" onclick="showTab('solution')">SOLUTION</button>
+        {{if .HasSetup}}
+        <button onclick="resetEnv()" class="term-btn" style="margin-left:auto;padding:0 4px;" title="Reconfigurar ambiente">↺ reset env</button>
+        {{end}}
+    </div>
+
+    <!-- ── Main body ───────────────────────────────────────────── -->
+    <div class="lab-body">
+
+        {{if .SessionID}}
+        <!-- Session complete overlay -->
+        <div id="session-complete-overlay" class="full-overlay">
+            <div style="text-align:center;padding:0 24px;">
+                <div style="font-size:48px;margin-bottom:14px;">🎉</div>
+                <h2 style="font-size:20px;font-weight:800;color:var(--text);margin-bottom:8px;">Sessão Concluída!</h2>
+                <p style="font-size:13px;color:var(--text-2);margin-bottom:4px;">Você completou todos os <strong style="color:var(--green);">{{.SessionTotal}}</strong> exercícios.</p>
+                <p style="font-size:12px;color:var(--text-3);margin-bottom:22px;">Ótimo trabalho!</p>
+                <div style="display:flex;gap:10px;justify-content:center;">
+                    <a href="/lab" class="btn btn-outline btn-lg">Ver Todos os Labs</a>
+                    <a href="/" class="btn btn-primary btn-lg">← Início</a>
+                </div>
+            </div>
+        </div>
+
+        {{end}}
+
+        <!-- NAV LOADING OVERLAY -->
+        <div id="nav-loading" class="full-overlay">
+            <div style="text-align:center;">
+                <div class="loader-ring-wrap" style="width:120px;height:120px;margin:0 auto 18px;">
+                    <svg class="loader-ring" viewBox="0 0 300 300">
+                        <circle class="ring-track" cx="150" cy="150" r="145"/>
+                        <circle class="ring-arc" cx="150" cy="150" r="145"/>
+                    </svg>
+                </div>
+                <p style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;">Preparando a próxima questão...</p>
+                <p style="font-size:11px;color:var(--text-3);">Limpando os resources do exercício atual.</p>
+            </div>
+        </div>
+
+        <!-- END LAB OVERLAY -->
+        <div id="endlab-overlay" class="full-overlay">
+            <div style="text-align:center;padding:0 24px;">
+                <div style="font-size:28px;margin-bottom:12px;">🏁</div>
+                <h2 style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">Encerrar Lab?</h2>
+                <p style="font-size:12px;color:var(--text-3);margin-bottom:20px;">Os resources criados serão removidos do cluster.</p>
+                <div id="endlab-btns" style="display:flex;align-items:center;justify-content:center;gap:10px;">
+                    <button onclick="hideEndLabOverlay()" class="btn btn-outline">Cancelar</button>
+                    <button onclick="endLab()" class="btn btn-danger" style="background:var(--red);color:#fff;border-color:var(--red);">Encerrar Lab</button>
+                </div>
+                <div id="endlab-loading" style="display:none;">
+                    <div style="font-size:20px;color:var(--violet);animation:spin 1s linear infinite;display:inline-block;"></div>
+                    <p style="font-size:11px;color:var(--text-3);margin-top:8px;">Limpando...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- STOP CLUSTER OVERLAY -->
+        <div id="stopcluster-overlay" class="full-overlay">
+            <div style="text-align:center;padding:0 24px;max-width:400px;">
+                <div style="font-size:28px;margin-bottom:12px;">☁️</div>
+                <h2 style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">Parar o cluster AKS?</h2>
+                <p style="font-size:12px;color:var(--text-3);margin-bottom:20px;line-height:1.6;">
+                    O faturamento de compute será pausado.<br>
+                    O alvo dos labs volta para o <strong style="color:var(--green);">minikube local</strong>.
+                </p>
+                <div id="stopcluster-btns" style="display:flex;align-items:center;justify-content:center;gap:10px;">
+                    <button onclick="hideStopClusterOverlay()" class="btn btn-outline">Cancelar</button>
+                    <button onclick="stopCluster()" class="btn btn-danger" style="background:var(--red);color:#fff;border-color:var(--red);">Parar Cluster</button>
+                </div>
+                <div id="stopcluster-loading" style="display:none;">
+                    <div style="font-size:20px;color:#38bdf8;animation:spin 1s linear infinite;display:inline-block;">⟳</div>
+                    <p style="font-size:12px;font-weight:600;color:var(--text-2);margin-top:10px;">Parando o cluster... (~2-3 min)</p>
+                    <p class="mono" style="font-size:10px;color:var(--text-4);margin-top:4px;">pode fechar esta janela — o desligamento continua na Azure</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── LEFT: Task panel ────────────────────────────────── -->
+        <div class="task-panel">
+
+            <!-- PREP OVERLAY — cobre só o painel da questão; o terminal fica livre -->
+            {{if .SessionID}}
+            <div id="session-start-overlay" class="full-overlay active">
+                <div style="display:flex;flex-direction:column;align-items:center;width:100%;">
+                    <div class="lab-loader">
+                        <div class="loader-ring-wrap">
+                            <svg class="loader-ring" viewBox="0 0 300 300">
+                                <circle class="ring-track" cx="150" cy="150" r="145"/>
+                                <circle class="ring-arc" cx="150" cy="150" r="145"/>
+                            </svg>
+                            <div class="loader-center">
+                                <p class="loader-status" id="sov-status">Limpando o cluster...</p>
+                                <p class="loader-title">Loading</p>
+                            </div>
+                        </div>
+                        <div class="loader-quote">
+                            <span class="q-mark">“</span>
+                            <p class="q-text" id="sov-quote"></p>
+                            <p class="q-author" id="sov-quote-author"></p>
+                        </div>
+                    </div>
+                    <div id="sov-error" style="display:none;border-radius:var(--r-md);padding:14px 20px;background:var(--red-dim);border:1px solid var(--red-glow);text-align:center;margin-top:24px;">
+                        <p style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px;">Alguns passos falharam</p>
+                        <p style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Verifique se o cluster está ativo.</p>
+                        <button onclick="dismissSessionOverlay()" class="term-btn" style="color:var(--violet);">Continuar mesmo assim →</button>
+                    </div>
+                </div>
+            </div>
+            {{else}}
+            {{if .HasSetup}}
+            <div id="setup-overlay" class="full-overlay active">
+                <div style="display:flex;flex-direction:column;align-items:center;width:100%;">
+                    <div class="lab-loader">
+                        <div class="loader-ring-wrap">
+                            <svg class="loader-ring" viewBox="0 0 300 300">
+                                <circle class="ring-track" cx="150" cy="150" r="145"/>
+                                <circle class="ring-arc" cx="150" cy="150" r="145"/>
+                            </svg>
+                            <div class="loader-center">
+                                <p class="loader-status" id="setup-status">Preparando o ambiente...</p>
+                                <p class="loader-title">Loading</p>
+                            </div>
+                        </div>
+                        <div class="loader-quote">
+                            <span class="q-mark">“</span>
+                            <p class="q-text" id="setup-quote"></p>
+                            <p class="q-author" id="setup-quote-author"></p>
+                        </div>
+                    </div>
+                    <div id="setup-error" style="display:none;border-radius:var(--r-md);padding:14px 20px;background:var(--red-dim);border:1px solid var(--red-glow);text-align:center;margin-top:24px;">
+                        <p style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px;">Alguns passos falharam</p>
+                        <p style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Verifique se o cluster está ativo.</p>
+                        <button onclick="dismissOverlay()" class="term-btn" style="color:var(--violet);">Continuar mesmo assim →</button>
+                    </div>
+                </div>
+            </div>
+            {{end}}
+            {{end}}
+
+            <div class="task-scroll">
+
+                <!-- TASK TAB -->
+                <div id="panel-task">
+                    <p class="task-label">Tarefa</p>
+                    <div class="task-body" id="task-body-text">{{.Question.Question}}</div>
+
+                    <!-- GOALS CHECKLIST -->
+                    {{if .Goals}}
+                    <div class="goals-header">
+                        <span class="task-label" style="margin-bottom:0;">Goals</span>
+                        <span class="goals-progress" id="goals-progress">0 / {{len .Goals}} completados</span>
+                    </div>
+                    <div id="goals-list">
+                        {{range $i, $g := .Goals}}
+                        <div class="goal-card state-idle" id="goal-card-{{$i}}">
+                            <div class="goal-header">
+                                <div class="goal-num" id="goal-num-{{$i}}">{{add $i 1}}</div>
+                                <div class="goal-desc" id="goal-desc-{{$i}}">{{$g.Description}}</div>
+                            </div>
+                            <div class="goal-body">
+                                <button class="goal-check-btn idle" id="goal-btn-{{$i}}"
+                                    onclick="checkGoal({{$i}}, '{{$.Question.ID}}')">
+                                    ▶ CHECK
+                                </button>
+                                <div class="goal-result hidden" id="goal-result-{{$i}}"></div>
+                                <div id="goal-retry-{{$i}}" class="goal-retry-msg" style="display:none;">
+                                    Não foi dessa vez! Verifique seu comando e tente novamente.
+                                </div>
+                                <div id="goal-expl-{{$i}}" class="goal-expl" style="display:none;"></div>
+                            </div>
+                        </div>
+                        {{end}}
+                    </div>
+                    {{else}}
+                    <div style="margin-top:16px;padding:12px;border-radius:var(--r-md);background:var(--surface-2);border:1px solid var(--border);">
+                        <p style="font-size:11px;color:var(--text-2);margin-bottom:6px;">ℹ Sem validação automática disponível para este lab.</p>
+                        <p style="font-size:11px;color:var(--text-3);">Execute o comando no terminal e confira o resultado.</p>
+                    </div>
+                    {{end}}
+                </div>
+
+                <!-- HINT TAB -->
+                <div id="panel-hint" style="display:none;">
+                    <p class="task-label">Hint</p>
+                    {{if .Question.Hint}}
+                    <div class="hint-box">{{.Question.Hint}}</div>
+                    {{else}}
+                    <p style="font-size:12px;color:var(--text-3);">Sem hints disponíveis para esta questão.</p>
+                    {{end}}
+                    {{range $i, $g := .Goals}}
+                    {{if $g.Hint}}
+                    <div style="margin-top:10px;">
+                        <p class="task-label">Goal {{add $i 1}}</p>
+                        <div class="hint-box">{{$g.Hint}}</div>
+                    </div>
+                    {{end}}
+                    {{end}}
+                </div>
+
+                <!-- SOLUTION TAB -->
+                <div id="panel-solution" style="display:none;">
+                    <p class="task-label">Solution</p>
+                    {{if .Question.AnswerCommand}}
+                    <div class="solution-cmd">
+                        <span class="mono" style="font-size:9px;color:var(--text-3);display:block;margin-bottom:6px;letter-spacing:.1em;">COMMAND</span>
+                        {{.Question.AnswerCommand}}
+                    </div>
+                    {{end}}
+                    {{if .Question.Explanation}}
+                    <div class="solution-expl">{{.Question.Explanation}}</div>
+                    {{end}}
+                    {{if .Question.DocURL}}
+                    <a href="{{.Question.DocURL}}" target="_blank" rel="noopener"
+                       style="display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:11px;font-weight:600;color:var(--violet);">
+                       📖 {{if .Question.DocSection}}{{.Question.DocSection}}{{else}}Documentação{{end}} ↗
+                    </a>
+                    {{end}}
+                </div>
+
+            </div>
+
+            <!-- Footer nav -->
+            <div class="task-footer">
+                {{if .SessionID}}
+                <div class="nav-row">
+                    <a href="/lab" class="mono" style="font-size:12px;font-weight:600;color:var(--text-3);flex:1;display:block;">← Sair</a>
+                    <span class="mono" style="font-size:11px;font-weight:600;color:var(--text-3);">{{.SessionIndex}} / {{.SessionTotal}}</span>
+                    <div style="flex:1;text-align:right;">
+                        {{if .SessionIsLast}}
+                        <button onclick="finishSession()" class="btn btn-ghost btn-sm" style="background:var(--green);color:#020b06;border-color:var(--green);">Finalizar ✓</button>
+                        {{else}}
+                        <button onclick="nextQuestion()" class="btn btn-primary btn-sm">Próxima →</button>
+                        {{end}}
+                    </div>
+                </div>
+                {{else}}
+                <div class="nav-row">
+                    <button class="nav-btn" onclick="navigateLab('/lab')">← Voltar aos labs</button>
+                </div>
+                {{end}}
+            </div>
+        </div>
+
+        <!-- ── RIGHT: Terminal ─────────────────────────────────── -->
+        <div class="term-panel">
+            <div class="term-window">
+                <div class="term-titlebar">
+                    <div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1;">
+                        <div class="term-dots">
+                            <div class="term-dot r"></div>
+                            <div class="term-dot y"></div>
+                            <div class="term-dot g"></div>
+                        </div>
+                        <div class="term-tabs" id="term-tabs"></div>
+                        <button class="term-add-btn" onclick="addTerminal()" title="Novo terminal">+</button>
+                    </div>
+                    <div class="term-actions" style="display:flex;align-items:center;gap:10px;">
+                        <span class="term-title" id="term-title"><span class="ico">❯</span> bash</span>
+                        <button class="term-btn" onclick="clearTerminal()">clear</button>
+                    </div>
+                </div>
+                <div id="terminal-container"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- xterm.js -->
+<link rel="stylesheet" href="/static/vendor/xterm.css"/>
+<script src="/static/vendor/xterm.js"></script>
+<script src="/static/vendor/addon-fit.js"></script>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// Markdown bold renderer for task body
+// ─────────────────────────────────────────────────────────────
+(function renderMarkdown() {
+    const el = document.getElementById('task-body-text');
+    if (!el) return;
+    let html = el.innerHTML
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
+    el.innerHTML = html;
+
+    document.querySelectorAll('.goal-desc').forEach(d => {
+        d.innerHTML = d.innerHTML
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/`([^`]+)`/g, '<code style="font-family:var(--mono);font-size:11px;background:var(--surface-4);color:var(--violet);padding:1px 4px;border-radius:3px;">$1</code>');
+    });
+})();
+
+// ─────────────────────────────────────────────────────────────
+// Tabs
+// ─────────────────────────────────────────────────────────────
+const tutorEventSent = {};
+function showTab(name) {
+    ['task','hint','solution'].forEach(t => {
+        document.getElementById('panel-' + t).style.display = 'none';
+        document.getElementById('tab-' + t).classList.remove('active');
+    });
+    document.getElementById('panel-' + name).style.display = 'block';
+    document.getElementById('tab-' + name).classList.add('active');
+
+    // Tutor: consultar dica/solução é sinal de dificuldade (1x por aba/página)
+    if ((name === 'hint' || name === 'solution') && !tutorEventSent[name]) {
+        tutorEventSent[name] = true;
+        fetch('/api/tutor/event', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: name + '_view', question_id: '{{.Question.ID}}' })
+        }).catch(() => {});
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Goals
+// ─────────────────────────────────────────────────────────────
+const totalGoals = {{if .Goals}}{{len .Goals}}{{else}}0{{end}};
+let completedGoals = 0;
+
+function checkGoal(idx, questionId) {
+    const card = document.getElementById('goal-card-' + idx);
+    const btn = document.getElementById('goal-btn-' + idx);
+    const resultEl = document.getElementById('goal-result-' + idx);
+    const retryEl = document.getElementById('goal-retry-' + idx);
+    const explEl = document.getElementById('goal-expl-' + idx);
+
+    card.className = 'goal-card state-checking';
+    btn.className = 'goal-check-btn checking';
+    btn.textContent = '⟳ Verificando...';
+    btn.disabled = true;
+    resultEl.classList.add('hidden');
+    retryEl.style.display = 'none';
+    explEl.style.display = 'none';
+
+    fetch('/lab/' + questionId + '/validate?goal=' + idx)
+        .then(r => r.json())
+        .then(d => {
+            resultEl.classList.remove('hidden');
+            resultEl.textContent = d.output || '';
+
+            if (d.success) {
+                card.className = 'goal-card state-success';
+                btn.className = 'goal-check-btn success';
+                btn.textContent = '✓ Correto!';
+                btn.disabled = true;
+                resultEl.className = 'goal-result success';
+
+                if (d.explanation) {
+                    explEl.textContent = d.explanation;
+                    explEl.style.display = 'block';
+                }
+
+                completedGoals++;
+                markStreak();
+                const prog = document.getElementById('goals-progress');
+                if (prog) prog.textContent = completedGoals + ' / ' + totalGoals + ' completados';
+            } else {
+                card.className = 'goal-card state-fail';
+                btn.className = 'goal-check-btn fail';
+                btn.textContent = '↺ Tentar Novamente';
+                btn.disabled = false;
+                resultEl.className = 'goal-result fail';
+                retryEl.style.display = 'block';
+                // IA local: oferece explicação do erro em tempo real
+                if (LLM_OK && !EXAM) {
+                    retryEl.innerHTML = 'Não foi dessa vez! Verifique seu comando e tente novamente. ' +
+                        `<button class="term-btn" style="color:var(--violet);padding:0 4px;" onclick="tutorExplain(${idx}, this)">✦ explicar este erro</button>`;
+                }
+                // Tutor: uma falha pode disparar recomendação em tempo real
+                setTimeout(checkTutorSuggestion, 600);
+            }
+        })
+        .catch(() => {
+            card.className = 'goal-card state-idle';
+            btn.className = 'goal-check-btn idle';
+            btn.textContent = '▶ CHECK';
+            btn.disabled = false;
+            resultEl.classList.add('hidden');
+        });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Tutor — sugestão em tempo real quando detecta dificuldade
+// ─────────────────────────────────────────────────────────────
+const LAB_TOPIC = '{{.Question.Topic}}';
+const LAB_CERT = '{{.Question.Cert}}';
+let tutorShown = false;
+
+// Registra a sessão ativa para o card "continuar de onde parou" na home
+{{if .SessionID}}
+try {
+    localStorage.setItem('k8slab-resume', JSON.stringify({
+        url: location.pathname + location.search,
+        topic: LAB_TOPIC, cert: LAB_CERT,
+        index: {{.SessionIndex}}, total: {{.SessionTotal}},
+        ts: Date.now()
+    }));
+} catch(e) {}
+{{end}}
+let LLM_OK = false;
+
+// ─────────────────────────────────────────────────────────────
+// MODO EXAME — 2h, sem dicas, score report ao final
+// ─────────────────────────────────────────────────────────────
+const EXAM = new URLSearchParams(location.search).has('exam');
+const EXAM_MS = 120 * 60 * 1000;
+
+if (EXAM) {
+    ['tab-hint', 'tab-solution'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.style.display = 'none';
+    });
+    document.querySelectorAll('.lab-tabbar .term-btn').forEach(el => el.style.display = 'none');
+}
+
+function examKey(s) { return 'k8slab-exam-{{.SessionID}}' + s; }
+
+function examRecordCurrent() {
+    if (!EXAM) return;
+    try {
+        const res = JSON.parse(localStorage.getItem(examKey('-res')) || '[]');
+        res.push({ topic: LAB_TOPIC, ok: totalGoals > 0 && completedGoals === totalGoals });
+        localStorage.setItem(examKey('-res'), JSON.stringify(res));
+    } catch (e) {}
+}
+
+function finishExam() {
+    examRecordCurrent();
+    let res = [];
+    try { res = JSON.parse(localStorage.getItem(examKey('-res')) || '[]'); } catch (e) {}
+    const total = Math.max(res.length, 1);
+    const ok = res.filter(r => r.ok).length;
+    const pct = Math.round(ok / total * 100);
+    const passed = pct >= 66;
+    const byTopic = {};
+    res.forEach(r => {
+        byTopic[r.topic] = byTopic[r.topic] || { ok: 0, n: 0 };
+        byTopic[r.topic].n++; if (r.ok) byTopic[r.topic].ok++;
+    });
+    let rows = '';
+    Object.keys(byTopic).sort().forEach(t => {
+        const b = byTopic[t], p = Math.round(b.ok / b.n * 100);
+        rows += `<div style="display:flex;justify-content:space-between;gap:16px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;">
+            <span style="color:var(--text-2);">${esc(t)}</span>
+            <span class="mono" style="color:${p >= 66 ? 'var(--green)' : 'var(--red)'};font-weight:700;">${b.ok}/${b.n} · ${p}%</span></div>`;
+    });
+    const ov = document.createElement('div');
+    ov.className = 'full-overlay active';
+    ov.style.zIndex = '95';
+    ov.innerHTML = `<div style="max-width:430px;width:100%;padding:0 24px;text-align:center;">
+        <div style="font-size:44px;margin-bottom:10px;animation:fadeUp .5s ease both;">${passed ? '🏆' : '📚'}</div>
+        <h2 style="font-size:26px;font-weight:800;color:${passed ? 'var(--green)' : 'var(--red)'};margin-bottom:4px;">${pct}%</h2>
+        <p style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px;">${passed ? 'APROVADO ✓' : 'Ainda não — nota de corte: 66%'}</p>
+        <p style="font-size:11px;color:var(--text-3);margin-bottom:18px;">${ok} de ${total} questões completas</p>
+        <div style="background:var(--surface-2);border:1px solid var(--border-2);border-radius:12px;padding:14px 16px;text-align:left;margin-bottom:18px;">
+            <p class="mono" style="font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text-4);margin-bottom:8px;">score por domínio</p>
+            ${rows}
+        </div>
+        <div style="display:flex;gap:10px;justify-content:center;">
+            <a href="/tutor" class="btn btn-outline">Revisar com o tutor</a>
+            <a href="/" class="btn btn-primary">← Início</a>
+        </div>
+    </div>`;
+    document.querySelector('.lab-body').appendChild(ov);
+    try { localStorage.removeItem(examKey('-res')); localStorage.removeItem(examKey('-start')); localStorage.removeItem('k8slab-resume'); } catch (e) {}
+}
+
+// ─────────────────────────────────────────────────────────────
+// Atalhos de teclado: Ctrl+Enter valida · Ctrl+→ próxima
+// ─────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.key === 'Enter') {
+        const btn = document.querySelector('.goal-check-btn.idle, .goal-check-btn.fail');
+        if (btn) { e.preventDefault(); btn.click(); }
+    } else if (e.key === 'ArrowRight' && typeof nextQuestion === 'function') {
+        e.preventDefault(); nextQuestion();
+    }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Streak 🔥 — marca o dia como estudado a cada goal verde
+// ─────────────────────────────────────────────────────────────
+function markStreak() {
+    try {
+        const today = new Date().toISOString().slice(0, 10);
+        const s = JSON.parse(localStorage.getItem('k8slab-streak') || '{}');
+        if (s.last === today) return;
+        const y = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+        s.count = (s.last === y) ? (s.count || 0) + 1 : 1;
+        s.last = today;
+        localStorage.setItem('k8slab-streak', JSON.stringify(s));
+    } catch (e) {}
+}
+
+// Detecta a IA local (Ollama) uma vez no load
+fetch('/api/tutor/status').then(r => r.json())
+    .then(d => { LLM_OK = !!(d.llm && d.llm.available); })
+    .catch(() => {});
+
+// Explica um goal que falhou usando o LLM local (sem custo, sem nuvem)
+async function tutorExplain(idx, btnEl) {
+    const explEl = document.getElementById('goal-expl-' + idx);
+    const resultEl = document.getElementById('goal-result-' + idx);
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = '✦ pensando...'; }
+    explEl.style.display = 'block';
+    explEl.textContent = 'analisando seu erro com a IA local...';
+    try {
+        const r = await fetch('/api/tutor/explain', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                question_id: '{{.Question.ID}}',
+                goal: idx,
+                output: resultEl ? resultEl.textContent : ''
+            })
+        });
+        const d = await r.json();
+        explEl.textContent = d.explanation || d.error || 'sem resposta da IA local';
+    } catch(e) {
+        explEl.textContent = 'IA local indisponível no momento.';
+    }
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = '✦ explicar este erro'; }
+}
+
+async function checkTutorSuggestion() {
+    if (tutorShown || EXAM) return;
+    try {
+        const r = await fetch('/api/tutor/status');
+        const d = await r.json();
+        const rec = (d.recommendations || []).find(x => x.topic === LAB_TOPIC);
+        if (!rec) return;
+        // só oferece labs que o gerador sabe criar
+        if (!(d.gen_topics || []).includes(rec.topic)) return;
+        tutorShown = true;
+        renderTutorCard(rec);
+    } catch(e) {}
+}
+
+function renderTutorCard(rec) {
+    const host = document.getElementById('panel-task');
+    const el = document.createElement('div');
+    el.className = 'tutor-card';
+    el.id = 'tutor-suggest';
+    el.innerHTML =
+        `<div class="t-head"><svg width="14" height="14" viewBox="0 0 64 64" fill="none" style="vertical-align:-2px;flex-shrink:0;"><rect x="10" y="12" width="44" height="39" rx="12" stroke="#818cf8" stroke-width="4" fill="rgba(129,140,248,.1)"/><circle cx="23.5" cy="29" r="5" fill="#818cf8"/><circle cx="40.5" cy="29" r="5" fill="#38bdf8"/><path d="M24 40c2.6 3.2 13.4 3.2 16 0" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/></svg> tutor</div>` +
+        `<div class="t-body">${escT(rec.reason)}<br>Posso gerar um <strong>lab novo, só seu</strong>, com nível ${rec.level} de ajuda${rec.level === 3 ? ' (passo a passo completo)' : ''}.</div>` +
+        `<div class="t-actions">
+            <button class="btn btn-primary btn-sm" onclick="tutorGenerate('${escT(rec.topic)}', ${rec.level})">✦ Gerar lab personalizado</button>
+            <button class="btn btn-outline btn-sm" onclick="tutorDismiss('${escT(rec.topic)}')">Agora não</button>
+         </div>`;
+    host.appendChild(el);
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function tutorGenerate(topic, level) {
+    const card = document.getElementById('tutor-suggest');
+    if (card) card.querySelector('.t-actions').innerHTML =
+        '<span style="font-size:11px;color:var(--text-3);">gerando seu lab...</span>';
+    try {
+        const r = await fetch('/api/tutor/generate', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topic, level, cert: LAB_CERT, count: 2 })
+        });
+        const d = await r.json();
+        if (d.first) { window.location.href = '/lab/' + d.first + '?session=' + d.id; return; }
+    } catch(e) {}
+    if (card) card.remove();
+}
+
+function tutorDismiss(topic) {
+    fetch('/api/tutor/event', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'dismiss', cert: LAB_CERT, topic })
+    }).catch(() => {});
+    const card = document.getElementById('tutor-suggest');
+    if (card) card.remove();
+}
+
+function escT(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;'); }
+
+// ─────────────────────────────────────────────────────────────
+// Timer
+// ─────────────────────────────────────────────────────────────
+const timerEl = document.getElementById('timer');
+if (EXAM) {
+    // regressivo: 120 min desde o início do exame (persiste entre questões)
+    let start = 0;
+    try {
+        start = parseInt(localStorage.getItem(examKey('-start')) || '0');
+        if (!start) { start = Date.now(); localStorage.setItem(examKey('-start'), String(start)); }
+    } catch (e) { start = Date.now(); }
+    const tick = () => {
+        const left = EXAM_MS - (Date.now() - start);
+        if (left <= 0) { timerEl.textContent = '00:00'; finishExam(); return; }
+        const m = Math.floor(left / 60000), s = Math.floor(left % 60000 / 1000);
+        timerEl.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+        timerEl.style.color = left < 10 * 60000 ? 'var(--red)' : 'var(--violet)';
+        setTimeout(tick, 1000);
+    };
+    tick();
+} else {
+    let secs = 0;
+    setInterval(() => {
+        secs++;
+        timerEl.textContent = String(Math.floor(secs/60)).padStart(2,'0') + ':' + String(secs%60).padStart(2,'0');
+    }, 1000);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Navigation
+// ─────────────────────────────────────────────────────────────
+function showEndLabOverlay() { document.getElementById('endlab-overlay').classList.add('active'); }
+function hideEndLabOverlay() {
+    document.getElementById('endlab-overlay').classList.remove('active');
+    document.getElementById('endlab-btns').style.display = 'flex';
+    document.getElementById('endlab-loading').style.display = 'none';
+}
+async function endLab() {
+    document.getElementById('endlab-btns').style.display = 'none';
+    document.getElementById('endlab-loading').style.display = 'block';
+    try { await fetch('/lab/{{.Question.ID}}/teardown', { method: 'POST' }); } catch(e) {}
+    window.location.href = '/lab';
+}
+
+async function navigateLab(url) {
+    document.getElementById('nav-loading').classList.add('active');
+    try { await fetch('/lab/{{.Question.ID}}/teardown', { method: 'POST' }); } catch(e) {}
+    window.location.href = url;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Ambiente ativo (local/cloud) + parar cluster AKS
+// ─────────────────────────────────────────────────────────────
+async function refreshEnvChip() {
+    try {
+        const r = await fetch('/api/cloud/status');
+        const d = await r.json();
+        const isCloud = d.active_context === d.cluster_name;
+        const chip = document.getElementById('env-chip');
+        chip.classList.toggle('cloud', isCloud);
+        document.getElementById('env-chip-label').textContent = isCloud ? 'cloud · aks' : 'local';
+        document.getElementById('env-menu-name').textContent =
+            isCloud ? d.cluster_name + ' (Azure AKS)' : 'minikube (local)';
+        document.getElementById('env-menu-cloud-actions').style.display = isCloud ? 'block' : 'none';
+        document.getElementById('term-title').innerHTML = isCloud
+            ? '<span class="ico">☁</span> bash — dentro do cluster AKS (pod lab-shell)'
+            : '<span class="ico">❯</span> bash — kubectl · vim · tab completion';
+    } catch(e) {}
+}
+
+function toggleEnvMenu(ev) {
+    ev.stopPropagation();
+    document.getElementById('env-menu').classList.toggle('open');
+}
+document.addEventListener('click', ev => {
+    if (!document.getElementById('env-wrap').contains(ev.target)) {
+        document.getElementById('env-menu').classList.remove('open');
+    }
+});
+
+function showStopClusterOverlay() {
+    document.getElementById('env-menu').classList.remove('open');
+    document.getElementById('stopcluster-overlay').classList.add('active');
+}
+function hideStopClusterOverlay() {
+    document.getElementById('stopcluster-overlay').classList.remove('active');
+    document.getElementById('stopcluster-btns').style.display = 'flex';
+    document.getElementById('stopcluster-loading').style.display = 'none';
+}
+async function stopCluster() {
+    document.getElementById('stopcluster-btns').style.display = 'none';
+    document.getElementById('stopcluster-loading').style.display = 'block';
+    try {
+        // Volta o alvo para o local antes — os labs continuam funcionando
+        await fetch('/api/context', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target: 'local' })
+        });
+        await fetch('/api/cloud/stop', { method: 'POST' });
+    } catch(e) {}
+    hideStopClusterOverlay();
+    refreshEnvChip();
+}
+
+refreshEnvChip();
+
+// ─────────────────────────────────────────────────────────────
+// Terminal
+// ─────────────────────────────────────────────────────────────
+// Paletas do terminal por tema (acompanham o switcher global)
+const TERM_THEMES = {
+    dark: {
+        background: '#08080f', foreground: '#d7d9ec',
+        cursor: '#818cf8', cursorAccent: '#08080f',
+        selectionBackground: 'rgba(129,140,248,.28)',
+        black: '#16163a',   brightBlack: '#50527a',
+        red: '#f87171',     brightRed: '#fca5a5',
+        green: '#34d399',   brightGreen: '#6ee7b7',
+        yellow: '#fbbf24',  brightYellow: '#fcd34d',
+        blue: '#818cf8',    brightBlue: '#a5b4fc',
+        magenta: '#c084fc', brightMagenta: '#d8b4fe',
+        cyan: '#22d3ee',    brightCyan: '#67e8f9',
+        white: '#d7d9ec',   brightWhite: '#eef0ff',
+    },
+    dimmed: {
+        background: '#22272e', foreground: '#adbac7',
+        cursor: '#6cb6ff', cursorAccent: '#22272e',
+        selectionBackground: 'rgba(108,182,255,.25)',
+        black: '#2d333b',   brightBlack: '#636e7b',
+        red: '#f47067',     brightRed: '#ff938a',
+        green: '#57ab5a',   brightGreen: '#6bc46d',
+        yellow: '#c69026',  brightYellow: '#daaa3f',
+        blue: '#539bf5',    brightBlue: '#6cb6ff',
+        magenta: '#b083f0', brightMagenta: '#dcbdfb',
+        cyan: '#39c5cf',    brightCyan: '#56d4dd',
+        white: '#909dab',   brightWhite: '#cdd9e5',
+    },
+    contrast: {
+        background: '#010409', foreground: '#f0f3f6',
+        cursor: '#a5b4fc', cursorAccent: '#010409',
+        selectionBackground: 'rgba(165,180,252,.35)',
+        black: '#21262d',   brightBlack: '#7a828e',
+        red: '#ff9492',     brightRed: '#ffb1af',
+        green: '#26cd4d',   brightGreen: '#4ae168',
+        yellow: '#f0b72f',  brightYellow: '#f7c843',
+        blue: '#71b7ff',    brightBlue: '#91cbff',
+        magenta: '#cb9eff', brightMagenta: '#dbb7ff',
+        cyan: '#39c5cf',    brightCyan: '#56d4dd',
+        white: '#d9dee3',   brightWhite: '#ffffff',
+    },
+    light: {
+        background: '#ffffff', foreground: '#1f2328',
+        cursor: '#4f46e5', cursorAccent: '#ffffff',
+        selectionBackground: 'rgba(79,70,229,.18)',
+        black: '#24292f',   brightBlack: '#57606a',
+        red: '#cf222e',     brightRed: '#a40e26',
+        green: '#116329',   brightGreen: '#1a7f37',
+        yellow: '#4d2d00',  brightYellow: '#633c01',
+        blue: '#0969da',    brightBlue: '#218bff',
+        magenta: '#8250df', brightMagenta: '#a475f9',
+        cyan: '#1b7c83',    brightCyan: '#3192aa',
+        white: '#6e7781',   brightWhite: '#8c959f',
+    },
+};
+function termThemeNow() {
+    const t = document.documentElement.getAttribute('data-theme') || 'dark';
+    return TERM_THEMES[t] || TERM_THEMES.dark;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Multi-terminal em abas — cada aba é uma sessão independente
+// (novo WS → novo shell no mesmo alvo). Reconexão automática:
+// sessões exec no AKS caem por ociosidade e voltam sozinhas.
+// ─────────────────────────────────────────────────────────────
+const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const MAX_TERMS = 4;
+const TERMS = [];
+let activeIdx = 0;
+let pageLeaving = false;
+window.addEventListener('beforeunload', () => { pageLeaving = true; });
+
+function wsConnect(h, isReconnect) {
+    h.ws = new WebSocket(wsProto + '//' + location.host + '/ws/terminal');
+    h.ws.binaryType = 'arraybuffer';
+    h.ws.onopen = () => {
+        h.retry = 1500;
+        h.ws.send(JSON.stringify({ type: 'resize', cols: h.term.cols, rows: h.term.rows }));
+        if (isReconnect) h.term.writeln('\x1b[38;2;52;211;153m[reconectado]\x1b[0m');
+    };
+    h.ws.onmessage = e => {
+        if (e.data instanceof ArrayBuffer) {
+            h.term.write(new Uint8Array(e.data));
+            if (!EXAM) scanTermOutput(new TextDecoder().decode(e.data));
+        }
+    };
+    h.ws.onclose = () => {
+        if (pageLeaving || h.closed) return;
+        h.term.writeln('\r\n\x1b[38;2;107;114;128m[sessão caiu — reconectando...]\x1b[0m');
+        setTimeout(() => { if (!h.closed) wsConnect(h, true); }, h.retry);
+        h.retry = Math.min(h.retry * 2, 10000); // backoff até 10s
+    };
+    h.ws.onerror = () => { try { h.ws.close(); } catch(e) {} };
+}
+
+function createTermSession() {
+    const cont = document.createElement('div');
+    cont.className = 'term-instance';
+    document.getElementById('terminal-container').appendChild(cont);
+
+    const term = new Terminal({
+        cursorBlink: true,
+        fontFamily: '"JetBrains Mono","Fira Code","Cascadia Code",monospace',
+        fontSize: 13,
+        lineHeight: 1.45,
+        letterSpacing: 0.2,
+        theme: termThemeNow()
+    });
+    const fit = new FitAddon.FitAddon();
+    term.loadAddon(fit);
+    term.open(cont);
+
+    const h = { term, fit, cont, ws: null, retry: 1500, closed: false };
+    term.onData(data => {
+        if (h.ws && h.ws.readyState === WebSocket.OPEN) {
+            h.ws.send(new TextEncoder().encode(data).buffer);
+        }
+    });
+    wsConnect(h, false);
+    return h;
+}
+
+function sendResize(h) {
+    if (h.ws && h.ws.readyState === WebSocket.OPEN) {
+        h.ws.send(JSON.stringify({ type: 'resize', cols: h.term.cols, rows: h.term.rows }));
+    }
+}
+
+function renderTabs() {
+    const tabs = document.getElementById('term-tabs');
+    tabs.innerHTML = '';
+    TERMS.forEach((h, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'term-tab-btn' + (i === activeIdx ? ' active' : '');
+        btn.onclick = () => switchTerm(i);
+        btn.innerHTML = 'Terminal ' + (i + 1) +
+            (TERMS.length > 1 ? '<span class="tab-x" title="Fechar">×</span>' : '');
+        const x = btn.querySelector('.tab-x');
+        if (x) x.onclick = ev => { ev.stopPropagation(); closeTerm(i); };
+        tabs.appendChild(btn);
+    });
+}
+
+function switchTerm(i) {
+    activeIdx = i;
+    TERMS.forEach((h, j) => h.cont.classList.toggle('active', i === j));
+    renderTabs();
+    requestAnimationFrame(() => {
+        const h = TERMS[activeIdx];
+        h.fit.fit();
+        sendResize(h);
+        h.term.focus();
+    });
+}
+
+function addTerminal() {
+    if (TERMS.length >= MAX_TERMS) return;
+    TERMS.push(createTermSession());
+    switchTerm(TERMS.length - 1);
+}
+
+function closeTerm(i) {
+    if (TERMS.length <= 1) return;
+    const h = TERMS[i];
+    h.closed = true;
+    try { h.ws.close(); } catch(e) {}
+    h.term.dispose();
+    h.cont.remove();
+    TERMS.splice(i, 1);
+    switchTerm(Math.min(activeIdx > i ? activeIdx - 1 : activeIdx, TERMS.length - 1));
+}
+
+function fitActiveTerm() {
+    const h = TERMS[activeIdx];
+    if (h) { h.fit.fit(); sendResize(h); }
+}
+
+window.addEventListener('resize', fitActiveTerm);
+window.addEventListener('k8slab-theme', () => {
+    TERMS.forEach(h => { h.term.options.theme = termThemeNow(); });
+});
+
+function clearTerminal() {
+    const h = TERMS[activeIdx];
+    if (h && h.ws && h.ws.readyState === WebSocket.OPEN) {
+        h.ws.send(new TextEncoder().encode('\x0c').buffer);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Tutor observando o terminal — dica em tempo real após erros
+// repetidos (tudo no navegador; nada sai da máquina)
+// ─────────────────────────────────────────────────────────────
+let termErrTimes = [];
+let lastToastAt = 0;
+
+const TERM_TIPS = [
+    { re: /command not found/, tip: 'comando não encontrado — confere a digitação? O clássico é <b>kubectl</b> virar <i>kubctl/kubect</i>.' },
+    { re: /error: unknown command/, tip: 'subcomando não existe — os principais: <b>get · describe · create · apply · delete · logs · exec</b>.' },
+    { re: /Error: unknown flag|unknown shorthand/, tip: 'flag desconhecida — <b>kubectl &lt;cmd&gt; --help</b> lista as válidas rapidinho.' },
+    { re: /Error from server \(NotFound\)/, tip: 'recurso não encontrado — confira o <b>nome exato</b> e o <b>namespace</b> (-n). <b>kubectl get all</b> mostra o que existe.' },
+    { re: /Error from server \(Forbidden\)/, tip: 'sem permissão — teste com <b>kubectl auth can-i</b> para entender o RBAC em jogo.' },
+    { re: /error: exactly one|error: required/, tip: 'faltou argumento — compare com o exemplo do HINT ou use <b>--help</b>.' },
+];
+
+function scanTermOutput(chunk) {
+    const now = Date.now();
+    let matched = null;
+    for (const t of TERM_TIPS) {
+        if (t.re.test(chunk)) { matched = t; break; }
+    }
+    if (!matched) return;
+    termErrTimes.push(now);
+    termErrTimes = termErrTimes.filter(t => now - t < 60000);
+    // 3 erros em 1 min + cooldown de 90s entre toasts
+    if (termErrTimes.length >= 3 && now - lastToastAt > 90000) {
+        lastToastAt = now;
+        termErrTimes = [];
+        showTermToast(matched.tip);
+    }
+}
+
+function showTermToast(tipHtml) {
+    const old = document.getElementById('term-toast');
+    if (old) old.remove();
+    const el = document.createElement('div');
+    el.id = 'term-toast';
+    el.className = 'term-toast';
+    el.innerHTML =
+        '<svg width="18" height="18" viewBox="0 0 64 64" fill="none" style="flex-shrink:0;"><rect x="10" y="12" width="44" height="39" rx="12" stroke="#818cf8" stroke-width="4" fill="rgba(129,140,248,.15)"/><circle cx="23.5" cy="29" r="5" fill="#818cf8"/><circle cx="40.5" cy="29" r="5" fill="#38bdf8"/><path d="M24 40c2.6 3.2 13.4 3.2 16 0" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/></svg>' +
+        '<span>' + tipHtml + '</span>' +
+        '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--text-4);cursor:pointer;font-size:13px;padding:0 2px;">×</button>';
+    document.querySelector('.term-panel').appendChild(el);
+    setTimeout(() => { if (el.isConnected) el.remove(); }, 12000);
+}
+
+// Primeiro terminal
+addTerminal();
+
+// ─────────────────────────────────────────────────────────────
+// Overlay helpers (shared)
+// ─────────────────────────────────────────────────────────────
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+const LAB_QUOTES = [
+    { t: 'Você não consegue o que deseja. Consegue aquilo pelo que trabalha.', a: 'Daniel Milstein' },
+    { t: 'A sorte favorece a mente preparada.', a: 'Louis Pasteur' },
+    { t: 'O especialista em qualquer coisa já foi um dia iniciante.', a: 'Helen Hayes' },
+    { t: 'Sucesso é a soma de pequenos esforços repetidos dia após dia.', a: 'Robert Collier' },
+    { t: 'Não conte os dias. Faça os dias contarem.', a: 'Muhammad Ali' },
+    { t: 'Aprender é a única coisa de que a mente nunca se cansa e nunca se arrepende.', a: 'Leonardo da Vinci' },
+    { t: 'Nós somos aquilo que fazemos repetidamente. Excelência não é um ato, é um hábito.', a: 'Aristóteles' },
+    { t: 'A melhor maneira de prever o futuro é criá-lo.', a: 'Peter Drucker' },
+];
+function pickQuote(textId, authorId) {
+    const q = LAB_QUOTES[Math.floor(Math.random() * LAB_QUOTES.length)];
+    const t = document.getElementById(textId);
+    const a = document.getElementById(authorId);
+    if (t) t.textContent = q.t;
+    if (a) a.textContent = '– ' + q.a;
+}
+
+// ─────────────────────────────────────────────────────────────
+// SESSION MODE
+// ─────────────────────────────────────────────────────────────
+{{if .SessionID}}
+const SESSION_ID = '{{.SessionID}}';
+const SESSION_HAS_SETUP = {{if .HasSetup}}true{{else}}false{{end}};
+const SESSION_QUESTION_ID = '{{.Question.ID}}';
+let sovErrors = false;
+const sovStatus = document.getElementById('sov-status');
+pickQuote('sov-quote', 'sov-quote-author');
+
+const resetES = new EventSource('/api/cluster/reset');
+resetES.onmessage = ev => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'step') {
+        if (msg.status === 'running') sovStatus.textContent = msg.desc + '...';
+        if (msg.status === 'warn') sovErrors = true;
+    } else if (msg.type === 'done') {
+        resetES.close();
+        if (SESSION_HAS_SETUP) {
+            sovStatus.textContent = 'Configurando o exercício...';
+            startSovSetup();
+        } else {
+            sovFinish();
+        }
+    }
+};
+resetES.onerror = () => { resetES.close(); sovShowError(); };
+
+function startSovSetup() {
+    const es = new EventSource('/lab/' + SESSION_QUESTION_ID + '/setup');
+    es.onmessage = ev => {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'step') {
+            if (msg.status === 'running') sovStatus.textContent = msg.description;
+            if (msg.status === 'warn') sovErrors = true;
+        } else if (msg.type === 'done' || msg.type === 'error') {
+            es.close();
+            if (msg.type === 'error') sovErrors = true;
+            sovFinish();
+        }
+    };
+    es.onerror = () => { es.close(); sovShowError(); };
+}
+
+// Pronto: dispensa o overlay sozinho — sem clique extra.
+function sovFinish() {
+    if (sovErrors) { sovShowError(); return; }
+    sovStatus.textContent = 'Ambiente pronto ✓';
+    setTimeout(dismissSessionOverlay, 550);
+}
+function sovShowError() {
+    document.getElementById('sov-error').style.display = 'block';
+}
+function dismissSessionOverlay() {
+    const ov = document.getElementById('session-start-overlay');
+    ov.style.opacity = '0';
+    ov.style.transition = 'opacity .3s ease';
+    setTimeout(() => { ov.classList.remove('active'); fitActiveTerm(); }, 300);
+}
+
+async function nextQuestion() {
+    document.getElementById('nav-loading').classList.add('active');
+    try {
+        const r = await fetch('/lab/session/' + SESSION_ID + '/advance', { method: 'POST' });
+        const d = await r.json();
+        if (d.done) {
+            document.getElementById('nav-loading').classList.remove('active');
+            try { localStorage.removeItem('k8slab-resume'); } catch(e) {}
+            document.getElementById('session-complete-overlay').classList.add('active');
+        } else {
+            examRecordCurrent();
+            window.location.href = '/lab/' + d.next + '?session=' + SESSION_ID + (EXAM ? '&exam=1' : '');
+        }
+    } catch(e) {
+        document.getElementById('nav-loading').classList.remove('active');
+    }
+}
+
+function finishSession() {
+    try { localStorage.removeItem('k8slab-resume'); } catch(e) {}
+            document.getElementById('session-complete-overlay').classList.add('active');
+}
+
+function resetEnv() {
+    location.reload();
+}
+
+{{else}}
+// ─────────────────────────────────────────────────────────────
+// NON-SESSION: setup overlay (mesmo loader, auto-dismiss)
+// ─────────────────────────────────────────────────────────────
+{{if .HasSetup}}
+const setupOverlay = document.getElementById('setup-overlay');
+let hasErrors = false;
+const setupStatus = document.getElementById('setup-status');
+pickQuote('setup-quote', 'setup-quote-author');
+
+const evtSource = new EventSource('/lab/{{.Question.ID}}/setup');
+evtSource.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'step') {
+        if (msg.status === 'running') setupStatus.textContent = msg.description;
+        if (msg.status === 'warn') hasErrors = true;
+    } else if (msg.type === 'done') {
+        evtSource.close();
+        if (hasErrors) { document.getElementById('setup-error').style.display = 'block'; return; }
+        setupStatus.textContent = 'Ambiente pronto ✓';
+        setTimeout(dismissOverlay, 550);
+    } else if (msg.type === 'error') {
+        evtSource.close();
+        hasErrors = true;
+        document.getElementById('setup-error').style.display = 'block';
+    }
+};
+evtSource.onerror = () => { evtSource.close(); document.getElementById('setup-error').style.display = 'block'; };
+
+function dismissOverlay() {
+    setupOverlay.style.opacity = '0';
+    setupOverlay.style.transition = 'opacity .3s ease';
+    setTimeout(() => { setupOverlay.classList.remove('active'); fitActiveTerm(); }, 300);
+}
+
+function resetEnv() {
+    fetch('/lab/{{.Question.ID}}/teardown', { method: 'POST' }).then(() => location.reload());
+}
+{{end}}
+{{end}}
+</script>
+{{end}}

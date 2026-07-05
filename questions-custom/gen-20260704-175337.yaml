@@ -1,0 +1,73 @@
+questions:
+    - id: custom-9bc0cd33
+      cert: CKA
+      topic: Core Concepts
+      difficulty: easy
+      type: lab
+      question: |-
+        Namespaces e quotas, passo a passo:
+
+        1. `kubectl create namespace lab-vega`
+        2. `kubectl create quota lab-vega-quota --hard=pods=5 -n lab-vega`
+        3. `kubectl run vega-portal --image=nginx:1.21 -n lab-vega`
+        4. Veja o consumo: `kubectl describe quota -n lab-vega` (used: 1/5)
+      options: []
+      answer: 0
+      explanation: Namespaces particionam o cluster (nomes, RBAC, quotas, network policies por escopo). ResourceQuota impõe limites agregados — pods, cpu, memória, PVCs. Quando estourada, o API server REJEITA a criação (403 exceeded quota), não mata nada existente. describe quota mostra used vs hard — ótimo para diagnóstico.
+      doc_url: https://kubernetes.io/docs/concepts/policy/resource-quotas/
+      doc_section: Concepts → Policy → Resource Quotas
+      hint: kubectl create ns lab-vega; kubectl create quota lab-vega-quota --hard=pods=5 -n lab-vega; kubectl run vega-portal --image=nginx:1.21 -n lab-vega
+      answer_command: kubectl create ns lab-vega; kubectl create quota lab-vega-quota --hard=pods=5 -n lab-vega; kubectl run vega-portal --image=nginx:1.21 -n lab-vega
+      validation: null
+      goals:
+        - description: Quota de **5 pods** ativa no namespace **lab-vega**
+          hint: kubectl create quota lab-vega-quota --hard=pods=5 -n lab-vega
+          validation:
+            command: kubectl get quota -n lab-vega -o jsonpath='{.items[0].spec.hard.pods}' 2>/dev/null
+            expected_contains: "5"
+            expected_output: ""
+        - description: Pod **vega-portal** Running dentro de **lab-vega**
+          hint: kubectl run vega-portal --image=nginx:1.21 -n lab-vega
+          validation:
+            command: kubectl get pod vega-portal -n lab-vega -o jsonpath='{.status.phase}' 2>/dev/null
+            expected_contains: Running
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete namespace lab-vega --ignore-not-found=true --wait=false
+    - id: custom-24be8d84
+      cert: CKA
+      topic: Core Concepts
+      difficulty: easy
+      type: lab
+      question: |-
+        Namespaces e quotas, passo a passo:
+
+        1. `kubectl create namespace lab-atlas`
+        2. `kubectl create quota lab-atlas-quota --hard=pods=5 -n lab-atlas`
+        3. `kubectl run atlas-worker --image=nginx:1.21 -n lab-atlas`
+        4. Veja o consumo: `kubectl describe quota -n lab-atlas` (used: 1/5)
+      options: []
+      answer: 0
+      explanation: Namespaces particionam o cluster (nomes, RBAC, quotas, network policies por escopo). ResourceQuota impõe limites agregados — pods, cpu, memória, PVCs. Quando estourada, o API server REJEITA a criação (403 exceeded quota), não mata nada existente. describe quota mostra used vs hard — ótimo para diagnóstico.
+      doc_url: https://kubernetes.io/docs/concepts/policy/resource-quotas/
+      doc_section: Concepts → Policy → Resource Quotas
+      hint: kubectl create ns lab-atlas; kubectl create quota lab-atlas-quota --hard=pods=5 -n lab-atlas; kubectl run atlas-worker --image=nginx:1.21 -n lab-atlas
+      answer_command: kubectl create ns lab-atlas; kubectl create quota lab-atlas-quota --hard=pods=5 -n lab-atlas; kubectl run atlas-worker --image=nginx:1.21 -n lab-atlas
+      validation: null
+      goals:
+        - description: Quota de **5 pods** ativa no namespace **lab-atlas**
+          hint: kubectl create quota lab-atlas-quota --hard=pods=5 -n lab-atlas
+          validation:
+            command: kubectl get quota -n lab-atlas -o jsonpath='{.items[0].spec.hard.pods}' 2>/dev/null
+            expected_contains: "5"
+            expected_output: ""
+        - description: Pod **atlas-worker** Running dentro de **lab-atlas**
+          hint: kubectl run atlas-worker --image=nginx:1.21 -n lab-atlas
+          validation:
+            command: kubectl get pod atlas-worker -n lab-atlas -o jsonpath='{.status.phase}' 2>/dev/null
+            expected_contains: Running
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete namespace lab-atlas --ignore-not-found=true --wait=false

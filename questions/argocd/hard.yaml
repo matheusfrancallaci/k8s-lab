@@ -1,0 +1,160 @@
+questions:
+  - id: argocd-hard-001
+    cert: ArgoCD
+    topic: Architecture
+    difficulty: hard
+    type: multiple_choice
+    question: "Como configurar o ArgoCD em modo HA (High Availability) e quais componentes precisam de múltiplas réplicas?"
+    options:
+      - "Apenas aumentar réplicas do argocd-server é suficiente"
+      - "argocd-server (stateless, N réplicas), argocd-repo-server (N réplicas), argocd-application-controller (1 por shard, sharding habilitado), Redis HA (Sentinel ou Cluster)"
+      - "Apenas o Redis precisa de HA; os outros componentes são automaticamente HA"
+      - "HA no ArgoCD requer múltiplos clusters Kubernetes separados"
+    answer: 1
+    explanation: "ArgoCD HA: argocd-server é stateless (múltiplas réplicas + HPA), argocd-repo-server é stateless (múltiplas réplicas), argocd-application-controller pode ser shardado por clusters (argocd-application-controller-N), Redis requer Sentinel ou Cluster para persistência das sessions. Use o manifesto install-ha.yaml oficial."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/ha/"
+    doc_section: "ArgoCD Docs → Operator Manual → High Availability"
+
+  - id: argocd-hard-002
+    cert: ArgoCD
+    topic: Security
+    difficulty: hard
+    type: multiple_choice
+    question: "Como integrar ArgoCD com um provedor SSO (ex: Okta/Azure AD) usando OIDC e quais componentes do ArgoCD estão envolvidos?"
+    options:
+      - "Configurar um Secret com o token do Okta e referenciar no argocd-server"
+      - "Configurar o argocd-cm ConfigMap com oidc.config (issuer, clientID, clientSecret, requestedScopes), e mapear grupos OIDC para roles no argocd-rbac-cm"
+      - "Criar um Ingress com autenticação OAuth2 Proxy antes do argocd-server"
+      - "Usar Dex integrado para qualquer provedor; configurar apenas no argocd-dex-server"
+    answer: 1
+    explanation: "OIDC nativo (sem Dex): configurar argocd-cm com oidc.config (URL do provedor, client ID/Secret em Secret, scopes). Dex (embutido): suporta mais conectores (SAML, LDAP, GitHub). argocd-rbac-cm mapeia grupos/usuários OIDC para roles ArgoCD. O argocd-dex-server é o broker de identidade quando usando Dex."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/user-management/"
+    doc_section: "ArgoCD Docs → Operator Manual → User Management"
+
+  - id: argocd-hard-003
+    cert: ArgoCD
+    topic: Sync Strategies
+    difficulty: hard
+    type: multiple_choice
+    question: "Como implementar GitOps para múltiplos ambientes (dev/staging/prod) com promoção controlada usando ArgoCD ApplicationSets?"
+    options:
+      - "Criar branches Git separadas para cada ambiente e um ArgoCD por branch"
+      - "Usar ApplicationSet com ListGenerator ou MatrixGenerator, combinando cluster/ambiente como parâmetros, e pipeline CI que faz PR para o Git de produção como gate de promoção"
+      - "Usar uma única Application com múltiplos spec.destinations"
+      - "Criar uma Application por ambiente manualmente e sincronizar em ordem"
+    answer: 1
+    explanation: "Padrão avançado: ApplicationSet com MatrixGenerator combina clusters × ambientes. Promoção: (1) Merge na branch 'dev' aciona sync automático em dev, (2) Pipeline de testes valida, (3) PR para 'staging', aprovação manual, merge → sync em staging, (4) PR para 'prod' com aprovação senior + deploy window. O Git é o audit trail completo."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/application-set/"
+    doc_section: "ArgoCD Docs → User Guide → ApplicationSet → Generators"
+
+  - id: argocd-hard-004
+    cert: ArgoCD
+    topic: Application Management
+    difficulty: hard
+    type: multiple_choice
+    question: "Como usar Config Management Plugins (CMP) no ArgoCD para suportar uma ferramenta customizada de template (ex: jsonnet)?"
+    options:
+      - "Adicionar a ferramenta como binário no container do argocd-server"
+      - "Criar um sidecar container no argocd-repo-server com o CMP definido em ConfigMap, especificando os comandos init, generate, e discover para o plugin"
+      - "Instalar a ferramenta via InitContainer no argocd-application-controller"
+      - "Usar Helm com um plugin pré-criado para jsonnet"
+    answer: 1
+    explanation: "CMP (Config Management Plugin v2): (1) Criar ConfigMap 'cmp-plugin' com spec do plugin (nome, generate command, discover rule), (2) Adicionar sidecar no argocd-repo-server com a imagem que contém a ferramenta, montando o ConfigMap e o socket /home/argocd/cmp-server/. O argocd-repo-server usa o socket para chamar o plugin."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/config-management-plugins/"
+    doc_section: "ArgoCD Docs → Operator Manual → Config Management Plugins"
+
+  - id: argocd-hard-005
+    cert: ArgoCD
+    topic: Security
+    difficulty: hard
+    type: multiple_choice
+    question: "O que é 'GnuPG commit verification' no ArgoCD e como configurar para rejeitar commits não assinados?"
+    options:
+      - "Uma verificação de integridade dos arquivos YAML antes de aplicar"
+      - "ArgoCD verifica a assinatura GPG de cada commit no repositório Git; só sincroniza se o commit for assinado por uma chave pública registrada no argocd-gpg-keys-cm"
+      - "Uma criptografia end-to-end entre o ArgoCD e o cluster de destino"
+      - "Uma verificação de permissões de branch no repositório Git"
+    answer: 1
+    explanation: "GPG Commit Verification: (1) Importar chaves públicas confiáveis no ConfigMap 'argocd-gpg-keys-cm', (2) Na Application, definir spec.source.targetRevision assinado, (3) No AppProject, habilitar spec.signatureKeys com fingerprints das chaves permitidas. O ArgoCD só sincroniza commits assinados por chaves confiáveis — previne execução de código de commits maliciosos."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/gpg-verification/"
+    doc_section: "ArgoCD Docs → User Guide → GPG Verification"
+
+  - id: argocd-hard-006
+    cert: ArgoCD
+    topic: Architecture
+    difficulty: hard
+    type: multiple_choice
+    question: "Como o ArgoCD garante que um recurso de uma Application não seja deletado acidentalmente se a Application for deletada?"
+    options:
+      - "O ArgoCD não permite deletar Applications com recursos ativos"
+      - "Usando a anotação 'argocd.argoproj.io/sync-options: Delete=false' nos recursos, ou o finalizer 'resources-finalizer.argocd.argoproj.io/foreground' na Application para controlar o cascade delete"
+      - "Configurando uma policy no OPA que bloqueia delete de Applications"
+      - "Apenas com backups externos do etcd"
+    answer: 1
+    explanation: "Cascade Delete: por padrão, ao deletar uma Application, o ArgoCD também deleta todos os recursos gerenciados (cascade delete via finalizer). Para prevenir: (1) Remover o finalizer da Application antes de deletar, (2) Anotar recursos críticos com 'Delete=false' no sync-options, (3) Usar 'argocd app delete --cascade=false'."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/app_deletion/"
+    doc_section: "ArgoCD Docs → User Guide → App Deletion"
+
+  - id: argocd-hard-007
+    cert: ArgoCD
+    topic: Sync Strategies
+    difficulty: hard
+    type: multiple_choice
+    question: "Como lidar com drift detection em tempo real e configurar alertas quando recursos são modificados manualmente no cluster?"
+    options:
+      - "O ArgoCD não suporta alertas de drift — apenas sincroniza periodicamente"
+      - "Combinar: selfHeal=true para auto-corrigir, ArgoCD Notifications Controller para enviar alertas (Slack/PagerDuty) quando Application vai para OutOfSync, e argocd-metrics no Prometheus para métricas de sync"
+      - "Usar kubectl watch para detectar mudanças e scripts customizados"
+      - "Configurar webhooks GitHub que alertam quando commits são feitos"
+    answer: 1
+    explanation: "Estratégia completa: (1) selfHeal=true auto-reverte mudanças manuais, (2) ArgoCD Notifications Controller com trigger OnOutOfSync → enviar alerta no Slack/Email/PagerDuty, (3) Métricas argocd_app_sync_total e argocd_app_health_status no Prometheus/Grafana para dashboards. Capture quem fez a mudança via Audit Log do K8s."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/notifications/"
+    doc_section: "ArgoCD Docs → Operator Manual → Notifications"
+
+  - id: argocd-hard-008
+    cert: ArgoCD
+    topic: Application Management
+    difficulty: hard
+    type: multiple_choice
+    question: "Como usar ArgoCD com Helm para gerenciar valores secretos sem colocar senhas diretamente no repositório Git?"
+    options:
+      - "Usar --helm-set password=secretvalue diretamente no argocd app create"
+      - "Usar Helm Secrets (sops/age criptografia), ArgoCD Vault Plugin (AVP) que substitui placeholders por valores do Vault/Secrets Manager, ou ExternalSecrets Operator que sincroniza secrets de fontes externas"
+      - "Criar Secrets manualmente no cluster e referenciar no values.yaml com nomes fixos"
+      - "Usar base64 no values.yaml para ofuscar os valores"
+    answer: 1
+    explanation: "Estratégias para secrets com ArgoCD+Helm: (1) Helm Secrets + sops: criptografa values com chave KMS/age, ArgoCD descriptografa via CMP, (2) ArgoCD Vault Plugin (AVP): substitui <path:vault/path#key> por valores do HashiCorp Vault, (3) ExternalSecrets Operator: Kubernetes CRD que sincroniza secrets de AWS Secrets Manager/GCP Secret Manager/Vault para Secrets K8s."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/secret-management/"
+    doc_section: "ArgoCD Docs → Operator Manual → Secret Management"
+
+  - id: argocd-hard-009
+    cert: ArgoCD
+    topic: Security
+    difficulty: hard
+    type: multiple_choice
+    question: "Como configurar o ArgoCD para fazer deploy em clusters em redes privadas (sem acesso de saída para o cluster de gerenciamento)?"
+    options:
+      - "Não é possível — o ArgoCD requer acesso de rede direto ao cluster"
+      - "Usar o padrão 'pull' com ArgoCD em cada cluster de destino em modo 'agent' (Argo CD Agent / GitOps Engine), onde o agente local faz pull das configurações"
+      - "Usar kubectl port-forward para criar túnel temporário"
+      - "Configurar VPN permanente entre os clusters"
+    answer: 1
+    explanation: "Para clusters com rede privada: (1) ArgoCD Agent (modo pull): um agente ArgoCD no cluster privado conecta-se outbound ao ArgoCD central (manifests are pulled), (2) Argo CD Core mode: instalar ArgoCD em cada cluster sem o server UI, gerenciado centralmente via GitOps. Evita expor o kube-apiserver do cluster privado ao ArgoCD central."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/architecture/"
+    doc_section: "ArgoCD Docs → Operator Manual → Architecture"
+
+  - id: argocd-hard-010
+    cert: ArgoCD
+    topic: Application Management
+    difficulty: hard
+    type: multiple_choice
+    question: "Como implementar progressive delivery (canary/blue-green) com ArgoCD e Argo Rollouts?"
+    options:
+      - "Usar ArgoCD com kubectl para fazer deploy gradual manualmente"
+      - "Instalar Argo Rollouts no cluster, substituir Deployments por Rollout CRDs com spec.strategy.canary/blueGreen, e o ArgoCD sincroniza os Rollouts que o Argo Rollouts executa progressivamente"
+      - "Configurar 2 Applications no ArgoCD — uma para cada versão — e alternar manualmente"
+      - "Usar Helm hooks para controlar o deploy progressivo"
+    answer: 1
+    explanation: "ArgoCD + Argo Rollouts: (1) Rollout CRD substitui Deployment com spec.strategy.canary (percentual, steps, análise) ou blueGreen, (2) ArgoCD sincroniza o Rollout, (3) Argo Rollouts Controller executa o progresso gradual com métricas (AnalysisTemplate com Prometheus/DataDog), (4) Se a análise falhar, rollback automático. ArgoCD UI mostra o progresso do Rollout."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/integrations/"
+    doc_section: "ArgoCD Docs → User Guide → Integrations"

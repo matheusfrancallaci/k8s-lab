@@ -1,0 +1,241 @@
+questions:
+  # ── Scheduling ────────────────────────────────────────────
+  - id: cka-mid-001
+    cert: CKA
+    topic: Scheduling
+    difficulty: mid
+    type: multiple_choice
+    question: "Você precisa garantir que um pod rode APENAS em nós com a label 'disk=ssd'. Qual campo usar no spec do pod?"
+    options:
+      - "nodeSelector: {disk: ssd}"
+      - "podAffinity com labelSelector disk=ssd"
+      - "toleration: [{key: disk, value: ssd}]"
+      - "priorityClass: disk-ssd"
+    answer: 0
+    explanation: "nodeSelector é a forma mais simples de restringir em quais nós um pod pode ser agendado usando labels. É um mapa simples de chave-valor que deve corresponder às labels do nó."
+    doc_url: "https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector"
+    doc_section: "Concepts → Scheduling → Assign Pod to Node"
+
+  - id: cka-mid-002
+    cert: CKA
+    topic: Storage
+    difficulty: mid
+    type: multiple_choice
+    question: "Qual é a diferença entre PersistentVolume (PV) e PersistentVolumeClaim (PVC)?"
+    options:
+      - "PV é criado pelo usuário, PVC pelo administrador"
+      - "PV é o recurso de armazenamento provisionado; PVC é a requisição de armazenamento pelo pod"
+      - "PV e PVC são a mesma coisa com nomes diferentes"
+      - "PVC define o tipo de storage, PV define a capacidade"
+    answer: 1
+    explanation: "PV representa o armazenamento físico provisionado pelo admin ou dinamicamente. PVC é a solicitação feita pelo usuário/pod para consumir esse armazenamento. O controller faz o bind entre PVC e um PV compatível."
+    doc_url: "https://kubernetes.io/docs/concepts/storage/persistent-volumes/"
+    doc_section: "Concepts → Storage → Persistent Volumes"
+
+  - id: cka-mid-003
+    cert: CKA
+    topic: Networking
+    difficulty: mid
+    type: multiple_choice
+    question: "O que uma NetworkPolicy faz por padrão quando aplicada a um pod sem nenhuma regra de ingress definida?"
+    options:
+      - "Permite todo o tráfego de entrada"
+      - "Bloqueia todo o tráfego de entrada"
+      - "Redireciona o tráfego para o kube-proxy"
+      - "Não altera o comportamento de rede do pod"
+    answer: 1
+    explanation: "Quando um pod é selecionado por uma NetworkPolicy que não define regras de ingress, todo o tráfego de entrada é bloqueado por padrão. Para permitir tráfego específico, você deve adicionar regras de ingress explicitamente."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/network-policies/"
+    doc_section: "Concepts → Services and Networking → Network Policies"
+
+  - id: cka-mid-004
+    cert: CKA
+    topic: Cluster Maintenance
+    difficulty: mid
+    type: multiple_choice
+    question: "Qual sequência correta para drenar um nó para manutenção sem perder workloads?"
+    options:
+      - "kubectl delete node -> kubectl cordon node"
+      - "kubectl cordon node -> kubectl drain node"
+      - "kubectl taint node -> kubectl drain node"
+      - "kubectl drain node -> kubectl cordon node"
+    answer: 1
+    explanation: "Cordon impede que novos pods sejam agendados no nó (marca como 'unschedulable'). Drain remove os pods existentes e os reagenda em outros nós. A ordem correta é: cordon primeiro para evitar novos pods, depois drain."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/"
+    doc_section: "Tasks → Administer Cluster → Safely Drain a Node"
+
+  - id: cka-mid-005
+    cert: CKA
+    topic: Security
+    difficulty: mid
+    type: multiple_choice
+    question: "Qual recurso do RBAC concede permissões a um usuário em um namespace específico?"
+    options:
+      - "ClusterRole + ClusterRoleBinding"
+      - "Role + ClusterRoleBinding"
+      - "Role + RoleBinding"
+      - "ClusterRole + RoleBinding"
+    answer: 2
+    explanation: "Role define permissões dentro de um namespace específico. RoleBinding associa essa Role a um usuário/grupo/serviceaccount no mesmo namespace. ClusterRole e ClusterRoleBinding têm escopo de cluster inteiro."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/"
+    doc_section: "Reference → API Access Control → RBAC"
+
+  - id: cka-mid-006
+    cert: CKA
+    topic: Workloads
+    difficulty: mid
+    type: multiple_choice
+    question: "Como fazer o rollback de um Deployment 'api' para a versão anterior?"
+    options:
+      - "kubectl restore deployment api --previous"
+      - "kubectl rollout undo deployment/api"
+      - "kubectl revert deployment api --previous"
+      - "kubectl rollback deployment api"
+    answer: 1
+    explanation: "'kubectl rollout undo' reverte o Deployment para a revisão anterior. Use '--to-revision=N' para reverter para uma revisão específica. Use 'kubectl rollout history deployment/api' para ver o histórico."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#rolling-back-a-deployment"
+    doc_section: "Concepts → Deployments → Rolling Back"
+
+  - id: cka-mid-007
+    cert: CKA
+    topic: Workloads
+    difficulty: mid
+    type: multiple_choice
+    question: "Qual é a diferença entre RollingUpdate e Recreate como estratégia de atualização de um Deployment?"
+    options:
+      - "RollingUpdate só funciona com DaemonSets"
+      - "Recreate atualiza pods gradualmente; RollingUpdate derruba todos e recria"
+      - "RollingUpdate atualiza pods gradualmente sem downtime; Recreate derruba todos os pods antes de criar os novos"
+      - "Não há diferença prática entre as duas estratégias"
+    answer: 2
+    explanation: "RollingUpdate (padrão) atualiza pods gradualmente, mantendo disponibilidade. Recreate derruba todos os pods da versão antiga antes de criar os novos (causa downtime, mas garante que nunca há duas versões rodando simultaneamente)."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy"
+    doc_section: "Concepts → Deployments → Strategy"
+
+  - id: cka-mid-008
+    cert: CKA
+    topic: Scheduling
+    difficulty: mid
+    type: multiple_choice
+    question: "O que é uma Taint com efeito 'NoExecute' em um nó?"
+    options:
+      - "Impede novos pods de serem agendados no nó"
+      - "Remove pods existentes sem toleration e impede novos pods"
+      - "Permite qualquer pod mas com baixa prioridade"
+      - "Marca o nó como indisponível para manutenção"
+    answer: 1
+    explanation: "NoExecute é o efeito mais agressivo: remove pods já existentes que não têm toleration correspondente (com opcional tolerationSeconds para atraso) E impede novos pods sem toleration de serem agendados. NoSchedule só impede novos pods."
+    doc_url: "https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/#taint-based-evictions"
+    doc_section: "Concepts → Scheduling → Taints → Taint-based Evictions"
+
+  - id: cka-mid-009
+    cert: CKA
+    topic: Networking
+    difficulty: mid
+    type: multiple_choice
+    question: "Um Ingress está configurado com path '/api' mas o backend não recebe tráfego. Qual é a causa mais provável?"
+    options:
+      - "O namespace do Ingress está errado"
+      - "O pathType não está configurado (deve ser Prefix ou Exact)"
+      - "O Service referenciado não existe ou o seletor não corresponde aos pods"
+      - "O Ingress Controller não suporta esse path"
+    answer: 2
+    explanation: "A causa mais comum de Ingress não funcionar é: (1) Service referenciado não existe, (2) selector do Service não corresponde aos pods, ou (3) pods não estão saudáveis. Verifique com 'kubectl describe ingress' e 'kubectl get endpoints <service>'."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/ingress/"
+    doc_section: "Concepts → Services → Ingress"
+
+  - id: cka-mid-010
+    cert: CKA
+    topic: Troubleshooting
+    difficulty: mid
+    type: multiple_choice
+    question: "Um pod está em estado 'Pending'. Quais são as causas mais comuns para investigar primeiro?"
+    options:
+      - "Problema de rede entre pods"
+      - "Recursos insuficientes no cluster, selector de nó incompatível ou PVC não bound"
+      - "Imagem inválida ou não encontrada"
+      - "ConfigMap ou Secret referenciado não existe"
+    answer: 1
+    explanation: "Pod em Pending geralmente indica: (1) recursos insuficientes no cluster (CPU/memória), (2) nodeSelector/affinity não corresponde a nenhum nó, (3) taints sem tolerations, (4) PVC em Pending. 'kubectl describe pod' mostra o motivo exato nos Events."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/"
+    doc_section: "Tasks → Debug → Debug Pods"
+
+  - id: cka-mid-011
+    cert: CKA
+    topic: Security
+    difficulty: mid
+    type: multiple_choice
+    question: "O que é um ServiceAccount no Kubernetes e para que serve?"
+    options:
+      - "Uma conta de usuário para acessar o cluster via kubectl"
+      - "Uma identidade para processos rodando em pods acessarem a API do Kubernetes"
+      - "Um grupo de usuários com permissões compartilhadas"
+      - "Uma conta de serviço para o kube-scheduler"
+    answer: 1
+    explanation: "ServiceAccount é uma identidade não-humana para pods que precisam interagir com a API do Kubernetes. Cada pod tem uma ServiceAccount (default se não especificada) e seu token é montado automaticamente em /var/run/secrets/kubernetes.io/serviceaccount/."
+    doc_url: "https://kubernetes.io/docs/concepts/security/service-accounts/"
+    doc_section: "Concepts → Security → Service Accounts"
+
+  - id: cka-mid-012
+    cert: CKA
+    topic: Storage
+    difficulty: mid
+    type: multiple_choice
+    question: "O que é um StorageClass no Kubernetes e qual sua função principal?"
+    options:
+      - "Define a classe de disponibilidade dos nós de armazenamento"
+      - "Permite o provisionamento dinâmico de PersistentVolumes"
+      - "Configura as permissões de acesso a volumes existentes"
+      - "Define o tamanho máximo de armazenamento por namespace"
+    answer: 1
+    explanation: "StorageClass permite o provisionamento dinâmico de PVs: quando uma PVC é criada solicitando uma StorageClass, o provisioner correspondente cria automaticamente um PV. Elimina a necessidade de criar PVs manualmente."
+    doc_url: "https://kubernetes.io/docs/concepts/storage/storage-classes/"
+    doc_section: "Concepts → Storage → Storage Classes"
+
+  - id: cka-mid-013
+    cert: CKA
+    topic: Workloads
+    difficulty: mid
+    type: multiple_choice
+    question: "Qual a diferença entre um Deployment e um StatefulSet?"
+    options:
+      - "StatefulSet não suporta rolling updates"
+      - "Deployment gerencia réplicas idênticas sem identidade estável; StatefulSet garante identidade estável, nomes previsíveis e ordem de inicialização/encerramento"
+      - "Deployment é para aplicações stateful; StatefulSet para stateless"
+      - "Não há diferença técnica, são apenas nomes diferentes"
+    answer: 1
+    explanation: "StatefulSet garante: nomes de pods estáveis (app-0, app-1...), volumes persistentes únicos por pod, e ordem de inicialização/encerramento. Ideal para bancos de dados e aplicações que precisam de identidade estável como Kafka, Zookeeper, MongoDB."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/"
+    doc_section: "Concepts → Workloads → StatefulSets"
+
+  - id: cka-mid-014
+    cert: CKA
+    topic: Cluster Maintenance
+    difficulty: mid
+    type: multiple_choice
+    question: "Qual o propósito do comando 'kubectl cordon <node>'?"
+    options:
+      - "Remove todos os pods do nó imediatamente"
+      - "Marca o nó como 'unschedulable' para que novos pods não sejam agendados nele"
+      - "Atualiza o kubelet no nó"
+      - "Adiciona um taint NoExecute ao nó"
+    answer: 1
+    explanation: "'kubectl cordon' marca o nó como 'SchedulingDisabled' (unschedulable), impedindo que novos pods sejam agendados nele. Pods existentes continuam rodando. Use 'kubectl uncordon' para restaurar o nó."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/"
+    doc_section: "Tasks → Administer Cluster → Safely Drain Node"
+
+  - id: cka-mid-015
+    cert: CKA
+    topic: Networking
+    difficulty: mid
+    type: multiple_choice
+    question: "Como garantir que apenas pods com a label 'role=frontend' possam se comunicar com um pod 'backend-db'?"
+    options:
+      - "Configurar um ResourceQuota no namespace"
+      - "Criar uma NetworkPolicy com podSelector para 'backend-db' e ingress de pods com 'role=frontend'"
+      - "Adicionar uma annotation 'allow-from=frontend' no pod backend-db"
+      - "Criar um Service que só aceita conexões de pods específicos"
+    answer: 1
+    explanation: "NetworkPolicy controla o tráfego de rede. Para restringir acesso ao 'backend-db', crie uma NetworkPolicy com spec.podSelector selecionando o backend-db, e uma regra ingress permitindo tráfego de pods com 'role=frontend'."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/network-policies/"
+    doc_section: "Concepts → Services → Network Policies"

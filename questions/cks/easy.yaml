@@ -1,0 +1,240 @@
+questions:
+  - id: cks-easy-001
+    cert: CKS
+    topic: Cluster Setup
+    difficulty: easy
+    type: multiple_choice
+    question: "O que é o PodSecurityAdmission (PSA) e quais são seus três níveis de política?"
+    options:
+      - "Um plugin de autenticação com níveis: basic, medium, full"
+      - "Um mecanismo de admissão que enforça perfis de segurança em namespaces: Privileged, Baseline e Restricted"
+      - "Um controller de imagens com níveis: public, private, verified"
+      - "Um sistema de criptografia com níveis: TLS1.0, TLS1.2, TLS1.3"
+    answer: 1
+    explanation: "PSA substitui o PodSecurityPolicy (deprecated no 1.21, removido no 1.25). Três perfis: Privileged (sem restrições), Baseline (proíbe configurações perigosas básicas), Restricted (mais seguro). Configurado via labels no namespace."
+    doc_url: "https://kubernetes.io/docs/concepts/security/pod-security-admission/"
+    doc_section: "Concepts → Security → Pod Security Admission"
+
+  - id: cks-easy-002
+    cert: CKS
+    topic: Supply Chain Security
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual prática é recomendada para tags de imagens de container em ambientes de produção?"
+    options:
+      - "Usar sempre a tag 'latest' para garantir a versão mais recente"
+      - "Usar imagens com tags imutáveis (versão específica) ou digest SHA256"
+      - "Usar imagens públicas sem verificação para maior velocidade"
+      - "Construir imagens sem tag para simplificar o processo"
+    answer: 1
+    explanation: "Tags como 'latest' são mutáveis e podem apontar para versões diferentes ao longo do tempo. Tags específicas (nginx:1.25.3) ou digests SHA256 (nginx@sha256:abc...) garantem que você sempre usa exatamente a mesma imagem, essencial para reprodutibilidade e segurança."
+    doc_url: "https://kubernetes.io/docs/concepts/containers/images/#image-names"
+    doc_section: "Concepts → Containers → Images"
+
+  - id: cks-easy-003
+    cert: CKS
+    topic: Runtime Security
+    difficulty: easy
+    type: multiple_choice
+    question: "O que o campo 'runAsNonRoot: true' no SecurityContext de um pod garante?"
+    options:
+      - "O container roda com um usuário chamado 'nonroot'"
+      - "O kubelet rejeita o container se ele tentar rodar com UID 0 (root)"
+      - "O container não pode criar novos processos filho"
+      - "O container não pode acessar a rede do host"
+    answer: 1
+    explanation: "runAsNonRoot: true faz o kubelet verificar na imagem o UID do processo de entrada. Se for 0 (root), o pod falha com erro 'container has runAsNonRoot and image will run as root'. Use runAsUser junto para definir qual UID usar."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/security-context/"
+    doc_section: "Tasks → Configure Security Context"
+
+  - id: cks-easy-004
+    cert: CKS
+    topic: Network Security
+    difficulty: easy
+    type: multiple_choice
+    question: "Por padrão, antes de aplicar qualquer NetworkPolicy, como é o tráfego entre pods no Kubernetes?"
+    options:
+      - "Todo tráfego é bloqueado — pods devem solicitar permissão explícita"
+      - "Todo tráfego é permitido — pods podem se comunicar livremente entre si"
+      - "Apenas tráfego dentro do mesmo namespace é permitido"
+      - "Apenas tráfego com TLS mútuo (mTLS) é permitido"
+    answer: 1
+    explanation: "Por padrão, o Kubernetes é 'allow-all': qualquer pod pode se comunicar com qualquer outro pod do cluster. NetworkPolicies são usadas para restringir esse comportamento. Para ambientes seguros, comece com uma política 'default-deny-all' e adicione permissões explícitas."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/network-policies/"
+    doc_section: "Concepts → Network Policies"
+
+  - id: cks-easy-005
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual é o propósito de desabilitar 'anonymous-auth' no kube-apiserver?"
+    options:
+      - "Impede requisições não autenticadas — todo acesso requer credenciais válidas"
+      - "Desabilita o acesso via kubectl para usuários externos"
+      - "Remove o usuário admin do cluster automaticamente"
+      - "Bloqueia todo acesso externo ao cluster"
+    answer: 0
+    explanation: "Com --anonymous-auth=false, o kube-apiserver rejeita todas as requisições sem credenciais válidas. Por padrão, anonymous requests são permitidas mas mapeadas ao grupo 'system:unauthenticated' com permissões muito limitadas. Desabilitar é boa prática de hardening."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/authentication/#anonymous-requests"
+    doc_section: "Reference → Authentication → Anonymous Requests"
+
+  - id: cks-easy-006
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: easy
+    type: multiple_choice
+    question: "O que é o RBAC no Kubernetes e qual problema ele resolve?"
+    options:
+      - "Role-Based Access Control — controla quem pode acessar quais recursos da API Kubernetes"
+      - "Resource-Based Access Control — limita o uso de CPU/memória por usuário"
+      - "Registry-Based Access Control — controla quais registries de imagem podem ser usados"
+      - "Route-Based Access Control — controla o roteamento de rede entre pods"
+    answer: 0
+    explanation: "RBAC usa Roles (permissões em namespace), ClusterRoles (cluster inteiro), RoleBindings e ClusterRoleBindings para definir quem (usuário, grupo, ServiceAccount) pode fazer o quê (verbs: get, list, create, delete...) em quais recursos (pods, services, secrets...)."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/rbac/"
+    doc_section: "Reference → RBAC"
+
+  - id: cks-easy-007
+    cert: CKS
+    topic: Minimizing Microservice Vulnerabilities
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual Pod Security Standard garante maior isolamento, impedindo execução como root, escalação de privilégio e volumes perigosos?"
+    options:
+      - "Baseline"
+      - "Privileged"
+      - "Restricted"
+      - "Isolated"
+    answer: 2
+    explanation: "O Pod Security Standard 'Restricted' é o mais seguro: exige runAsNonRoot, proíbe privileged containers, bloqueia hostPath e hostNetwork, exige allowPrivilegeEscalation: false e um perfil seccomp. Recomendado para workloads de produção."
+    doc_url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted"
+    doc_section: "Concepts → Security → Pod Security Standards → Restricted"
+
+  - id: cks-easy-008
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: easy
+    type: multiple_choice
+    question: "Como verificar a expiração dos certificados TLS em um cluster kubeadm?"
+    options:
+      - "kubectl get certificates -n kube-system --expiry"
+      - "kubeadm certs check-expiration"
+      - "openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -dates"
+      - "B e C estão corretos"
+    answer: 3
+    explanation: "'kubeadm certs check-expiration' lista todos os certificados e expirações de forma organizada. 'openssl x509 -noout -dates' verifica um certificado específico. Certificados kubeadm expiram em 1 ano por padrão. Renove com 'kubeadm certs renew all'."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/"
+    doc_section: "Tasks → Administer Cluster → kubeadm → Certificate Management"
+
+  - id: cks-easy-009
+    cert: CKS
+    topic: Supply Chain Security
+    difficulty: easy
+    type: multiple_choice
+    question: "O que é uma imagem 'distroless' e qual vantagem ela oferece em termos de segurança?"
+    options:
+      - "Uma imagem sem sistema operacional, apenas com o binário da aplicação e dependências mínimas"
+      - "Uma imagem com todas as ferramentas de diagnóstico pré-instaladas"
+      - "Uma imagem certificada pelo Google"
+      - "Uma imagem que funciona sem Docker"
+    answer: 0
+    explanation: "Imagens distroless (projeto Google) contêm apenas o runtime necessário (ex: libc, JVM) sem shell, gerenciador de pacotes ou outras ferramentas. Isso reduz drasticamente a superfície de ataque: sem bash, o invasor não consegue executar comandos mesmo que obtenha acesso ao container."
+    doc_url: "https://kubernetes.io/docs/concepts/security/supply-chain-security/"
+    doc_section: "Concepts → Security → Supply Chain Security"
+
+  - id: cks-easy-010
+    cert: CKS
+    topic: Runtime Security
+    difficulty: easy
+    type: multiple_choice
+    question: "O que é o Falco e qual problema ele resolve?"
+    options:
+      - "Um scanner de vulnerabilidades que analisa imagens antes do deploy"
+      - "Uma ferramenta de detecção de ameaças em runtime que monitora syscalls e alerta sobre comportamentos suspeitos"
+      - "Um controlador de admissão para validar manifests YAML"
+      - "Um proxy de rede que inspeciona tráfego entre pods"
+    answer: 1
+    explanation: "Falco (CNCF) usa eBPF ou módulo do kernel para monitorar syscalls em runtime. Detecta: shell iniciado em container de produção, leitura de /etc/shadow, escrita em diretórios sensíveis, conexões de rede não esperadas. Gera alertas em tempo real para SIEM/Slack/webhook."
+    doc_url: "https://kubernetes.io/docs/concepts/security/cloud-native-security/"
+    doc_section: "Concepts → Security → Cloud Native Security"
+
+  - id: cks-easy-011
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual é o risco de deixar o campo 'hostNetwork: true' em um pod?"
+    options:
+      - "O pod não consegue acessar outros pods no cluster"
+      - "O pod compartilha a rede do nó host, podendo ouvir em todas as interfaces e portas do host"
+      - "O pod fica mais lento por usar a rede do host"
+      - "O pod perde acesso ao DNS do cluster"
+    answer: 1
+    explanation: "hostNetwork: true coloca o pod na rede do nó host em vez de sua própria network namespace. O pod pode interceptar tráfego do host, acessar serviços locais do nó e potencialmente escalar privilégios. Evite exceto para casos específicos (ex: monitoring agents)."
+    doc_url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/"
+    doc_section: "Concepts → Security → Pod Security Standards"
+
+  - id: cks-easy-012
+    cert: CKS
+    topic: Minimizing Microservice Vulnerabilities
+    difficulty: easy
+    type: multiple_choice
+    question: "O que é 'allowPrivilegeEscalation: false' no SecurityContext de um container?"
+    options:
+      - "Impede o container de criar outros containers"
+      - "Impede que processos no container obtenham mais privilégios via setuid binaries ou sudo"
+      - "Desativa o usuário root dentro do container"
+      - "Impede que o container monte volumes do host"
+    answer: 1
+    explanation: "allowPrivilegeEscalation controla se processos podem obter mais privilégios que seu pai (via setuid, capabilities). False impede isso. É obrigatório no Pod Security Standard Restricted. Sem essa configuração, um binário setuid poderia elevar privilégios para root mesmo com runAsNonRoot."
+    doc_url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted"
+    doc_section: "Concepts → Security → Pod Security Standards → Restricted"
+
+  - id: cks-easy-013
+    cert: CKS
+    topic: Runtime Security
+    difficulty: easy
+    type: multiple_choice
+    question: "O que é seccomp (Secure Computing Mode) no contexto de containers?"
+    options:
+      - "Um protocolo de comunicação segura entre pods usando TLS"
+      - "Um mecanismo do kernel Linux que filtra syscalls permitidas para um processo/container"
+      - "Um scanner de portas de rede em runtime"
+      - "Uma política de acesso baseada em certificados de segurança"
+    answer: 1
+    explanation: "Seccomp usa filtros BPF para restringir quais chamadas de sistema (syscalls) um container pode fazer ao kernel. O perfil 'RuntimeDefault' é um ponto de partida seguro. No PSA Restricted, seccomp é obrigatório. Configure com securityContext.seccompProfile.type: RuntimeDefault."
+    doc_url: "https://kubernetes.io/docs/tutorials/security/seccomp/"
+    doc_section: "Tutorials → Security → Seccomp"
+
+  - id: cks-easy-014
+    cert: CKS
+    topic: Supply Chain Security
+    difficulty: easy
+    type: multiple_choice
+    question: "O que é image scanning e qual ferramenta CNCF é amplamente usada para isso?"
+    options:
+      - "Verificar o tamanho de imagens; ferramenta: Docker Scout"
+      - "Analisar imagens em busca de CVEs em pacotes; ferramenta popular: Trivy"
+      - "Verificar a assinatura das imagens; ferramenta: Notary"
+      - "Comparar imagens entre ambientes; ferramenta: Skopeo"
+    answer: 1
+    explanation: "Image scanning analisa camadas de imagens em busca de CVEs conhecidas em bibliotecas e pacotes. Trivy (CNCF) é a ferramenta mais popular: simples, rápida, suporta imagens OCI, filesystem, repositórios Git. Integre ao pipeline CI para bloquear builds com CVEs críticas."
+    doc_url: "https://kubernetes.io/docs/concepts/security/supply-chain-security/"
+    doc_section: "Concepts → Security → Supply Chain Security"
+
+  - id: cks-easy-015
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual dos seguintes é um exemplo de dado que deve estar em um Secret e não em um ConfigMap?"
+    options:
+      - "URL do banco de dados"
+      - "Nome do ambiente (production/staging)"
+      - "Senha do banco de dados ou token de API"
+      - "Número de réplicas desejadas"
+    answer: 2
+    explanation: "Secrets são projetados para dados sensíveis: senhas, tokens OAuth, chaves SSH, certificados TLS, credenciais de API. ConfigMaps são para configurações não sensíveis. Embora Secrets sejam encodados em base64 (não criptografados por padrão), podem ser criptografados at-rest e ter RBAC mais restritivo."
+    doc_url: "https://kubernetes.io/docs/concepts/configuration/secret/"
+    doc_section: "Concepts → Configuration → Secrets"

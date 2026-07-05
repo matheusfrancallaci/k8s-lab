@@ -1,0 +1,160 @@
+questions:
+  - id: ckad-hard-001
+    cert: CKAD
+    topic: Application Design
+    difficulty: hard
+    type: multiple_choice
+    question: "Um pod com sidecar pattern precisa compartilhar um socket Unix entre o container principal e o sidecar. Qual tipo de volume usar?"
+    options:
+      - "hostPath para montar o diretório do host"
+      - "emptyDir para volume temporário compartilhado entre containers do mesmo pod"
+      - "persistentVolumeClaim para garantir persistência do socket"
+      - "configMap para armazenar o caminho do socket"
+    answer: 1
+    explanation: "emptyDir é criado quando o pod é atribuído ao nó e compartilhado entre todos os containers do pod. Ideal para comunicação via socket Unix entre sidecar e container principal. hostPath expõe o host e é um risco de segurança. O socket não precisa de persistência além da vida do pod."
+    doc_url: "https://kubernetes.io/docs/concepts/storage/volumes/#emptydir"
+    doc_section: "Concepts → Storage → emptyDir"
+
+  - id: ckad-hard-002
+    cert: CKAD
+    topic: Configuration
+    difficulty: hard
+    type: multiple_choice
+    question: "Como projetar múltiplas fontes (Secret + ConfigMap + ServiceAccount token) em um único volume em um pod?"
+    options:
+      - "Criar um volume separado para cada fonte e múltiplos volumeMounts"
+      - "Usar um Projected Volume (type: projected) com sources: [secret, configMap, serviceAccountToken]"
+      - "Montar o Secret como envFrom e o ConfigMap como arquivo separado"
+      - "Não é possível combinar múltiplas fontes em um único volume"
+    answer: 1
+    explanation: "Projected Volumes combinam múltiplas fontes em um único diretório montado. Sources suportadas: secret, configMap, serviceAccountToken, downwardAPI. Isso simplifica o gerenciamento de volumes quando a aplicação espera múltiplos arquivos de configuração no mesmo diretório."
+    doc_url: "https://kubernetes.io/docs/concepts/storage/projected-volumes/"
+    doc_section: "Concepts → Storage → Projected Volumes"
+
+  - id: ckad-hard-003
+    cert: CKAD
+    topic: Observability
+    difficulty: hard
+    type: multiple_choice
+    question: "Um pod tem readinessProbe falha mas os logs do container parecem normais. Qual é o passo mais eficaz para diagnosticar?"
+    options:
+      - "Reiniciar o pod"
+      - "kubectl describe pod para ver os Events e o endpoint/port exato da probe, depois testar manualmente com kubectl exec"
+      - "Aumentar o failureThreshold da readinessProbe"
+      - "Verificar os logs do kube-scheduler"
+    answer: 1
+    explanation: "'kubectl describe pod' mostra os Events incluindo probe failures com detalhes (código HTTP, timeout, etc.). Depois teste manualmente: 'kubectl exec -it <pod> -- wget -qO- localhost:8080/healthz' ou 'curl'. Verifique se a aplicação ouve no port correto e se o path existe."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/#define-readiness-probes"
+    doc_section: "Tasks → Configure Probes → Readiness"
+
+  - id: ckad-hard-004
+    cert: CKAD
+    topic: Application Deployment
+    difficulty: hard
+    type: multiple_choice
+    question: "Como implementar blue-green deployment no Kubernetes usando Services?"
+    options:
+      - "Criar dois Deployments (blue e green), e alternar o selector do Service para apontar para o ativo"
+      - "Usar kubectl rolling-update entre as duas versões"
+      - "Configurar dois Services com LoadBalancer e alternar o DNS"
+      - "Criar um único Deployment com duas versões de imagem simultaneamente"
+    answer: 0
+    explanation: "Blue-green no K8s: (1) Deployment 'blue' com label version=blue rodando (produção), (2) Deployment 'green' com label version=green criado com nova versão, (3) Testar o green, (4) Atualizar o selector do Service de version=blue para version=green. Mudança atômica, zero downtime, fácil rollback."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/management/"
+    doc_section: "Concepts → Workloads → Management"
+
+  - id: ckad-hard-005
+    cert: CKAD
+    topic: Application Environment
+    difficulty: hard
+    type: multiple_choice
+    question: "Qual é a diferença entre LimitRange e ResourceQuota em um namespace?"
+    options:
+      - "LimitRange e ResourceQuota fazem a mesma coisa"
+      - "LimitRange define defaults e limites por container/pod individual; ResourceQuota define o total de recursos consumíveis pelo namespace inteiro"
+      - "LimitRange aplica-se ao namespace; ResourceQuota a pods individuais"
+      - "ResourceQuota é apenas para CPU; LimitRange é apenas para memória"
+    answer: 1
+    explanation: "LimitRange: define padrões e limites por objeto (container, pod, PVC). Se um container não especifica resources, recebe os defaults do LimitRange. ResourceQuota: limita o consumo TOTAL de recursos por namespace (ex: no máximo 10 CPUs e 20Gi de RAM para todos os pods juntos)."
+    doc_url: "https://kubernetes.io/docs/concepts/policy/limit-range/"
+    doc_section: "Concepts → Policy → Limit Range"
+
+  - id: ckad-hard-006
+    cert: CKAD
+    topic: Services
+    difficulty: hard
+    type: multiple_choice
+    question: "Como configurar um Service com sessionAffinity para garantir que requisições do mesmo cliente vão para o mesmo pod?"
+    options:
+      - "spec.sessionAffinity: ClientIP (com sessionAffinityConfig.clientIP.timeoutSeconds)"
+      - "spec.loadBalancing: sticky"
+      - "spec.affinity: clientIP"
+      - "spec.persistence: enabled"
+    answer: 0
+    explanation: "sessionAffinity: ClientIP faz o kube-proxy garantir que requisições do mesmo IP do cliente sejam roteadas para o mesmo pod (via iptables/ipvs rules). timeoutSeconds define por quanto tempo a sessão é mantida (padrão 10800s = 3h). Não garante afinidade em casos de falha do pod."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/service/#session-stickiness"
+    doc_section: "Concepts → Services → Session Stickiness"
+
+  - id: ckad-hard-007
+    cert: CKAD
+    topic: State Persistence
+    difficulty: hard
+    type: multiple_choice
+    question: "Como escalar um StatefulSet para 0 réplicas para fazer manutenção nos volumes sem deletar os PVCs?"
+    options:
+      - "kubectl delete statefulset app (os PVCs são preservados por padrão)"
+      - "kubectl scale statefulset app --replicas=0 (os PVCs persistem; ao escalar de volta, pods são remontados ao mesmo PVC)"
+      - "kubectl suspend statefulset app"
+      - "Não é possível escalar StatefulSets para 0"
+    answer: 1
+    explanation: "Escalar um StatefulSet para 0 termina todos os pods na ordem inversa (app-2 → app-1 → app-0) mas NÃO deleta os PVCs. Os dados persistem. Ao escalar de volta, os pods são recriados e remontados aos mesmos PVCs. Ideal para manutenção, backup ou pausar custos."
+    doc_url: "https://kubernetes.io/docs/tasks/run-application/scale-stateful-set/"
+    doc_section: "Tasks → Run Application → Scale StatefulSet"
+
+  - id: ckad-hard-008
+    cert: CKAD
+    topic: Application Design
+    difficulty: hard
+    type: multiple_choice
+    question: "Qual é o propósito do campo 'terminationGracePeriodSeconds' em um pod e quando é relevante ajustá-lo?"
+    options:
+      - "Define quanto tempo o pod aguarda novos requests antes de iniciar"
+      - "Define o tempo máximo que o Kubernetes aguarda o container encerrar graciosamente antes de enviar SIGKILL"
+      - "Define o tempo de retry quando o pod falha na inicialização"
+      - "Define o timeout de conexão de rede do pod"
+    answer: 1
+    explanation: "Quando um pod é terminado, o K8s envia SIGTERM e aguarda terminationGracePeriodSeconds (padrão 30s). Se o processo não encerrar no tempo, SIGKILL é enviado. Para aplicações que precisam encerrar conexões, finalizar transações ou fazer flush de dados, aumente esse valor (ex: 60-120s para bancos de dados)."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination"
+    doc_section: "Concepts → Pods → Lifecycle → Pod Termination"
+
+  - id: ckad-hard-009
+    cert: CKAD
+    topic: Application Environment
+    difficulty: hard
+    type: multiple_choice
+    question: "Como usar Downward API para injetar o nome do pod e o namespace como variáveis de ambiente no container?"
+    options:
+      - "spec.env: [{name: POD_NAME, value: metadata.name}]"
+      - "spec.env: [{name: POD_NAME, valueFrom: {fieldRef: {fieldPath: metadata.name}}}, {name: NAMESPACE, valueFrom: {fieldRef: {fieldPath: metadata.namespace}}}]"
+      - "spec.downwardAPI: [{POD_NAME: metadata.name}]"
+      - "spec.metadata.inject: [name, namespace]"
+    answer: 1
+    explanation: "Downward API permite injetar metadados do pod/namespace no container. fieldRef.fieldPath aceita: metadata.name, metadata.namespace, metadata.labels['key'], status.podIP, spec.nodeName, etc. Também disponível como arquivos via volume do tipo downwardAPI."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/pods/downward-api/"
+    doc_section: "Concepts → Pods → Downward API"
+
+  - id: ckad-hard-010
+    cert: CKAD
+    topic: Application Design
+    difficulty: hard
+    type: multiple_choice
+    question: "Como configurar um Job para que ele crie múltiplos pods em paralelo e complete quando 10 pods forem bem-sucedidos?"
+    options:
+      - "spec.replicas: 10 no Job"
+      - "spec.completions: 10 e spec.parallelism: 3 no Job"
+      - "spec.parallel: true e spec.count: 10 no Job"
+      - "spec.backoffLimit: 10 no Job"
+    answer: 1
+    explanation: "spec.completions define quantas conclusões bem-sucedidas são necessárias. spec.parallelism define quantos pods rodam em paralelo simultaneamente. O Job garante que exatamente 'completions' pods terminem com sucesso. backoffLimit define número máximo de tentativas em caso de falha."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/job/#parallel-jobs"
+    doc_section: "Concepts → Workloads → Jobs → Parallel Jobs"

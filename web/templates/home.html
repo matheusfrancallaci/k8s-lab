@@ -1,0 +1,284 @@
+{{define "content"}}
+<div class="shell">
+{{template "sidebar" .}}
+<div class="shell-main">
+
+<!-- 2-column split -->
+<div class="home-split" style="flex:1;">
+
+    <!-- LEFT: Hero + Stats -->
+    <div class="home-hero">
+        <div class="term-prompt">
+            <span class="sym">❯</span>
+            <span>k8s-lab --certs=all</span>
+            <span class="term-cursor"></span>
+        </div>
+
+        <h1 class="home-title">
+            Kubernetes<br><em>Certification</em><br>Practice
+        </h1>
+        <p class="home-desc" data-i18n="home.desc">
+            CKA · CKAD · CKS · ArgoCD — questões de teoria e labs práticos com kubectl real no seu cluster.
+        </p>
+
+        <div class="home-stats">
+            <div class="home-stat">
+                <div class="home-stat-val">4</div>
+                <div>
+                    <div class="home-stat-label">certificações</div>
+                    <div class="home-stat-sub">CKA · CKAD · CKS · ArgoCD</div>
+                </div>
+            </div>
+            <div class="home-stat">
+                <div class="home-stat-val">{{.Total}}</div>
+                <div>
+                    <div class="home-stat-label">questões</div>
+                    <div class="home-stat-sub">teoria + conceitos</div>
+                </div>
+            </div>
+            <div class="home-stat">
+                <div class="home-stat-val">{{.LabCount}}</div>
+                <div>
+                    <div class="home-stat-label">laboratórios</div>
+                    <div class="home-stat-sub">kubectl real · cluster k8s</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seu progresso (tutor) — aparece quando há histórico -->
+        <style>
+        .pg-card {
+            display:none; margin-top:26px; max-width:430px;
+            background:var(--surface-2); border:1px solid var(--border-2);
+            border-radius:16px; padding:18px 20px;
+            box-shadow:0 16px 44px -18px rgba(0,0,0,.45);
+        }
+        .pg-body { display:flex; align-items:center; gap:20px; }
+        .pg-ring-wrap { position:relative; width:96px; height:96px; flex-shrink:0; }
+        .pg-ring-wrap svg { transform:rotate(-90deg); }
+        .pg-ring-track { fill:none; stroke:var(--surface-4); stroke-width:8; }
+        .pg-ring-val {
+            fill:none; stroke-width:8; stroke-linecap:round;
+            stroke-dasharray:226; stroke-dashoffset:226;
+            transition:stroke-dashoffset 1s cubic-bezier(.2,.8,.3,1), stroke .4s;
+        }
+        .pg-ring-center {
+            position:absolute; inset:0; display:flex; flex-direction:column;
+            align-items:center; justify-content:center;
+        }
+        .pg-ring-center .v { font-family:var(--mono); font-size:20px; font-weight:800; color:var(--text); line-height:1; }
+        .pg-ring-center .s { font-size:8.5px; color:var(--text-4); text-transform:uppercase; letter-spacing:.08em; margin-top:3px; }
+        .pg-topics { flex:1; min-width:0; display:flex; flex-direction:column; gap:9px; }
+        .pg-topic { display:flex; align-items:center; gap:8px; cursor:pointer; }
+        .pg-topic .n {
+            font-size:11px; font-weight:600; color:var(--text-2);
+            width:100px; flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        }
+        .pg-topic:hover .n { color:var(--text); }
+        .pg-topic .bar { flex:1; height:5px; border-radius:3px; background:var(--surface-4); overflow:hidden; }
+        .pg-topic .bar i {
+            display:block; height:100%; border-radius:3px; width:0;
+            transition:width .9s cubic-bezier(.2,.8,.3,1);
+        }
+        .pg-topic .p { font-family:var(--mono); font-size:9.5px; color:var(--text-3); width:30px; text-align:right; flex-shrink:0; }
+        .pg-topic.weak .n { color:var(--red); font-weight:700; }
+        .pg-foot {
+            margin-top:14px; padding-top:12px; border-top:1px solid var(--border);
+            display:flex; align-items:center; justify-content:space-between; gap:10px;
+            font-family:var(--mono); font-size:10.5px; color:var(--text-3);
+        }
+        </style>
+        <div id="progress-card" class="pg-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+                <p class="section-label" style="margin:0;" data-i18n="home.progress">seu progresso</p>
+                <span id="streak-badge" style="display:none;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--amber);">🔥 <span id="streak-n">0</span> dias</span>
+            </div>
+            <div class="pg-body">
+                <div class="pg-ring-wrap">
+                    <svg width="96" height="96" viewBox="0 0 96 96">
+                        <circle class="pg-ring-track" cx="48" cy="48" r="36"/>
+                        <circle class="pg-ring-val" id="pg-ring" cx="48" cy="48" r="36" stroke="var(--green)"/>
+                    </svg>
+                    <div class="pg-ring-center">
+                        <span class="v" id="pg-score">-</span>
+                        <span class="s">acerto</span>
+                    </div>
+                </div>
+                <div class="pg-topics" id="pg-topics"></div>
+            </div>
+            <div class="pg-foot">
+                <span><strong id="pg-checks" style="color:var(--text);">0</strong> <span data-i18n="home.checks">checks feitos</span></span>
+                <span><strong id="pg-done" style="color:var(--green);">0</strong> <span data-i18n="home.done">labs concluídos</span></span>
+            </div>
+            <button id="daily-btn" style="display:none;margin-top:12px;" class="btn btn-ghost btn-sm btn-full" onclick="startDaily()" data-i18n="home.daily">⚡ Revisão do dia — 5 questões dos seus pontos fracos</button>
+        </div>
+    </div>
+
+    <!-- RIGHT: Choice hub -->
+    <div class="home-form" style="justify-content:center;">
+        <div style="max-width:440px;">
+            <p class="section-label" style="margin-bottom:14px;" data-i18n="home.mode">escolha um modo</p>
+
+            <div class="choice-list">
+
+                <!-- Continuar sessão (aparece se houver sessão recente) -->
+                <a href="#" id="resume-card" class="choice-card" style="display:none;--edge:#38bdf8;--glow:rgba(56,189,248,.32);">
+                    <div class="choice-ico" style="background:rgba(56,189,248,.08);color:#38bdf8;border-color:rgba(56,189,248,.25);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                    </div>
+                    <div class="choice-body">
+                        <div class="choice-title"><span data-i18n="home.resume">Continuar de onde parou</span> <span class="choice-tag" style="background:rgba(56,189,248,.1);color:#38bdf8;">sessão</span></div>
+                        <div class="choice-desc" id="resume-desc">...</div>
+                    </div>
+                    <svg class="choice-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </a>
+
+                <!-- Quiz -->
+                <a href="/practice" class="choice-card" style="--edge:var(--violet-b);--glow:rgba(91,95,239,.35);">
+                    <div class="choice-ico" style="background:var(--violet-dim);color:var(--violet);border-color:rgba(91,95,239,.25);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 0-2.5-2.5H2V2z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 1 2.5-2.5H22V2z"/></svg>
+                    </div>
+                    <div class="choice-body">
+                        <div class="choice-title"><span data-i18n="home.quiz.t">Prova Teórica</span> <span class="choice-tag" style="background:var(--violet-dim);color:var(--violet);">quiz</span></div>
+                        <div class="choice-desc" data-i18n="home.quiz.d">Questões de teoria e conceitos. Escolha certificação, dificuldade e quantidade.</div>
+                    </div>
+                    <svg class="choice-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </a>
+
+                <!-- Lab -->
+                <a href="/lab" class="choice-card" style="--edge:var(--green);--glow:rgba(52,211,153,.32);">
+                    <div class="choice-ico" style="background:var(--green-dim);color:var(--green);border-color:rgba(52,211,153,.25);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+                    </div>
+                    <div class="choice-body">
+                        <div class="choice-title"><span data-i18n="home.lab.t">Laboratório Prático</span> <span class="choice-tag" style="background:var(--green-dim);color:var(--green);">hands-on</span></div>
+                        <div class="choice-desc" data-i18n="home.lab.d">Terminal real com kubectl, vim e tab completion. Sessões com validação automática.</div>
+                    </div>
+                    <svg class="choice-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </a>
+
+            </div>
+
+            <!-- Sugestão do tutor (aparece quando há recomendação) -->
+            <div id="tutor-home-card" class="tutor-card" style="display:none;margin-top:14px;">
+                <div class="t-head"><svg width="14" height="14" viewBox="0 0 64 64" fill="none" style="vertical-align:-2px;flex-shrink:0;"><rect x="10" y="12" width="44" height="39" rx="12" stroke="#818cf8" stroke-width="4" fill="rgba(129,140,248,.1)"/><circle cx="23.5" cy="29" r="5" fill="#818cf8"/><circle cx="40.5" cy="29" r="5" fill="#38bdf8"/><path d="M24 40c2.6 3.2 13.4 3.2 16 0" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/></svg> tutor</div>
+                <div class="t-body" id="tutor-home-reason"></div>
+                <div class="t-actions">
+                    <a href="/tutor" class="btn btn-primary btn-sm">✦ Ver no tutor</a>
+                </div>
+            </div>
+
+            <p class="comment" style="text-align:center;margin-top:18px;">// cada modo tem sua própria tela de configuração</p>
+        </div>
+    </div>
+
+</div>
+</div>
+</div>
+
+<script>
+// ── Dashboard: progresso do tutor + retomar sessão ─────────
+(function () {
+    // Retomar sessão (últimas 24h)
+    try {
+        const raw = localStorage.getItem('k8slab-resume');
+        if (raw) {
+            const r = JSON.parse(raw);
+            if (r.url && Date.now() - r.ts < 24 * 3600 * 1000) {
+                const card = document.getElementById('resume-card');
+                card.href = r.url;
+                document.getElementById('resume-desc').textContent =
+                    `${r.cert} · ${r.topic} — questão ${r.index} de ${r.total}`;
+                card.style.display = '';
+            }
+        }
+    } catch (e) {}
+
+    // Streak 🔥
+    try {
+        const st = JSON.parse(localStorage.getItem('k8slab-streak') || '{}');
+        const today = new Date().toISOString().slice(0, 10);
+        const y = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+        if (st.count > 0 && (st.last === today || st.last === y)) {
+            document.getElementById('streak-n').textContent = st.count;
+            document.getElementById('streak-badge').style.display = '';
+        }
+    } catch (e) {}
+
+    // Progresso: donut central animado + barras finas por tópico
+    function scoreColor(s) { return s >= .7 ? 'var(--green)' : s >= .5 ? 'var(--amber)' : 'var(--red)'; }
+    function escP(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;'); }
+
+    fetch('/api/tutor/status').then(x => x.json()).then(d => {
+        const stats = (d.stats || []).filter(s => s.attempts > 0);
+        window._tutorStats = stats;
+        if (stats.length) {
+            document.getElementById('daily-btn').style.display = '';
+            let checks = 0, done = 0, sum = 0;
+            stats.forEach(s => { checks += s.attempts; done += s.completed; sum += s.score * s.attempts; });
+            const avg = Math.round((sum / checks) * 100);
+            document.getElementById('pg-checks').textContent = checks;
+            document.getElementById('pg-done').textContent = done;
+            document.getElementById('pg-score').textContent = avg + '%';
+
+            // barras por tópico (piores primeiro, máx. 5) — clicáveis → tutor
+            const box = document.getElementById('pg-topics');
+            box.innerHTML = '';
+            const sorted = stats.slice().sort((a, b) => a.score - b.score);
+            sorted.slice(0, 5).forEach((s, i) => {
+                const pct = Math.round(s.score * 100);
+                const weak = i === 0 && s.score < .6;
+                const canGen = (d.gen_topics || []).includes(s.topic);
+                const row = document.createElement('div');
+                row.className = 'pg-topic' + (weak ? ' weak' : '');
+                row.title = canGen ? 'treinar ' + s.topic + ' com o tutor' : s.topic;
+                row.innerHTML =
+                    `<span class="n">${weak ? '⚠ ' : ''}${escP(s.topic)}</span>` +
+                    `<span class="bar"><i style="background:linear-gradient(90deg,${scoreColor(s.score)},${scoreColor(s.score)}cc);"></i></span>` +
+                    `<span class="p">${pct}%</span>`;
+                if (canGen) row.onclick = () =>
+                    location.href = '/tutor?q=' + encodeURIComponent('crie um lab de ' + s.topic.toLowerCase() + ' nível 3');
+                box.appendChild(row);
+                // anima a barra no frame seguinte (transition faz o resto)
+                requestAnimationFrame(() => requestAnimationFrame(() => {
+                    row.querySelector('.bar i').style.width = Math.max(pct, 4) + '%';
+                }));
+            });
+
+            document.getElementById('progress-card').style.display = 'block';
+
+            // donut anima depois que o card aparece
+            const ring = document.getElementById('pg-ring');
+            ring.style.stroke = scoreColor(avg / 100);
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+                ring.style.strokeDashoffset = String(226 - (226 * avg / 100));
+            }));
+        }
+        const rec = (d.recommendations || [])[0];
+        if (rec) {
+            document.getElementById('tutor-home-reason').textContent = rec.reason;
+            document.getElementById('tutor-home-card').style.display = 'block';
+        }
+    }).catch(() => {});
+})();
+
+// ⚡ Revisão do dia: 5 labs do tópico mais fraco, nível conforme o score
+async function startDaily() {
+    const btn = document.getElementById('daily-btn');
+    btn.disabled = true; btn.textContent = '⚡ montando sua revisão...';
+    try {
+        const stats = (window._tutorStats || []).slice().sort((a, b) => a.score - b.score);
+        const genOK = await fetch('/api/tutor/status').then(r => r.json());
+        const weakest = stats.find(s => (genOK.gen_topics || []).includes(s.topic)) || { topic: 'Core Concepts', score: .5 };
+        const level = weakest.score < .4 ? 3 : weakest.score < .65 ? 2 : 1;
+        const r = await fetch('/api/tutor/generate', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topic: weakest.topic, level, count: 5 })
+        });
+        const d = await r.json();
+        if (d.first) { location.href = '/lab/' + d.first + '?session=' + d.id; return; }
+    } catch (e) {}
+    btn.disabled = false; btn.textContent = '⚡ Revisão do dia — 5 questões dos seus pontos fracos';
+}
+</script>
+{{end}}

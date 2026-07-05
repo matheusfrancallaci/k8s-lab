@@ -1,0 +1,241 @@
+questions:
+  # ── Application Design ────────────────────────────────────
+  - id: ckad-mid-001
+    cert: CKAD
+    topic: Application Design
+    difficulty: mid
+    type: multiple_choice
+    question: "Qual é a diferença entre um Deployment e um StatefulSet para aplicações que precisam de identidade estável?"
+    options:
+      - "Deployments têm pods com nomes aleatórios sem persistência de identidade; StatefulSets têm nomes ordinais (app-0, app-1) e volumes persistentes únicos por pod"
+      - "StatefulSets não suportam rolling updates"
+      - "Deployments são para bancos de dados; StatefulSets para web apps"
+      - "Não há diferença — ambos garantem identidade estável"
+    answer: 0
+    explanation: "StatefulSet garante: (1) nomes previsíveis (app-0, app-1...), (2) inicialização ordenada (app-0 antes de app-1), (3) volumeClaimTemplates cria PVCs individuais por pod. Ideal para Kafka, ZooKeeper, Cassandra, etcd, bancos relacionais."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/"
+    doc_section: "Concepts → Workloads → StatefulSets"
+
+  - id: ckad-mid-002
+    cert: CKAD
+    topic: Application Deployment
+    difficulty: mid
+    type: multiple_choice
+    question: "Como configurar um Deployment para ter no máximo 1 pod indisponível e no máximo 1 pod extra durante um rolling update?"
+    options:
+      - "spec.strategy.rollingUpdate: {maxUnavailable: 1, maxSurge: 1}"
+      - "spec.updateStrategy: {unavailable: 1, surge: 1}"
+      - "spec.rollout: {maxDown: 1, maxUp: 1}"
+      - "spec.replicas.rolling: {unavailable: 1, extra: 1}"
+    answer: 0
+    explanation: "maxUnavailable define quantos pods podem estar indisponíveis durante o update (pode ser número ou porcentagem). maxSurge define quantos pods extras podem existir acima do número desejado. Controlar esses valores permite balancear velocidade vs disponibilidade durante updates."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#rolling-update-deployment"
+    doc_section: "Concepts → Deployments → Rolling Update"
+
+  - id: ckad-mid-003
+    cert: CKAD
+    topic: Configuration
+    difficulty: mid
+    type: multiple_choice
+    question: "Você quer que um pod não rode como root. Qual campo no SecurityContext do pod usar?"
+    options:
+      - "spec.securityContext.runAsNonRoot: true"
+      - "spec.securityContext.noRoot: true"
+      - "spec.containers[].securityContext.preventRoot: true"
+      - "spec.securityContext.user: nonroot"
+    answer: 0
+    explanation: "runAsNonRoot: true faz o kubelet validar que o container não roda como UID 0 (root). Se o container tentar rodar como root, será rejeitado. Combine com runAsUser: <UID não zero> para especificar o usuário. Também é possível definir no SecurityContext do container individual."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/security-context/"
+    doc_section: "Tasks → Configure Security Context"
+
+  - id: ckad-mid-004
+    cert: CKAD
+    topic: Observability
+    difficulty: mid
+    type: multiple_choice
+    question: "Uma aplicação demora 60 segundos para inicializar mas as liveness probes começam a falhar antes disso. Qual probe resolver esse problema sem desativar o liveness?"
+    options:
+      - "Aumentar o initialDelaySeconds da livenessProbe para 60"
+      - "Usar startupProbe: ao ser bem-sucedida, libera as liveness e readiness probes para verificação"
+      - "Desativar a livenessProbe durante a inicialização com lifecycle.postStart"
+      - "Usar a annotation 'kubernetes.io/startup-delay: 60s'"
+    answer: 1
+    explanation: "startupProbe foi criada exatamente para esse caso: aplicações lentas para iniciar. Enquanto a startupProbe não tem sucesso, as livenessProbe e readinessProbe são desabilitadas. Configure failureThreshold × periodSeconds maior que o tempo máximo de inicialização."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/#define-startup-probes"
+    doc_section: "Tasks → Configure Probes → Startup Probes"
+
+  - id: ckad-mid-005
+    cert: CKAD
+    topic: Application Environment
+    difficulty: mid
+    type: multiple_choice
+    question: "Como limitar que pods em um namespace só possam usar imagens de um registry interno 'registry.internal.company.com'?"
+    options:
+      - "Criar um NetworkPolicy bloqueando acesso a outros registries"
+      - "Usar um Admission Controller como OPA/Gatekeeper ou Kyverno com uma policy de validação de imagens"
+      - "Configurar imagePullPolicy: Never em todos os pods"
+      - "Adicionar uma annotation 'allowed-registry' no namespace"
+    answer: 1
+    explanation: "Admission Controllers (Gatekeeper/Kyverno) podem validar e bloquear recursos que não seguem políticas. Uma policy de validação de imagens verifica se o prefixo da imagem corresponde ao registry permitido antes de criar o pod."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/"
+    doc_section: "Reference → Admission Controllers"
+
+  - id: ckad-mid-006
+    cert: CKAD
+    topic: Services
+    difficulty: mid
+    type: multiple_choice
+    question: "Qual é o comportamento de um Ingress com múltiplos paths ('/api' e '/web') apontando para Services diferentes?"
+    options:
+      - "O Ingress roteia para o primeiro Service que responder"
+      - "O Ingress Controller rota o tráfego baseado no path da requisição HTTP para o Service correspondente"
+      - "Múltiplos paths no mesmo Ingress não são suportados"
+      - "O Ingress usa round-robin entre os dois Services"
+    answer: 1
+    explanation: "Um Ingress pode ter múltiplos paths (path-based routing): requisições para '/api' vão para o Service 'api-service', requisições para '/web' vão para 'web-service'. O Ingress Controller (nginx, traefik etc.) implementa essa lógica de roteamento."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/ingress/#path-types"
+    doc_section: "Concepts → Services → Ingress → Path Types"
+
+  - id: ckad-mid-007
+    cert: CKAD
+    topic: State Persistence
+    difficulty: mid
+    type: multiple_choice
+    question: "Um StatefulSet com 3 réplicas usa volumeClaimTemplates. Quantos PVCs são criados?"
+    options:
+      - "1 PVC compartilhado entre todas as réplicas"
+      - "3 PVCs, um por réplica, com nomes como 'data-app-0', 'data-app-1', 'data-app-2'"
+      - "PVCs são criados apenas quando o pod monta o volume pela primeira vez"
+      - "Nenhum PVC; StatefulSets usam hostPath por padrão"
+    answer: 1
+    explanation: "volumeClaimTemplates cria um PVC por réplica do StatefulSet. Os PVCs seguem o padrão '<template-name>-<pod-name>' (ex: data-app-0). Quando um pod é deletado e recriado, ele é remontado ao mesmo PVC, preservando os dados."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#volume-claim-templates"
+    doc_section: "Concepts → StatefulSets → Volume Claim Templates"
+
+  - id: ckad-mid-008
+    cert: CKAD
+    topic: Application Design
+    difficulty: mid
+    type: multiple_choice
+    question: "Como configurar um pod para que ele seja reiniciado apenas quando finalizar com erro (exit code != 0), não em caso de sucesso?"
+    options:
+      - "spec.restartPolicy: OnFailure"
+      - "spec.restartPolicy: Never"
+      - "spec.restartPolicy: Always"
+      - "spec.containers[].restartPolicy: OnError"
+    answer: 0
+    explanation: "restartPolicy: OnFailure reinicia o container apenas se ele sair com código diferente de 0. 'Always' (padrão para Deployments) reinicia sempre. 'Never' nunca reinicia. OnFailure é comum em Jobs que devem ser executados até completar com sucesso."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#restart-policy"
+    doc_section: "Concepts → Pods → Lifecycle → Restart Policy"
+
+  - id: ckad-mid-009
+    cert: CKAD
+    topic: Configuration
+    difficulty: mid
+    type: multiple_choice
+    question: "Como verificar se um ServiceAccount 'deploy-bot' tem permissão para criar Deployments no namespace 'staging'?"
+    options:
+      - "kubectl describe serviceaccount deploy-bot -n staging"
+      - "kubectl auth can-i create deployments --as=system:serviceaccount:staging:deploy-bot -n staging"
+      - "kubectl get rbac --serviceaccount=deploy-bot -n staging"
+      - "kubectl check permissions serviceaccount/deploy-bot create deployments"
+    answer: 1
+    explanation: "'kubectl auth can-i' com '--as=system:serviceaccount:<namespace>:<name>' impersona uma ServiceAccount para verificar permissões. Retorna 'yes' ou 'no'. O formato completo de impersonação de SA é 'system:serviceaccount:<namespace>:<name>'."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/authorization/#checking-api-access"
+    doc_section: "Reference → Authorization → Checking API Access"
+
+  - id: ckad-mid-010
+    cert: CKAD
+    topic: Application Deployment
+    difficulty: mid
+    type: multiple_choice
+    question: "Como forçar um Deployment a recriar os pods sem alterar a imagem (ex: para recarregar um ConfigMap montado como variável de ambiente)?"
+    options:
+      - "kubectl reload deployment/api"
+      - "kubectl rollout restart deployment/api"
+      - "kubectl delete pods -l app=api"
+      - "kubectl scale deployment api --replicas=0 && kubectl scale deployment api --replicas=3"
+    answer: 1
+    explanation: "'kubectl rollout restart' aciona um rolling restart dos pods do Deployment sem alterar a spec. É a forma recomendada de recriar pods para recarregar configurações. Internamente adiciona uma annotation com o timestamp para forçar o update."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/generated/kubectl_rollout/kubectl_rollout_restart/"
+    doc_section: "Reference → kubectl rollout restart"
+
+  - id: ckad-mid-011
+    cert: CKAD
+    topic: Observability
+    difficulty: mid
+    type: multiple_choice
+    question: "Como exportar as métricas de uso de CPU e memória dos pods no namespace 'production'?"
+    options:
+      - "kubectl stats pods -n production"
+      - "kubectl top pods -n production"
+      - "kubectl metrics pods -n production"
+      - "kubectl describe pods -n production | grep CPU"
+    answer: 1
+    explanation: "'kubectl top' exibe métricas de uso de CPU e memória (requer o Metrics Server instalado). 'kubectl top pods -n production' mostra uso atual. 'kubectl top nodes' mostra métricas dos nós. Sem o Metrics Server, retorna 'error: Metrics API not available'."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-cluster/resource-metrics-pipeline/"
+    doc_section: "Tasks → Debug → Resource Metrics Pipeline"
+
+  - id: ckad-mid-012
+    cert: CKAD
+    topic: Application Environment
+    difficulty: mid
+    type: multiple_choice
+    question: "Qual campo no ResourceQuota de um namespace limita o número total de pods que podem ser criados?"
+    options:
+      - "spec.hard.pods"
+      - "spec.hard.count/pods"
+      - "spec.limits.pods"
+      - "spec.max.pods"
+    answer: 0
+    explanation: "'spec.hard.pods' define o número máximo de pods no namespace. Outros recursos comuns em ResourceQuota: requests.cpu, requests.memory, limits.cpu, limits.memory, count/services, count/deployments.apps, persistentvolumeclaims."
+    doc_url: "https://kubernetes.io/docs/concepts/policy/resource-quotas/"
+    doc_section: "Concepts → Policy → Resource Quotas"
+
+  - id: ckad-mid-013
+    cert: CKAD
+    topic: Services
+    difficulty: mid
+    type: multiple_choice
+    question: "O que diferencia um Headless Service (ClusterIP: None) de um Service ClusterIP normal?"
+    options:
+      - "Headless Services não têm selector e não roteiam tráfego"
+      - "Headless Services não criam um IP virtual; o DNS resolve diretamente para os IPs dos pods"
+      - "Headless Services só funcionam com StatefulSets"
+      - "Headless Services são Service do tipo ExternalName sem DNS"
+    answer: 1
+    explanation: "Com ClusterIP: None, o Service não tem IP virtual. O DNS resolve o nome do Service para a lista de IPs dos pods individuais (não um VIP). Ideal para StatefulSets (onde cada pod tem um DNS único app-0.svc.ns.svc.cluster.local) e para descoberta de serviços peer-to-peer."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/service/#headless-services"
+    doc_section: "Concepts → Services → Headless Services"
+
+  - id: ckad-mid-014
+    cert: CKAD
+    topic: Application Design
+    difficulty: mid
+    type: multiple_choice
+    question: "Qual é a estratégia de deployment que permite testar uma nova versão em uma porcentagem pequena do tráfego antes de migrar tudo?"
+    options:
+      - "Recreate"
+      - "Blue-Green"
+      - "Canary"
+      - "Shadow"
+    answer: 2
+    explanation: "Canary deployment envolve implantar a nova versão em uma fração dos pods (ex: 1 de 10) para testar com tráfego real antes de escalar. No Kubernetes, pode ser feito com múltiplos Deployments com o mesmo label selecionado pelo Service, ou com um Ingress configurando pesos de tráfego."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/management/#canary-deployments"
+    doc_section: "Concepts → Workloads → Management → Canary"
+
+  - id: ckad-mid-015
+    cert: CKAD
+    topic: Application Environment
+    difficulty: mid
+    type: multiple_choice
+    question: "Como configurar um pod para que ele tenha acesso somente de leitura ao seu sistema de arquivos raiz?"
+    options:
+      - "spec.securityContext.readOnly: true"
+      - "spec.containers[].securityContext.readOnlyRootFilesystem: true"
+      - "spec.volumes: [{type: readOnly}]"
+      - "spec.securityContext.fsReadOnly: true"
+    answer: 1
+    explanation: "readOnlyRootFilesystem: true no SecurityContext do container impede qualquer escrita no sistema de arquivos raiz do container. Aplicações que precisam escrever em disco devem usar volumes (emptyDir, PVC) montados em paths específicos."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/security-context/"
+    doc_section: "Tasks → Configure Security Context"

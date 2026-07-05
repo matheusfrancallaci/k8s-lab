@@ -1,0 +1,1069 @@
+questions:
+  # ── EASY: Application Design & Build ─────────────────────
+  - id: ckad-lab-001
+    cert: CKAD
+    topic: Application Design
+    difficulty: easy
+    type: lab
+    question: "Crie um Pod **multi-container** chamado **sidecar-pod** com dois containers: **app** (nginx:1.21) e **sidecar** (busybox) que execute **sleep 3600**."
+    options:
+      - "kubectl run sidecar-pod --image=nginx:1.21 --image=busybox -- sleep 3600"
+      - "Criar via YAML com spec.containers[] listando app (nginx:1.21) e sidecar (busybox + sleep 3600)"
+      - "kubectl create pod sidecar-pod --containers app=nginx:1.21,sidecar=busybox"
+      - "kubectl run sidecar-pod --image=nginx:1.21 && kubectl add container sidecar-pod busybox"
+    answer: 1
+    hint: |
+      kubectl run não suporta múltiplos containers. Use YAML:
+        kubectl run sidecar-pod --image=nginx:1.21 --dry-run=client -o yaml > sidecar-pod.yaml
+      Edite o arquivo e adicione o segundo container, depois: kubectl apply -f sidecar-pod.yaml
+    answer_command: "kubectl apply -f sidecar-pod.yaml"
+    goals:
+      - description: "Pod **sidecar-pod** existe no namespace **default**"
+        validation:
+          command: "kubectl get pod sidecar-pod -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "sidecar-pod"
+      - description: "Container **app** usa a imagem **nginx:1.21**"
+        validation:
+          command: "kubectl get pod sidecar-pod -o jsonpath='{.spec.containers[?(@.name==\"app\")].image}' 2>/dev/null"
+          expected_contains: "nginx:1.21"
+      - description: "Container **sidecar** (busybox) está presente"
+        validation:
+          command: "kubectl get pod sidecar-pod -o jsonpath='{.spec.containers[?(@.name==\"sidecar\")].image}' 2>/dev/null"
+          expected_contains: "busybox"
+      - description: "Pod tem exatamente **2 containers**"
+        validation:
+          command: "kubectl get pod sidecar-pod -o jsonpath='{.spec.containers}' 2>/dev/null | python3 -c 'import sys,json; print(len(json.load(sys.stdin)))' 2>/dev/null || kubectl get pod sidecar-pod -o jsonpath='{.spec.containers[*].name}' 2>/dev/null | wc -w"
+          expected_contains: "2"
+    teardown:
+      - "kubectl delete pod sidecar-pod --ignore-not-found=true"
+    explanation: "Pods multi-container não podem ser criados via kubectl run — requerem YAML com spec.containers[] como lista. Containers em um mesmo Pod compartilham network namespace (localhost) e podem compartilhar volumes."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/pods/#how-pods-manage-multiple-containers"
+    doc_section: "Concepts → Pods → Multi-container Pods"
+
+  - id: ckad-lab-002
+    cert: CKAD
+    topic: Application Design
+    difficulty: easy
+    type: lab
+    question: "Crie um Pod **init-pod** com um **initContainer** chamado **init-db** (imagem: busybox) que execute **echo 'ready' > /init/status** antes do container principal **app** (nginx:1.21) que monta o mesmo volume em **/data**."
+    options:
+      - "spec.startupContainers[]"
+      - "spec.beforeContainers[]"
+      - "spec.initContainers[]"
+      - "spec.preRunContainers[]"
+    answer: 2
+    hint: |
+      Crie YAML com spec.initContainers[] e spec.volumes[] (emptyDir) compartilhado entre init e app:
+        kubectl run init-pod --image=nginx:1.21 --dry-run=client -o yaml > init-pod.yaml
+      Adicione initContainers e o volume, depois: kubectl apply -f init-pod.yaml
+    answer_command: "kubectl apply -f pod-with-init.yaml"
+    goals:
+      - description: "Pod **init-pod** existe no cluster"
+        validation:
+          command: "kubectl get pod init-pod -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "init-pod"
+      - description: "initContainer **init-db** está presente"
+        validation:
+          command: "kubectl get pod init-pod -o jsonpath='{.spec.initContainers[0].name}' 2>/dev/null"
+          expected_contains: "init-db"
+      - description: "Container principal **app** usa **nginx:1.21**"
+        validation:
+          command: "kubectl get pod init-pod -o jsonpath='{.spec.containers[?(@.name==\"app\")].image}' 2>/dev/null"
+          expected_contains: "nginx:1.21"
+    teardown:
+      - "kubectl delete pod init-pod --ignore-not-found=true"
+    explanation: "initContainers são executados sequencialmente antes dos containers principais. Se um initContainer falhar, o Pod não inicia. Útil para pré-configuração: migrations de banco, espera por serviços, geração de configuração."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/pods/init-containers/"
+    doc_section: "Concepts → Pods → Init Containers"
+
+  - id: ckad-lab-003
+    cert: CKAD
+    topic: Configuration
+    difficulty: easy
+    type: lab
+    question: "Crie um Pod **env-pod** com a imagem **nginx** que tenha a variável de ambiente **APP_ENV=production** definida inline na spec."
+    options:
+      - "kubectl run env-pod --image=nginx --env APP_ENV=production"
+      - "kubectl run env-pod --image=nginx --set-env=APP_ENV=production"
+      - "kubectl run env-pod --image=nginx -e APP_ENV=production"
+      - "kubectl create pod env-pod --image=nginx --env=APP_ENV=production"
+    answer: 0
+    answer_command: "kubectl run env-pod --image=nginx --env APP_ENV=production"
+    validation:
+      command: "kubectl exec env-pod -- env | grep APP_ENV"
+      expected_contains: "production"
+    teardown:
+      - "kubectl delete pod env-pod --ignore-not-found=true"
+    explanation: "--env (ou -e) define variáveis de ambiente diretamente. Em YAML, use spec.containers[].env com name/value. Para referenciar ConfigMap: envFrom.configMapRef ou env[].valueFrom.configMapKeyRef."
+    doc_url: "https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/"
+    doc_section: "Tasks → Inject Data → Environment Variables"
+
+  - id: ckad-lab-004
+    cert: CKAD
+    topic: Configuration
+    difficulty: easy
+    type: lab
+    question: "Crie um ConfigMap **app-settings** com os dados do arquivo **config.properties** usando kubectl."
+    options:
+      - "kubectl create configmap app-settings --from-literal=config.properties"
+      - "kubectl create configmap app-settings --from-file=config.properties"
+      - "kubectl apply configmap app-settings --file=config.properties"
+      - "kubectl create configmap app-settings --import=config.properties"
+    answer: 1
+    answer_command: "kubectl create configmap app-settings --from-file=config.properties"
+    explanation: "--from-file cria uma entrada no ConfigMap com o nome do arquivo como chave e o conteúdo como valor. Para múltiplos arquivos de um diretório: --from-file=./config-dir/. Para literais: --from-literal=chave=valor."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/"
+    doc_section: "Tasks → Configure Pod → ConfigMap"
+
+  - id: ckad-lab-005
+    cert: CKAD
+    topic: Configuration
+    difficulty: easy
+    type: lab
+    question: "Crie um Secret genérico **api-keys** com **API_KEY=abc123** e **API_SECRET=xyz789**."
+    options:
+      - "kubectl create secret generic api-keys --from-literal=API_KEY=abc123 --from-literal=API_SECRET=xyz789"
+      - "kubectl create secret api-keys --data=API_KEY=abc123,API_SECRET=xyz789"
+      - "kubectl apply secret generic api-keys API_KEY=abc123 API_SECRET=xyz789"
+      - "kubectl create secret generic api-keys --key=API_KEY=abc123 --key=API_SECRET=xyz789"
+    answer: 0
+    answer_command: "kubectl create secret generic api-keys --from-literal=API_KEY=abc123 --from-literal=API_SECRET=xyz789"
+    goals:
+      - description: "Secret **api-keys** existe no namespace **default**"
+        validation:
+          command: "kubectl get secret api-keys -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "api-keys"
+      - description: "Secret contém a chave **API_KEY**"
+        validation:
+          command: "kubectl get secret api-keys -o jsonpath='{.data.API_KEY}' 2>/dev/null | base64 -d 2>/dev/null"
+          expected_contains: "abc123"
+      - description: "Secret contém a chave **API_SECRET**"
+        validation:
+          command: "kubectl get secret api-keys -o jsonpath='{.data.API_SECRET}' 2>/dev/null | base64 -d 2>/dev/null"
+          expected_contains: "xyz789"
+    teardown:
+      - "kubectl delete secret api-keys --ignore-not-found=true"
+    explanation: "Secrets genéricos armazenam pares chave-valor codificados em base64. Para usar em pods: envFrom.secretRef (todas as chaves) ou env[].valueFrom.secretKeyRef (chave específica) ou como volume."
+    doc_url: "https://kubernetes.io/docs/concepts/configuration/secret/"
+    doc_section: "Concepts → Configuration → Secrets"
+
+  - id: ckad-lab-006
+    cert: CKAD
+    topic: Application Deployment
+    difficulty: easy
+    type: lab
+    question: "Crie um Deployment **web-app** com imagem **nginx:1.21** e **2 réplicas**. Gere o YAML sem criar no cluster."
+    options:
+      - "kubectl create deployment web-app --image=nginx:1.21 --replicas=2 --preview"
+      - "kubectl create deployment web-app --image=nginx:1.21 --replicas=2 --dry-run=client -o yaml"
+      - "kubectl generate deployment web-app --image=nginx:1.21 --replicas=2"
+      - "kubectl template deployment web-app --image=nginx:1.21 --replicas=2"
+    answer: 1
+    answer_command: "kubectl create deployment web-app --image=nginx:1.21 --replicas=2 --dry-run=client -o yaml"
+    explanation: "--dry-run=client gera o manifesto sem criar recursos. Essencial no exame CKAD para criar templates rapidamente e então modificar conforme necessário antes de aplicar."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/conventions/"
+    doc_section: "Reference → kubectl → Conventions"
+
+  - id: ckad-lab-007
+    cert: CKAD
+    topic: Application Deployment
+    difficulty: easy
+    type: lab
+    question: "Verifique o status do rollout do Deployment **backend** e aguarde sua conclusão."
+    options:
+      - "kubectl get rollout deployment/backend --wait"
+      - "kubectl rollout status deployment/backend"
+      - "kubectl watch deployment backend"
+      - "kubectl describe deployment backend --rollout"
+    answer: 1
+    answer_command: "kubectl rollout status deployment/backend"
+    explanation: "kubectl rollout status bloqueia até o Deployment estar Available ou falhar. Retorna exit code 0 em sucesso. No exame, use após kubectl set image ou kubectl apply para confirmar que o rollout completou."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/generated/kubectl_rollout/kubectl_rollout_status/"
+    doc_section: "Reference → kubectl rollout status"
+
+  - id: ckad-lab-008
+    cert: CKAD
+    topic: Application Deployment
+    difficulty: easy
+    type: lab
+    question: "Escale o Deployment **frontend** de 2 para **4 réplicas**."
+    options:
+      - "kubectl update deployment frontend --replicas=4"
+      - "kubectl resize deployment frontend 4"
+      - "kubectl scale deployment frontend --replicas=4"
+      - "kubectl set replicas deployment/frontend 4"
+    answer: 2
+    answer_command: "kubectl scale deployment frontend --replicas=4"
+    setup:
+      - description: "Criando deployment frontend com 2 réplicas..."
+        command: "kubectl create deployment frontend --image=nginx:1.21 --replicas=2 2>/dev/null || true"
+      - description: "Aguardando réplicas ficarem prontas..."
+        command: "kubectl rollout status deployment/frontend --timeout=60s 2>/dev/null || true"
+    goals:
+      - description: "Deployment **frontend** tem **4 réplicas** configuradas"
+        hint: "kubectl scale deployment frontend --replicas=4"
+        validation:
+          command: "kubectl get deployment frontend -o jsonpath='{.spec.replicas}' 2>/dev/null"
+          expected_contains: "4"
+      - description: "Todas as 4 réplicas estão **Ready**"
+        validation:
+          command: "kubectl get deployment frontend -o jsonpath='{.status.readyReplicas}' 2>/dev/null"
+          expected_contains: "4"
+    teardown:
+      - "kubectl delete deployment frontend --ignore-not-found=true"
+    explanation: "kubectl scale ajusta o número de réplicas imediatamente. Também funciona com ReplicaSets e StatefulSets. Para escala condicional: --current-replicas=2 escala apenas se o número atual corresponder."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#scaling-a-deployment"
+    doc_section: "Concepts → Deployments → Scaling"
+
+  - id: ckad-lab-009
+    cert: CKAD
+    topic: Observability
+    difficulty: easy
+    type: lab
+    question: "Veja os logs das últimas **50 linhas** do pod **app-pod** e mantenha streaming."
+    options:
+      - "kubectl logs app-pod --last=50 --stream"
+      - "kubectl logs app-pod --tail=50 -f"
+      - "kubectl log app-pod -n 50 --follow"
+      - "kubectl get logs app-pod --tail 50 --watch"
+    answer: 1
+    answer_command: "kubectl logs app-pod --tail=50 -f"
+    explanation: "--tail=N mostra as últimas N linhas. -f (--follow) ativa streaming em tempo real. Útil para monitorar aplicações. --since=1h mostra logs da última hora. -c para container específico em pods multi-container."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/generated/kubectl_logs/"
+    doc_section: "Reference → kubectl logs"
+
+  - id: ckad-lab-010
+    cert: CKAD
+    topic: Services
+    difficulty: easy
+    type: lab
+    question: "Exponha o Pod **api-pod** (porta 8080) como Service ClusterIP chamado **api-pod** na porta **80**."
+    options:
+      - "kubectl expose pod api-pod --port=80 --target-port=8080"
+      - "kubectl create service clusterip api-pod --port=80 --target-port=8080"
+      - "kubectl expose pod api-pod --port=80 --container-port=8080"
+      - "kubectl service api-pod --port=80 --pod-port=8080"
+    answer: 0
+    answer_command: "kubectl expose pod api-pod --port=80 --target-port=8080"
+    setup:
+      - description: "Criando pod api-pod..."
+        command: "kubectl run api-pod --image=nginx --port=8080 2>/dev/null || true"
+    goals:
+      - description: "Service **api-pod** existe"
+        hint: "kubectl expose pod api-pod --port=80 --target-port=8080"
+        validation:
+          command: "kubectl get service api-pod -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "api-pod"
+      - description: "Service é do tipo **ClusterIP**"
+        validation:
+          command: "kubectl get service api-pod -o jsonpath='{.spec.type}' 2>/dev/null"
+          expected_contains: "ClusterIP"
+      - description: "Service escuta na porta **80**"
+        validation:
+          command: "kubectl get service api-pod -o jsonpath='{.spec.ports[0].port}' 2>/dev/null"
+          expected_contains: "80"
+    teardown:
+      - "kubectl delete service api-pod --ignore-not-found=true"
+      - "kubectl delete pod api-pod --ignore-not-found=true"
+    explanation: "--port é a porta do Service (acessada pelos clientes), --target-port é a porta do container (onde a aplicação escuta). Se omitir --target-port, usa o mesmo valor de --port."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/service/"
+    doc_section: "Concepts → Services"
+
+  - id: ckad-lab-011
+    cert: CKAD
+    topic: Services
+    difficulty: easy
+    type: lab
+    question: "Crie um CronJob **hello-cron** que execute **echo hello** a cada minuto usando a imagem **busybox**."
+    options:
+      - "kubectl create cronjob hello-cron --schedule='* * * * *' --image=busybox -- echo hello"
+      - "kubectl run cronjob hello-cron --schedule=@minutely --image=busybox -- echo hello"
+      - "kubectl create job hello-cron --schedule='*/1 * * * *' --image=busybox -- echo hello"
+      - "kubectl create cronjob hello-cron --interval=1m --image=busybox -- echo hello"
+    answer: 0
+    answer_command: "kubectl create cronjob hello-cron --schedule='* * * * *' --image=busybox -- echo hello"
+    goals:
+      - description: "CronJob **hello-cron** existe"
+        hint: "kubectl create cronjob hello-cron --schedule='* * * * *' --image=busybox -- echo hello"
+        validation:
+          command: "kubectl get cronjob hello-cron -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "hello-cron"
+      - description: "Schedule está configurado para **'* * * * *'** (todo minuto)"
+        validation:
+          command: "kubectl get cronjob hello-cron -o jsonpath='{.spec.schedule}' 2>/dev/null"
+          expected_contains: "* * * * *"
+      - description: "Imagem do CronJob é **busybox**"
+        validation:
+          command: "kubectl get cronjob hello-cron -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[0].image}' 2>/dev/null"
+          expected_contains: "busybox"
+    teardown:
+      - "kubectl delete cronjob hello-cron --ignore-not-found=true"
+    explanation: "CronJobs usam sintaxe cron padrão (minuto hora dia mês dia-semana). '* * * * *' = todo minuto. '0 * * * *' = todo início de hora. @hourly é atalho equivalente. O CronJob cria Jobs filhos conforme a agenda."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/"
+    doc_section: "Concepts → Workloads → CronJobs"
+
+  - id: ckad-lab-012
+    cert: CKAD
+    topic: Application Design
+    difficulty: easy
+    type: lab
+    question: "Um pod usa um volume **emptyDir** compartilhado entre containers. Qual é a característica principal de **emptyDir**?"
+    options:
+      - "Persiste dados após o pod ser deletado — útil para persistência de longo prazo"
+      - "Compartilha dados entre containers do mesmo pod; é destruído quando o pod termina"
+      - "Monta um diretório do nó host dentro do container"
+      - "Cria automaticamente um PersistentVolumeClaim para o pod"
+    answer: 1
+    answer_command: "kubectl apply -f pod-emptydir.yaml"
+    explanation: "emptyDir é criado quando o Pod é atribuído a um nó e persiste enquanto o Pod existir. Todos os containers no Pod podem ler e escrever. É destruído permanentemente quando o Pod é removido. Ideal para cache ou compartilhamento entre sidecar containers."
+    doc_url: "https://kubernetes.io/docs/concepts/storage/volumes/#emptydir"
+    doc_section: "Concepts → Storage → Volumes → emptyDir"
+
+  - id: ckad-lab-013
+    cert: CKAD
+    topic: Application Design
+    difficulty: easy
+    type: lab
+    question: "Liste todos os pods que foram reiniciados mais de 3 vezes (CrashLoopBackOff) em todos os namespaces."
+    options:
+      - "kubectl get pods -A --restart>3"
+      - "kubectl get pods -A | awk '$4 > 3 {print}'"
+      - "kubectl get pods -A --field-selector=status.containerStatuses.restartCount>3"
+      - "kubectl get pods -A -o wide | grep CrashLoop"
+    answer: 1
+    answer_command: "kubectl get pods -A | awk 'NR==1 || $5 > 3'"
+    explanation: "kubectl não tem filtro nativo para contagem de restarts. Usa-se pipelines shell (awk, grep) para filtrar a saída. -o wide mostra mais informações. Para inspecionar: kubectl describe pod <name> e kubectl logs <name> --previous."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/"
+    doc_section: "Tasks → Debug → Debug Pods"
+
+  - id: ckad-lab-014
+    cert: CKAD
+    topic: Application Design
+    difficulty: easy
+    type: lab
+    question: "Forçe o pod **stale-pod** a ser recriado sem deletar e recriar manualmente o Deployment."
+    options:
+      - "kubectl restart pod stale-pod"
+      - "kubectl delete pod stale-pod (o ReplicaSet recria automaticamente)"
+      - "kubectl replace pod stale-pod"
+      - "kubectl refresh pod stale-pod"
+    answer: 1
+    answer_command: "kubectl delete pod stale-pod"
+    explanation: "Pods gerenciados por um ReplicaSet (via Deployment) são automaticamente recriados quando deletados. Para pods não gerenciados: kubectl delete e reaplicar o YAML. 'kubectl rollout restart deployment/X' é mais seguro para Deployments pois faz rolling restart."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/"
+    doc_section: "Concepts → Workloads → ReplicaSet"
+
+  - id: ckad-lab-015
+    cert: CKAD
+    topic: Configuration
+    difficulty: easy
+    type: lab
+    question: "Edite o ConfigMap **app-config** para adicionar a chave **TIMEOUT=30** sem recriar o recurso."
+    options:
+      - "kubectl update configmap app-config --from-literal=TIMEOUT=30"
+      - "kubectl edit configmap app-config"
+      - "kubectl patch configmap app-config --data TIMEOUT=30"
+      - "kubectl set data configmap/app-config TIMEOUT=30"
+    answer: 1
+    answer_command: "kubectl edit configmap app-config"
+    explanation: "kubectl edit abre o recurso no editor padrão ($EDITOR ou vi). Após salvar, o Kubernetes aplica a mudança. Alternativa: kubectl patch -p '{\"data\":{\"TIMEOUT\":\"30\"}}'. Atenção: pods precisam ser reiniciados para ver vars de env atualizadas."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/#edit-a-configmap"
+    doc_section: "Tasks → Configure Pod → ConfigMap → Edit"
+
+  # ── MID: Observability & Probes ───────────────────────────
+  - id: ckad-lab-016
+    cert: CKAD
+    topic: Observability
+    difficulty: mid
+    type: lab
+    question: "Adicione um **livenessProbe** HTTP ao container **api** do Deployment **api-deploy**: verificar **GET /healthz** na porta **8080** a cada **10 segundos**, com **3 falhas** antes de reiniciar."
+    options:
+      - "kubectl set liveness deployment/api-deploy --http-get=/healthz --port=8080 --period=10 --failure=3"
+      - "Adicionar via YAML: livenessProbe.httpGet.path=/healthz, port=8080, periodSeconds=10, failureThreshold=3"
+      - "kubectl patch deployment api-deploy --probe=liveness:http:8080:/healthz:10s:3"
+      - "kubectl annotate deployment api-deploy liveness=http:8080:/healthz"
+    answer: 1
+    answer_command: "kubectl apply -f deployment-with-probe.yaml"
+    explanation: "Probes não podem ser adicionados via kubectl set — requerem edição do YAML. livenessProbe reinicia o container se falhar. readinessProbe remove o pod do endpoint se falhar. startupProbe dá tempo para aplicações lentas iniciarem antes do liveness começar."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/"
+    doc_section: "Tasks → Configure Pod → Probes"
+
+  - id: ckad-lab-017
+    cert: CKAD
+    topic: Observability
+    difficulty: mid
+    type: lab
+    question: "Configure um **readinessProbe** TCP no container **db** (porta **5432**) com **initialDelaySeconds=5** e **periodSeconds=10**."
+    options:
+      - "readinessProbe.httpGet.port=5432 é a forma correta para TCP"
+      - "readinessProbe.tcpSocket.port=5432, initialDelaySeconds=5, periodSeconds=10 no YAML"
+      - "kubectl set readiness deployment/db --tcp=5432 --delay=5 --period=10"
+      - "readinessProbe.exec com command: ['nc', '-z', 'localhost', '5432']"
+    answer: 1
+    answer_command: "kubectl apply -f db-deployment.yaml"
+    explanation: "readinessProbe.tcpSocket verifica se a porta está aceitando conexões. initialDelaySeconds aguarda antes da primeira verificação (tempo para o app iniciar). periodSeconds define a frequência. failureThreshold=3 é o padrão antes de marcar como NotReady."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/#define-a-tcp-liveness-probe"
+    doc_section: "Tasks → Configure Pod → Probes → TCP"
+
+  - id: ckad-lab-018
+    cert: CKAD
+    topic: Observability
+    difficulty: mid
+    type: lab
+    question: "Como depurar um pod com CrashLoopBackOff: qual é a sequência correta de diagnóstico?"
+    options:
+      - "kubectl restart pod <name> → kubectl describe pod <name> → verificar eventos"
+      - "kubectl describe pod <name> → kubectl logs <name> --previous → kubectl exec <name> -- sh para investigar"
+      - "kubectl delete pod <name> → aguardar pod recriar → testar novamente"
+      - "kubectl get pod <name> -o yaml → comparar com documentação"
+    answer: 1
+    answer_command: "kubectl describe pod <name> && kubectl logs <name> --previous"
+    explanation: "Sequência de diagnóstico: (1) kubectl describe mostra Events e o exit code/signal do crash, (2) --previous mostra os logs antes do crash, (3) kubectl exec com imagem debug. Causa comum: comando errado, variável de env faltando, permissão negada, porta em uso."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/"
+    doc_section: "Tasks → Debug → Debug Pods"
+
+  - id: ckad-lab-019
+    cert: CKAD
+    topic: Application Deployment
+    difficulty: mid
+    type: lab
+    question: "Implemente uma estratégia de **Blue/Green deployment**: o Deployment **app-v2** já existe. Como redirecionar o Service **app-svc** do v1 para v2 instantaneamente?"
+    options:
+      - "kubectl scale deployment app-v1 --replicas=0 && kubectl scale deployment app-v2 --replicas=3"
+      - "kubectl patch service app-svc -p '{\"spec\":{\"selector\":{\"version\":\"v2\"}}}'"
+      - "kubectl rollout update service/app-svc --deployment=app-v2"
+      - "kubectl apply -f new-service.yaml --force-replace"
+    answer: 1
+    answer_command: "kubectl patch service app-svc -p '{\"spec\":{\"selector\":{\"version\":\"v2\"}}}'"
+    explanation: "Blue/Green: muda o selector do Service de v1 para v2 atomicamente. Todo o tráfego vai para v2 imediatamente, sem rolling update. Se v2 apresentar problemas, reverter é instantâneo: patch de volta para v1. Ambos os Deployments ficam rodando durante a transição."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/service/#selectors"
+    doc_section: "Concepts → Services → Selectors"
+
+  - id: ckad-lab-020
+    cert: CKAD
+    topic: Application Deployment
+    difficulty: mid
+    type: lab
+    question: "Configure o Deployment **api** para atualização **Recreate** (para/inicia todos os pods juntos) em vez de RollingUpdate."
+    options:
+      - "kubectl set strategy deployment/api --type=Recreate"
+      - "kubectl patch deployment api -p '{\"spec\":{\"strategy\":{\"type\":\"Recreate\"}}}'"
+      - "kubectl update strategy deployment api Recreate"
+      - "kubectl annotate deployment api strategy=Recreate"
+    answer: 1
+    answer_command: "kubectl patch deployment api -p '{\"spec\":{\"strategy\":{\"type\":\"Recreate\"}}}'"
+    explanation: "Recreate termina todos os pods antigos antes de criar os novos — causa downtime mas garante que nunca há duas versões rodando simultaneamente. RollingUpdate (padrão) mantém disponibilidade mas tem período com versões mistas. Use Recreate para apps que não suportam múltiplas versões concorrentes."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#recreate-deployment"
+    doc_section: "Concepts → Deployments → Recreate"
+
+  - id: ckad-lab-021
+    cert: CKAD
+    topic: Configuration
+    difficulty: mid
+    type: lab
+    question: "Defina **resource requests** de **100m CPU e 128Mi memória** e **limits** de **500m CPU e 256Mi memória** para o container **app** no pod **resource-pod**."
+    options:
+      - "kubectl set resources pod resource-pod --requests=cpu=100m,memory=128Mi --limits=cpu=500m,memory=256Mi"
+      - "kubectl annotate pod resource-pod cpu=100m:500m memory=128Mi:256Mi"
+      - "kubectl resource pod resource-pod --cpu=100m/500m --memory=128Mi/256Mi"
+      - "kubectl label pod resource-pod requests.cpu=100m limits.cpu=500m"
+    answer: 0
+    answer_command: "kubectl set resources deployment/resource-deploy --requests=cpu=100m,memory=128Mi --limits=cpu=500m,memory=256Mi"
+    explanation: "kubectl set resources define requests e limits em containers de Deployments. Para pods diretos: editar YAML. Requests = garantia mínima (influencia scheduling). Limits = máximo permitido (CPU throttle, memória OOM killed se exceder)."
+    doc_url: "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
+    doc_section: "Concepts → Configuration → Resource Management"
+
+  - id: ckad-lab-022
+    cert: CKAD
+    topic: Configuration
+    difficulty: mid
+    type: lab
+    question: "Crie um Pod **secure-pod** com **securityContext** que proíba execução como root e ative **readOnlyRootFilesystem**."
+    options:
+      - "kubectl run secure-pod --image=nginx --security=no-root,read-only"
+      - "Criar via YAML com spec.securityContext.runAsNonRoot: true e spec.containers[].securityContext.readOnlyRootFilesystem: true"
+      - "kubectl create pod secure-pod --image=nginx --no-root --read-only"
+      - "kubectl annotate pod secure-pod security=strict"
+    answer: 1
+    answer_command: "kubectl apply -f secure-pod.yaml"
+    explanation: "securityContext pode ser definido no nível do Pod (aplica a todos containers) ou por container. runAsNonRoot=true faz o kubelet falhar se o container rodar como UID 0. readOnlyRootFilesystem=true impede escrita no filesystem (monte volumes para diretórios que precisam de escrita)."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/security-context/"
+    doc_section: "Tasks → Configure Pod → Security Context"
+
+  - id: ckad-lab-023
+    cert: CKAD
+    topic: Services
+    difficulty: mid
+    type: lab
+    question: "Crie um Ingress **web-ingress** que roteie **/api** para o Service **api-svc:8080** e **/** para **frontend-svc:80**."
+    options:
+      - "kubectl create ingress web-ingress --rule='/api=api-svc:8080' --rule='/*=frontend-svc:80'"
+      - "kubectl expose ingress web-ingress --backend api-svc:8080 / frontend-svc:80"
+      - "kubectl create ingress web-ingress --path /api:api-svc:8080 --path /:frontend-svc:80"
+      - "kubectl create ingress web-ingress --host='*' --path=/api:api-svc:8080"
+    answer: 0
+    answer_command: "kubectl create ingress web-ingress --rule='/api=api-svc:8080' --rule='/*=frontend-svc:80'"
+    explanation: "kubectl create ingress --rule='path=svc:port' cria regras de roteamento. O IngressController (nginx, traefik) implementa o roteamento. Use /* para rota padrão. Para TLS: --rule='host/path=svc:port,tls[=secret]'."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/ingress/"
+    doc_section: "Concepts → Services → Ingress"
+
+  - id: ckad-lab-024
+    cert: CKAD
+    topic: Application Design
+    difficulty: mid
+    type: lab
+    question: "Configure um **PodDisruptionBudget** chamado **critical-app-pdb** para o Deployment **critical-app** garantindo mínimo de **2 pods disponíveis** durante manutenção."
+    options:
+      - "kubectl create pdb critical-app-pdb --min-available=2 --selector=app=critical-app"
+      - "kubectl annotate deployment critical-app pdb.minAvailable=2"
+      - "kubectl scale deployment critical-app --min-available=2"
+      - "kubectl create pdb critical-app-pdb --min-pods=2 --deployment=critical-app"
+    answer: 0
+    answer_command: "kubectl create pdb critical-app-pdb --min-available=2 --selector=app=critical-app"
+    setup:
+      - description: "Criando deployment critical-app..."
+        command: "kubectl create deployment critical-app --image=nginx --replicas=3 2>/dev/null || true"
+    goals:
+      - description: "PDB **critical-app-pdb** existe"
+        hint: "kubectl create pdb critical-app-pdb --min-available=2 --selector=app=critical-app"
+        validation:
+          command: "kubectl get pdb critical-app-pdb -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "critical-app-pdb"
+      - description: "PDB garante mínimo de **2** pods disponíveis"
+        validation:
+          command: "kubectl get pdb critical-app-pdb -o jsonpath='{.spec.minAvailable}' 2>/dev/null"
+          expected_contains: "2"
+    teardown:
+      - "kubectl delete pdb critical-app-pdb --ignore-not-found=true"
+      - "kubectl delete deployment critical-app --ignore-not-found=true"
+    explanation: "PodDisruptionBudget (PDB) limita quantos pods podem ser disrupted simultaneamente durante drenagem de nós ou atualizações. --min-available=2 garante que pelo menos 2 replicas estejam sempre disponíveis. Alternativa: --max-unavailable=1."
+    doc_url: "https://kubernetes.io/docs/tasks/run-application/configure-pdb/"
+    doc_section: "Tasks → Run Application → Configure PDB"
+
+  - id: ckad-lab-025
+    cert: CKAD
+    topic: Configuration
+    difficulty: mid
+    type: lab
+    question: "Projete um Volume de ConfigMap no pod **config-reader** montando o ConfigMap **app-config** no diretório **/etc/config**. Qual campo usar na spec?"
+    options:
+      - "spec.volumes[].configMap e spec.containers[].volumeMounts[] com mountPath=/etc/config"
+      - "spec.containers[].env[].valueFrom.configMapKeyRef"
+      - "spec.envFrom[].configMapRef"
+      - "spec.volumes[].configMap.mountPath=/etc/config"
+    answer: 0
+    answer_command: "kubectl apply -f config-reader.yaml"
+    explanation: "Montar ConfigMap como volume cria arquivos em /etc/config (um arquivo por chave). Diferente de envFrom (importa como variáveis de env). Volumes refletem mudanças no ConfigMap automaticamente (com algum delay), enquanto vars de env requerem reinício do pod."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/#populate-a-volume-with-data-stored-in-a-configmap"
+    doc_section: "Tasks → Configure Pod → ConfigMap → Volume"
+
+  - id: ckad-lab-026
+    cert: CKAD
+    topic: Services
+    difficulty: mid
+    type: lab
+    question: "Descubra o endpoint DNS de um Service **redis** no namespace **cache**. Qual é o formato correto do nome DNS?"
+    options:
+      - "redis.cache"
+      - "redis.cache.svc"
+      - "redis.cache.svc.cluster.local"
+      - "cache.redis.svc.cluster.local"
+    answer: 2
+    answer_command: "nslookup redis.cache.svc.cluster.local"
+    explanation: "O formato DNS completo de Services é: <service>.<namespace>.svc.<cluster-domain>. O cluster domain padrão é 'cluster.local'. Dentro do mesmo namespace, basta usar o nome do service. O DNS é gerenciado pelo CoreDNS."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/"
+    doc_section: "Concepts → Services → DNS"
+
+  # ── HARD: Application Design & Deployment ─────────────────
+  - id: ckad-lab-027
+    cert: CKAD
+    topic: Application Design
+    difficulty: hard
+    type: lab
+    question: "Implemente um **StatefulSet** para um banco de dados **postgresql** com 3 réplicas usando um **volumeClaimTemplate** de 1Gi. Qual campo é exclusivo de StatefulSets (não existe em Deployments)?"
+    options:
+      - "spec.replicas"
+      - "spec.selector"
+      - "spec.volumeClaimTemplates"
+      - "spec.updateStrategy"
+    answer: 2
+    answer_command: "kubectl apply -f postgresql-statefulset.yaml"
+    explanation: "volumeClaimTemplates cria PVCs automaticamente para cada réplica do StatefulSet (ex: data-postgresql-0, data-postgresql-1, data-postgresql-2). Esses PVCs NÃO são deletados quando o StatefulSet é deletado — preservam os dados. StatefulSets também garantem identidade de rede estável (pod-0, pod-1...)."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/"
+    doc_section: "Concepts → Workloads → StatefulSets"
+
+  - id: ckad-lab-028
+    cert: CKAD
+    topic: Application Deployment
+    difficulty: hard
+    type: lab
+    question: "Configure um Canary Deployment onde **10% do tráfego** vai para a versão nova (v2) e **90%** para a versão estável (v1). Qual estratégia usar com Services nativos do Kubernetes?"
+    options:
+      - "kubectl set weight deployment/app-v2 10% deployment/app-v1 90%"
+      - "Usar um único Service e ajustar as réplicas: v1=9 réplicas, v2=1 réplica; o Service distribui proporcionalmente"
+      - "kubectl create ingress canary --v1=90% --v2=10%"
+      - "kubectl annotate service app canary=v2:10%"
+    answer: 1
+    answer_command: "kubectl scale deployment app-v1 --replicas=9 && kubectl scale deployment app-v2 --replicas=1"
+    explanation: "Com Services nativos (sem Ingress controller avançado), o balanceamento é baseado no número de pods. Para 10% canary: v1=9 pods, v2=1 pod. Um Service com selector comum às duas versões distribui o tráfego. Para canary mais preciso: use Nginx Ingress (nginx.ingress.kubernetes.io/canary) ou Istio."
+    doc_url: "https://kubernetes.io/docs/concepts/cluster-administration/manage-deployment/#canary-deployments"
+    doc_section: "Concepts → Cluster Administration → Canary Deployments"
+
+  - id: ckad-lab-029
+    cert: CKAD
+    topic: Configuration
+    difficulty: hard
+    type: lab
+    question: "Um pod precisa montar o **token da ServiceAccount** como arquivo para autenticar na API do K8s. Como fazer de forma segura com volumes projetados?"
+    options:
+      - "spec.volumes[].projected.sources[].serviceAccountToken com expirationSeconds e audience"
+      - "spec.serviceAccountName=default (o token é montado automaticamente em /var/run/secrets/kubernetes.io/serviceaccount)"
+      - "kubectl create secret sa-token --for=serviceaccount"
+      - "spec.volumes[].secret.secretName=default-token"
+    answer: 1
+    answer_command: "kubectl apply -f pod-with-sa.yaml"
+    explanation: "Por padrão, o token da SA é montado automaticamente em /var/run/secrets/kubernetes.io/serviceaccount/token. Para controle mais fino: spec.volumes[].projected.sources[].serviceAccountToken com expirationSeconds específico (Bound Service Account Tokens). automountServiceAccountToken: false desativa a montagem automática."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/"
+    doc_section: "Tasks → Configure Pod → Service Account"
+
+  - id: ckad-lab-030
+    cert: CKAD
+    topic: Observability
+    difficulty: hard
+    type: lab
+    question: "Configure um **startupProbe** no container **slow-app** que verifique **exec: cat /tmp/ready** com **failureThreshold=30** e **periodSeconds=10** (300 segundos total para iniciar)."
+    options:
+      - "startupProbe.httpGet.path=/ready, failureThreshold=30, periodSeconds=10"
+      - "startupProbe.exec.command=['cat', '/tmp/ready'], failureThreshold=30, periodSeconds=10 no YAML"
+      - "livenessProbe.exec.command=['cat', '/tmp/ready'] com initialDelaySeconds=300"
+      - "kubectl set startup deployment/slow --probe=exec:'cat /tmp/ready' --timeout=300"
+    answer: 1
+    answer_command: "kubectl apply -f slow-app.yaml"
+    explanation: "startupProbe evita que livenessProbe mate apps lentas para iniciar. failureThreshold * periodSeconds = janela máxima de startup (30 * 10 = 300s). Após o startupProbe ter sucesso, o livenessProbe assume. Sem startupProbe, use initialDelaySeconds no livenessProbe mas o valor é fixo."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/#define-startup-probes"
+    doc_section: "Tasks → Configure Pod → Probes → Startup"
+
+  - id: ckad-lab-031
+    cert: CKAD
+    topic: Services
+    difficulty: hard
+    type: lab
+    question: "Crie um **NetworkPolicy** que permita que apenas pods no namespace **frontend** com label **role=web** acessem pods no namespace **backend** na porta **3306** (MySQL)."
+    options:
+      - "kubectl create networkpolicy mysql-access --ingress-from-namespace=frontend --ingress-from-label=role=web --port=3306"
+      - "Criar via YAML com podSelector, policyTypes: [Ingress], ingress.from: [{namespaceSelector: {frontend}, podSelector: {role=web}}], ingress.ports: [{port: 3306}]"
+      - "kubectl annotate namespace backend allow-from=frontend"
+      - "kubectl create networkpolicy mysql-access --from=frontend/role=web --port=3306"
+    answer: 1
+    answer_command: "kubectl apply -f network-policy.yaml"
+    explanation: "NetworkPolicy com namespaceSelector + podSelector: ambas as condições no mesmo elemento 'from' são AND (namespace E label). Elementos separados na lista são OR. Requer namespaceSelector que identifique o namespace (use label no namespace). Requer CNI com suporte a NetworkPolicy."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/network-policies/"
+    doc_section: "Concepts → Network Policies"
+
+  - id: ckad-lab-032
+    cert: CKAD
+    topic: Application Design
+    difficulty: hard
+    type: lab
+    question: "Implemente um **DaemonSet** para um agente de monitoramento **node-exporter** com a imagem **prom/node-exporter** que rode em todos os nós incluindo control-plane."
+    options:
+      - "kubectl create daemonset node-exporter --image=prom/node-exporter"
+      - "Criar via YAML com kind: DaemonSet e tolerations para node-role.kubernetes.io/control-plane:NoSchedule"
+      - "kubectl create deployment node-exporter --image=prom/node-exporter --node-selector=all"
+      - "kubectl apply daemonset node-exporter --all-nodes=true"
+    answer: 1
+    answer_command: "kubectl apply -f node-exporter-daemonset.yaml"
+    explanation: "DaemonSets rodam exatamente um pod por nó. Para incluir control-plane (que tem taint node-role.kubernetes.io/control-plane:NoSchedule), adicione toleration correspondente. DaemonSets não podem ser criados via kubectl create diretamente — requerem YAML."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/"
+    doc_section: "Concepts → Workloads → DaemonSets"
+
+  - id: ckad-lab-033
+    cert: CKAD
+    topic: Application Deployment
+    difficulty: hard
+    type: lab
+    question: "O Deployment **api-v2** teve um rollout com problema. Faça rollback para a revisão **2** especificamente."
+    options:
+      - "kubectl rollout undo deployment/api-v2"
+      - "kubectl rollout undo deployment/api-v2 --to-revision=2"
+      - "kubectl rollback deployment api-v2 --revision=2"
+      - "kubectl restore deployment api-v2 --revision=2"
+    answer: 1
+    answer_command: "kubectl rollout undo deployment/api-v2 --to-revision=2"
+    explanation: "--to-revision especifica a revisão exata. Sem ele, reverte para a revisão anterior (N-1). Veja o histórico com 'kubectl rollout history deployment/api-v2 --revision=N' para inspecionar uma revisão específica antes de reverter."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#rolling-back-a-deployment"
+    doc_section: "Concepts → Deployments → Rolling Back"
+
+  - id: ckad-lab-034
+    cert: CKAD
+    topic: Configuration
+    difficulty: hard
+    type: lab
+    question: "Configure o container **app** para que as variáveis de ambiente **sejam populadas de todas as chaves** do ConfigMap **app-config** usando um único campo na spec."
+    options:
+      - "spec.containers[].env[].valueFrom.configMapKeyRef para cada chave individualmente"
+      - "spec.containers[].envFrom[].configMapRef.name=app-config"
+      - "spec.volumes[].configMap.name=app-config e spec.containers[].volumeMounts"
+      - "kubectl set env deployment/app --from=configmap/app-config"
+    answer: 1
+    answer_command: "kubectl set env deployment/app --from=configmap/app-config"
+    explanation: "envFrom.configMapRef importa TODAS as chaves como variáveis de env com um único campo (mais conveniente). env[].valueFrom.configMapKeyRef importa chaves individuais (mais controle). kubectl set env --from=configmap/X faz o mesmo via CLI. Cuidado: mudanças no ConfigMap não atualizam env vars sem restart do pod."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/#configure-all-key-value-pairs-in-a-configmap-as-container-environment-variables"
+    doc_section: "Tasks → Configure Pod → ConfigMap → envFrom"
+
+  - id: ckad-lab-035
+    cert: CKAD
+    topic: Application Design
+    difficulty: hard
+    type: lab
+    question: "Crie um **Job** chamado **parallel-job** que execute 6 tarefas com no máximo **2 rodando simultaneamente** e **3 completions** (imagem busybox, comando: echo task)."
+    options:
+      - "kubectl create job parallel-job --image=busybox --completions=3 --parallelism=2 -- echo 'task'"
+      - "kubectl create job parallel-job --image=busybox --total=6 --concurrent=2 -- echo 'task'"
+      - "kubectl create job parallel-job --image=busybox --max-runs=6 --parallel=2 -- echo 'task'"
+      - "kubectl run parallel-job --image=busybox --restart=OnFailure --completions=3 --parallelism=2"
+    answer: 0
+    answer_command: "kubectl create job parallel-job --image=busybox --completions=3 --parallelism=2 -- echo 'task'"
+    goals:
+      - description: "Job **parallel-job** existe"
+        hint: "kubectl create job parallel-job --image=busybox --completions=3 --parallelism=2 -- echo 'task'"
+        validation:
+          command: "kubectl get job parallel-job -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "parallel-job"
+      - description: "Job tem **3 completions** configuradas"
+        validation:
+          command: "kubectl get job parallel-job -o jsonpath='{.spec.completions}' 2>/dev/null"
+          expected_contains: "3"
+      - description: "Job tem **2 paralelismo** configurado"
+        validation:
+          command: "kubectl get job parallel-job -o jsonpath='{.spec.parallelism}' 2>/dev/null"
+          expected_contains: "2"
+    teardown:
+      - "kubectl delete job parallel-job --ignore-not-found=true"
+    explanation: "--completions define quantas vezes o pod deve completar com sucesso. --parallelism define quantas execuções rodam simultaneamente. O Job garante exatamente --completions execuções bem-sucedidas, respeitando o limite de paralelismo."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/job/#parallel-jobs"
+    doc_section: "Concepts → Workloads → Jobs → Parallel Jobs"
+
+  # ── NOVOS LABS INTERATIVOS (CKAD) ─────────────────────────
+  - id: ckad-lab-036
+    cert: CKAD
+    topic: Configuration
+    difficulty: easy
+    type: lab
+    question: "Crie um ConfigMap **app-config** com os valores **ENV=production** e **DEBUG=false**, depois crie um Pod **config-pod** (busybox, sleep 3600) que carregue essas variáveis via **envFrom**."
+    options:
+      - "kubectl create configmap app-config --from-literal=ENV=production --from-literal=DEBUG=false && kubectl apply -f config-pod.yaml"
+      - "kubectl create configmap app-config ENV=production DEBUG=false"
+      - "kubectl apply configmap --env=ENV=production,DEBUG=false"
+      - "kubectl create configmap app-config --env=ENV:production,DEBUG:false"
+    answer: 0
+    hint: |
+      1. kubectl create configmap app-config --from-literal=ENV=production --from-literal=DEBUG=false
+      2. Crie o pod YAML com envFrom.configMapRef.name=app-config
+    answer_command: "kubectl create configmap app-config --from-literal=ENV=production --from-literal=DEBUG=false"
+    goals:
+      - description: "ConfigMap **app-config** existe com chave **ENV=production**"
+        hint: "kubectl create configmap app-config --from-literal=ENV=production --from-literal=DEBUG=false"
+        validation:
+          command: "kubectl get configmap app-config -o jsonpath='{.data.ENV}' 2>/dev/null"
+          expected_contains: "production"
+      - description: "ConfigMap tem chave **DEBUG=false**"
+        validation:
+          command: "kubectl get configmap app-config -o jsonpath='{.data.DEBUG}' 2>/dev/null"
+          expected_contains: "false"
+      - description: "Pod **config-pod** existe e lê a variável ENV corretamente"
+        hint: "Crie o pod com spec.containers[].envFrom[].configMapRef.name=app-config"
+        validation:
+          command: "kubectl exec config-pod -- env 2>/dev/null | grep 'ENV=production' && echo 'ok'"
+          expected_contains: "ok"
+    teardown:
+      - "kubectl delete pod config-pod --ignore-not-found=true"
+      - "kubectl delete configmap app-config --ignore-not-found=true"
+    explanation: "envFrom.configMapRef importa TODAS as chaves do ConfigMap como variáveis de ambiente. Mais conveniente que env[].valueFrom.configMapKeyRef quando precisa de todas as chaves."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/"
+    doc_section: "Tasks → Configure Pod → ConfigMap"
+
+  - id: ckad-lab-037
+    cert: CKAD
+    topic: Application Deployment
+    difficulty: easy
+    type: lab
+    question: "Crie um Deployment **web** com imagem **nginx:1.21** e **3 réplicas**, depois atualize a imagem para **nginx:1.25** via rolling update."
+    options:
+      - "kubectl create deployment web --image=nginx:1.21 --replicas=3 && kubectl set image deployment/web nginx=nginx:1.25"
+      - "kubectl run web --image=nginx:1.21 --replicas=3 && kubectl update image web nginx:1.25"
+      - "kubectl create deployment web --image=nginx:1.25 --replicas=3"
+      - "kubectl apply deployment web --image=nginx:1.21 && kubectl upgrade web nginx:1.25"
+    answer: 0
+    hint: |
+      1. kubectl create deployment web --image=nginx:1.21 --replicas=3
+      2. kubectl set image deployment/web nginx=nginx:1.25
+      3. kubectl rollout status deployment/web
+    answer_command: "kubectl create deployment web --image=nginx:1.21 --replicas=3 && kubectl set image deployment/web nginx=nginx:1.25"
+    goals:
+      - description: "Deployment **web** existe com **3 réplicas**"
+        hint: "kubectl create deployment web --image=nginx:1.21 --replicas=3"
+        validation:
+          command: "kubectl get deployment web -o jsonpath='{.spec.replicas}' 2>/dev/null"
+          expected_contains: "3"
+      - description: "Imagem foi atualizada para **nginx:1.25**"
+        hint: "kubectl set image deployment/web nginx=nginx:1.25"
+        validation:
+          command: "kubectl get deployment web -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null"
+          expected_contains: "nginx:1.25"
+      - description: "Rollout completado com sucesso (todas as réplicas prontas)"
+        validation:
+          command: "kubectl get deployment web -o jsonpath='{.status.readyReplicas}' 2>/dev/null"
+          expected_contains: "3"
+    teardown:
+      - "kubectl delete deployment web --ignore-not-found=true"
+    explanation: "kubectl set image dispara um rolling update automaticamente. O Deployment substitui os pods antigos gradualmente, mantendo disponibilidade. Use kubectl rollout status para monitorar e kubectl rollout undo para reverter."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#updating-a-deployment"
+    doc_section: "Concepts → Deployments → Updating"
+
+  - id: ckad-lab-038
+    cert: CKAD
+    topic: Observability
+    difficulty: mid
+    type: lab
+    question: "Crie um Pod **probe-pod** (nginx:1.21) com **livenessProbe** HTTP em **/healthz** porta **80**, **initialDelaySeconds=5**, **periodSeconds=10**, e **readinessProbe** TCP na porta **80** com **initialDelaySeconds=3**."
+    options:
+      - "kubectl run probe-pod --image=nginx:1.21 --liveness=http:/healthz:80 --readiness=tcp:80"
+      - "Criar via YAML com livenessProbe.httpGet e readinessProbe.tcpSocket configurados"
+      - "kubectl annotate pod probe-pod liveness=http:80:/healthz readiness=tcp:80"
+      - "kubectl patch pod probe-pod --probe=liveness:http:80:/healthz,readiness:tcp:80"
+    answer: 1
+    hint: |
+      Gere o YAML base e edite:
+        kubectl run probe-pod --image=nginx:1.21 --dry-run=client -o yaml > probe-pod.yaml
+      Adicione livenessProbe e readinessProbe ao container, depois:
+        kubectl apply -f probe-pod.yaml
+    answer_command: "kubectl apply -f probe-pod.yaml"
+    goals:
+      - description: "Pod **probe-pod** existe"
+        validation:
+          command: "kubectl get pod probe-pod -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "probe-pod"
+      - description: "Pod tem **livenessProbe** configurada"
+        validation:
+          command: "kubectl get pod probe-pod -o jsonpath='{.spec.containers[0].livenessProbe.httpGet.path}' 2>/dev/null"
+          expected_contains: "healthz"
+      - description: "Pod tem **readinessProbe** configurada"
+        validation:
+          command: "kubectl get pod probe-pod -o jsonpath='{.spec.containers[0].readinessProbe}' 2>/dev/null | grep -cE 'tcp|80'"
+          expected_contains: "1"
+    teardown:
+      - "kubectl delete pod probe-pod --ignore-not-found=true"
+    explanation: "livenessProbe reinicia o container se falhar. readinessProbe remove o pod dos endpoints do Service se falhar (sem reiniciar). startupProbe protege apps lentas. httpGet verifica resposta HTTP, tcpSocket verifica conectividade TCP, exec executa um comando."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/"
+    doc_section: "Tasks → Configure Pod → Probes"
+
+  - id: ckad-lab-039
+    cert: CKAD
+    topic: Configuration
+    difficulty: mid
+    type: lab
+    question: "Crie um Pod **resource-pod** (nginx:1.21) com **resource requests** de 100m CPU e 128Mi memória e **limits** de 200m CPU e 256Mi memória."
+    options:
+      - "kubectl run resource-pod --image=nginx:1.21 --requests='cpu=100m,memory=128Mi' --limits='cpu=200m,memory=256Mi'"
+      - "kubectl run resource-pod --image=nginx:1.21 --cpu=100m --memory=128Mi --max-cpu=200m --max-memory=256Mi"
+      - "kubectl create pod resource-pod --image=nginx:1.21 --resources=cpu:100m,memory:128Mi"
+      - "kubectl run resource-pod --image=nginx:1.21 --resource-requests=cpu=100m"
+    answer: 0
+    answer_command: "kubectl run resource-pod --image=nginx:1.21 --requests='cpu=100m,memory=128Mi' --limits='cpu=200m,memory=256Mi'"
+    goals:
+      - description: "Pod **resource-pod** existe"
+        hint: "kubectl run resource-pod --image=nginx:1.21 --requests='cpu=100m,memory=128Mi' --limits='cpu=200m,memory=256Mi'"
+        validation:
+          command: "kubectl get pod resource-pod -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "resource-pod"
+      - description: "CPU request está em **100m**"
+        validation:
+          command: "kubectl get pod resource-pod -o jsonpath='{.spec.containers[0].resources.requests.cpu}' 2>/dev/null"
+          expected_contains: "100m"
+      - description: "Memory limit está em **256Mi**"
+        validation:
+          command: "kubectl get pod resource-pod -o jsonpath='{.spec.containers[0].resources.limits.memory}' 2>/dev/null"
+          expected_contains: "256Mi"
+    teardown:
+      - "kubectl delete pod resource-pod --ignore-not-found=true"
+    explanation: "Requests = garantia mínima que influencia o scheduling. Limits = máximo permitido (CPU é throttled, memória causa OOM kill). QoS classes: Guaranteed (requests=limits), Burstable (requests<limits), BestEffort (sem requests/limits)."
+    doc_url: "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
+    doc_section: "Concepts → Configuration → Resource Management"
+
+  - id: ckad-lab-040
+    cert: CKAD
+    topic: Application Design
+    difficulty: mid
+    type: lab
+    question: "Crie um **StatefulSet** chamado **mysql** com imagem **mysql:8.0**, **1 réplica**, variável de ambiente **MYSQL_ROOT_PASSWORD=secret** e um **volumeClaimTemplate** de **1Gi** com StorageClass **standard**."
+    options:
+      - "kubectl create statefulset mysql --image=mysql:8.0 --replicas=1 --volume-claim=1Gi"
+      - "Criar via YAML com kind: StatefulSet, volumeClaimTemplates, e env MYSQL_ROOT_PASSWORD"
+      - "kubectl run mysql --image=mysql:8.0 --stateful --pvc=1Gi"
+      - "kubectl create deployment mysql --image=mysql:8.0 --pvc=standard:1Gi"
+    answer: 1
+    hint: |
+      StatefulSets requerem YAML. Use como base:
+        kubectl create statefulset mysql --image=mysql:8.0 --dry-run=client -o yaml > mysql-sts.yaml
+      Adicione volumeClaimTemplates e env, depois: kubectl apply -f mysql-sts.yaml
+    answer_command: "kubectl apply -f mysql-sts.yaml"
+    goals:
+      - description: "StatefulSet **mysql** existe"
+        validation:
+          command: "kubectl get statefulset mysql -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "mysql"
+      - description: "StatefulSet usa a imagem **mysql:8.0**"
+        validation:
+          command: "kubectl get statefulset mysql -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null"
+          expected_contains: "mysql:8.0"
+      - description: "StatefulSet tem **volumeClaimTemplates** definido"
+        validation:
+          command: "kubectl get statefulset mysql -o jsonpath='{.spec.volumeClaimTemplates[0].metadata.name}' 2>/dev/null"
+          expected_contains: ""
+    teardown:
+      - "kubectl delete statefulset mysql --ignore-not-found=true"
+      - "kubectl delete pvc -l app=mysql --ignore-not-found=true 2>/dev/null || true"
+    explanation: "StatefulSets garantem identidade de rede estável (pod-0, pod-1...) e ordem de criação/deleção. volumeClaimTemplates cria um PVC por réplica automaticamente. Os PVCs sobrevivem à deleção do StatefulSet — dados preservados."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/"
+    doc_section: "Concepts → Workloads → StatefulSets"
+
+  - id: ckad-lab-041
+    cert: CKAD
+    topic: Services
+    difficulty: mid
+    type: lab
+    question: "Crie uma **NetworkPolicy** chamada **allow-frontend** no namespace **default** que permita tráfego de entrada (ingress) na porta **80** apenas de pods com label **app=frontend**."
+    options:
+      - "kubectl create networkpolicy allow-frontend --ingress-from=app=frontend --port=80"
+      - "Criar via YAML com podSelector, policyTypes: [Ingress], ingress.from.podSelector: {app: frontend}, ingress.ports: [{port: 80}]"
+      - "kubectl annotate namespace default allow-from=app=frontend"
+      - "kubectl create networkpolicy allow-frontend --from=frontend --port=80"
+    answer: 1
+    hint: |
+      NetworkPolicies requerem YAML. Exemplo:
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        metadata: {name: allow-frontend}
+        spec:
+          podSelector: {}
+          policyTypes: [Ingress]
+          ingress:
+          - from:
+            - podSelector:
+                matchLabels:
+                  app: frontend
+            ports:
+            - port: 80
+    answer_command: "kubectl apply -f allow-frontend-policy.yaml"
+    goals:
+      - description: "NetworkPolicy **allow-frontend** existe"
+        hint: "Crie via YAML com podSelector e ingress.from.podSelector.matchLabels.app=frontend"
+        validation:
+          command: "kubectl get networkpolicy allow-frontend -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "allow-frontend"
+      - description: "Policy tem tipo **Ingress**"
+        validation:
+          command: "kubectl get networkpolicy allow-frontend -o jsonpath='{.spec.policyTypes[0]}' 2>/dev/null"
+          expected_contains: "Ingress"
+      - description: "Regra permite pods com label **app=frontend**"
+        validation:
+          command: "kubectl get networkpolicy allow-frontend -o jsonpath='{.spec.ingress[0].from[0].podSelector.matchLabels}' 2>/dev/null"
+          expected_contains: "frontend"
+    teardown:
+      - "kubectl delete networkpolicy allow-frontend --ignore-not-found=true"
+    explanation: "NetworkPolicies isolam tráfego de rede entre pods. podSelector sem regras = todos os pods do namespace. from.podSelector seleciona pods origem. from.namespaceSelector seleciona namespaces. Requer CNI com suporte (Calico, Cilium, Weave)."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/network-policies/"
+    doc_section: "Concepts → Network Policies"
+
+  - id: ckad-lab-042
+    cert: CKAD
+    topic: Application Design
+    difficulty: hard
+    type: lab
+    question: "Crie um **DaemonSet** chamado **log-collector** com imagem **busybox** que execute **sleep 3600** e monte o diretório do host **/var/log** como volume **readonly** em **/host-logs**."
+    options:
+      - "kubectl create daemonset log-collector --image=busybox -- sleep 3600 --volume=/var/log:/host-logs:ro"
+      - "Criar via YAML: kind: DaemonSet com volumes.hostPath.path=/var/log e volumeMounts.readOnly=true"
+      - "kubectl run daemonset/log-collector --image=busybox --host-volume=/var/log"
+      - "kubectl create ds log-collector --image=busybox --mount-host=/var/log:/host-logs"
+    answer: 1
+    hint: |
+      DaemonSets requerem YAML:
+        apiVersion: apps/v1
+        kind: DaemonSet
+        metadata: {name: log-collector}
+        spec:
+          selector: {matchLabels: {name: log-collector}}
+          template:
+            metadata: {labels: {name: log-collector}}
+            spec:
+              volumes:
+              - name: host-logs
+                hostPath: {path: /var/log}
+              containers:
+              - name: collector
+                image: busybox
+                command: [sleep, "3600"]
+                volumeMounts:
+                - name: host-logs
+                  mountPath: /host-logs
+                  readOnly: true
+    answer_command: "kubectl apply -f log-collector-ds.yaml"
+    goals:
+      - description: "DaemonSet **log-collector** existe"
+        hint: "Crie via YAML com kind: DaemonSet"
+        validation:
+          command: "kubectl get daemonset log-collector -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "log-collector"
+      - description: "DaemonSet usa imagem **busybox**"
+        validation:
+          command: "kubectl get daemonset log-collector -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null"
+          expected_contains: "busybox"
+      - description: "Volume **hostPath** montado em **/host-logs**"
+        validation:
+          command: "kubectl get daemonset log-collector -o jsonpath='{.spec.template.spec.containers[0].volumeMounts[0].mountPath}' 2>/dev/null"
+          expected_contains: "host-logs"
+    teardown:
+      - "kubectl delete daemonset log-collector --ignore-not-found=true"
+    explanation: "DaemonSets garantem exatamente um pod por nó elegível. hostPath monta diretórios do nó. readOnly=true impede o container de modificar logs do host. Para incluir control-plane, adicione toleration para node-role.kubernetes.io/control-plane:NoSchedule."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/"
+    doc_section: "Concepts → Workloads → DaemonSets"
+
+  - id: ckad-lab-043
+    cert: CKAD
+    topic: Application Deployment
+    difficulty: hard
+    type: lab
+    question: "O Deployment **api-deploy** teve rollout com falha. Visualize o histórico de rollout, depois reverta para a revisão anterior."
+    options:
+      - "kubectl rollout history deployment/api-deploy && kubectl rollout revert deployment/api-deploy"
+      - "kubectl rollout history deployment/api-deploy && kubectl rollout undo deployment/api-deploy"
+      - "kubectl get history deployment api-deploy && kubectl restore deployment api-deploy"
+      - "kubectl describe deployment api-deploy --history && kubectl rollback api-deploy"
+    answer: 1
+    hint: |
+      1. kubectl rollout history deployment/api-deploy
+      2. kubectl rollout undo deployment/api-deploy
+      (Para revisão específica: kubectl rollout undo deployment/api-deploy --to-revision=1)
+    answer_command: "kubectl rollout history deployment/api-deploy && kubectl rollout undo deployment/api-deploy"
+    setup:
+      - description: "Criando deployment api-deploy com nginx:1.21..."
+        command: "kubectl create deployment api-deploy --image=nginx:1.21 2>/dev/null || true"
+      - description: "Aguardando primeira versão..."
+        command: "kubectl rollout status deployment/api-deploy --timeout=60s 2>/dev/null || true"
+      - description: "Atualizando imagem para nginx:1.25 (gerando histórico)..."
+        command: "kubectl set image deployment/api-deploy nginx=nginx:1.25 2>/dev/null || true"
+      - description: "Aguardando rollout completar..."
+        command: "kubectl rollout status deployment/api-deploy --timeout=60s 2>/dev/null || true"
+    goals:
+      - description: "Deployment **api-deploy** foi revertido (revisão anterior restaurada)"
+        hint: "kubectl rollout undo deployment/api-deploy"
+        validation:
+          command: "kubectl get deployment api-deploy -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null"
+          expected_contains: "nginx:1.21"
+    teardown:
+      - "kubectl delete deployment api-deploy --ignore-not-found=true"
+    explanation: "kubectl rollout undo reverte para a revisão anterior (N-1). --to-revision=N para versão específica. Histórico é limitado por spec.revisionHistoryLimit (padrão: 10). Adicione --record às mudanças para incluir o comando no histórico (deprecated mas ainda útil)."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#rolling-back-a-deployment"
+    doc_section: "Concepts → Deployments → Rolling Back"

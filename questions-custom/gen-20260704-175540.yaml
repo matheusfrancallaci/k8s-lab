@@ -1,0 +1,53 @@
+questions:
+    - id: custom-e209f5c0
+      cert: CKA
+      topic: Security
+      difficulty: easy
+      type: lab
+      question: |-
+        Deny-all ingress, passo a passo:
+
+        1. O pod **delta-auth** já existe (setup) com a label app=delta-auth
+        2. Aplique:
+        ```
+        kubectl apply -f - <<EOF
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        metadata:
+          name: delta-auth-deny
+        spec:
+          podSelector:
+            matchLabels:
+              app: delta-auth
+          policyTypes:
+          - Ingress
+        EOF
+        ```
+        3. Sem regras `ingress` listadas, NADA entra — é o padrão seguro do CKS.
+      options: []
+      answer: 0
+      explanation: 'NetworkPolicies funcionam como whitelist por seleção: o podSelector escolhe os pods protegidos; policyTypes declara as direções controladas; e a AUSÊNCIA de regras significa negação total. É a base do isolamento zero-trust cobrado no CKS. Atenção: exige um CNI que implemente NetworkPolicy (Calico/Cilium — o kindnet do minikube padrão não aplica de fato).'
+      doc_url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+      doc_section: Concepts → Network Policies
+      hint: NetworkPolicy com podSelector app=delta-auth e policyTypes [Ingress] sem regras ingress = deny-all.
+      answer_command: 'kubectl apply -f netpol.yaml  # NetworkPolicy delta-auth-deny, podSelector app=delta-auth, policyTypes [Ingress]'
+      validation: null
+      goals:
+        - description: NetworkPolicy **delta-auth-deny** seleciona o pod (app=delta-auth)
+          hint: Use o YAML do passo 2 exatamente.
+          validation:
+            command: kubectl get networkpolicy delta-auth-deny -o jsonpath='{.spec.podSelector.matchLabels.app}' 2>/dev/null
+            expected_contains: delta-auth
+            expected_output: ""
+        - description: A política bloqueia **Ingress** (deny-all)
+          hint: 'spec.policyTypes: [Ingress] e NENHUM item em spec.ingress.'
+          validation:
+            command: kubectl get networkpolicy delta-auth-deny -o jsonpath='{.spec.policyTypes}' 2>/dev/null
+            expected_contains: Ingress
+            expected_output: ""
+      setup:
+        - description: Criando o pod alvo delta-auth...
+          command: kubectl run delta-auth --image=nginx:1.21 --labels=app=delta-auth --restart=Never 2>/dev/null || true
+      teardown:
+        - kubectl delete networkpolicy delta-auth-deny --ignore-not-found=true
+        - kubectl delete pod delta-auth --ignore-not-found=true

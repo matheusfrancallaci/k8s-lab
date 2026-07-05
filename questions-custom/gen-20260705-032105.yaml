@@ -1,0 +1,74 @@
+questions:
+    - id: custom-88a82069
+      cert: CKA
+      topic: Core Concepts
+      difficulty: easy
+      type: lab
+      question: |-
+        Namespaces e quotas, passo a passo:
+
+        1. `kubectl create namespace lab-orion`
+        2. `kubectl create quota lab-orion-quota --hard=pods=5 -n lab-orion`
+        3. `kubectl run orion-api --image=nginx:1.21 -n lab-orion`
+        4. Veja o consumo: `kubectl describe quota -n lab-orion` (used: 1/5)
+      options: []
+      answer: 0
+      explanation: Namespaces particionam o cluster (nomes, RBAC, quotas, network policies por escopo). ResourceQuota impõe limites agregados — pods, cpu, memória, PVCs. Quando estourada, o API server REJEITA a criação (403 exceeded quota), não mata nada existente. describe quota mostra used vs hard — ótimo para diagnóstico.
+      doc_url: https://kubernetes.io/docs/concepts/policy/resource-quotas/
+      doc_section: Concepts → Policy → Resource Quotas
+      hint: kubectl create ns lab-orion; kubectl create quota lab-orion-quota --hard=pods=5 -n lab-orion; kubectl run orion-api --image=nginx:1.21 -n lab-orion
+      answer_command: kubectl create ns lab-orion; kubectl create quota lab-orion-quota --hard=pods=5 -n lab-orion; kubectl run orion-api --image=nginx:1.21 -n lab-orion
+      validation: null
+      goals:
+        - description: Quota de **5 pods** ativa no namespace **lab-orion**
+          hint: kubectl create quota lab-orion-quota --hard=pods=5 -n lab-orion
+          validation:
+            command: kubectl get quota -n lab-orion -o jsonpath='{.items[0].spec.hard.pods}' 2>/dev/null
+            expected_contains: "5"
+            expected_output: ""
+        - description: Pod **orion-api** Running dentro de **lab-orion**
+          hint: kubectl run orion-api --image=nginx:1.21 -n lab-orion
+          validation:
+            command: kubectl get pod orion-api -n lab-orion -o jsonpath='{.status.phase}' 2>/dev/null
+            expected_contains: Running
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete namespace lab-orion --ignore-not-found=true --wait=false
+    - id: custom-a414cb23
+      cert: CKA
+      topic: Core Concepts
+      difficulty: easy
+      type: lab
+      question: |-
+        Vamos criar um Pod passo a passo:
+
+        1. Use `kubectl run nova-gateway --image=nginx:1.25 --labels=app=nova-gateway`
+        2. Confirme com `kubectl get pod nova-gateway --show-labels`
+        3. Aguarde o STATUS ficar **Running**
+
+        Um Pod é a menor unidade do Kubernetes: um ou mais containers que compartilham rede e storage.
+      options: []
+      answer: 0
+      explanation: kubectl run cria um Pod único, sem controller por trás — se morrer, ninguém recria (diferente de um Deployment). Labels são pares chave=valor usados por selectors de Services, NetworkPolicies e afins para localizar pods. --show-labels no get exibe as labels.
+      doc_url: https://kubernetes.io/docs/concepts/workloads/pods/
+      doc_section: Concepts → Workloads → Pods
+      hint: kubectl run nova-gateway --image=nginx:1.25 --labels=app=nova-gateway
+      answer_command: kubectl run nova-gateway --image=nginx:1.25 --labels=app=nova-gateway
+      validation: null
+      goals:
+        - description: Pod **nova-gateway** está **Running**
+          hint: 'Comando completo: kubectl run nova-gateway --image=nginx:1.25 --labels=app=nova-gateway — depois aguarde alguns segundos.'
+          validation:
+            command: kubectl get pod nova-gateway -o jsonpath='{.status.phase}' 2>/dev/null
+            expected_contains: Running
+            expected_output: ""
+        - description: Pod tem a label **app=nova-gateway**
+          hint: 'Se esqueceu a label: kubectl label pod nova-gateway app=nova-gateway'
+          validation:
+            command: kubectl get pod nova-gateway -o jsonpath='{.metadata.labels.app}' 2>/dev/null
+            expected_contains: nova-gateway
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete pod nova-gateway --ignore-not-found=true

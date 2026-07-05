@@ -1,0 +1,160 @@
+questions:
+  - id: argocd-mid-001
+    cert: ArgoCD
+    topic: Sync Strategies
+    difficulty: mid
+    type: multiple_choice
+    question: "O que é 'Sync Waves' no ArgoCD e como usar para controlar a ordem de deploy de recursos?"
+    options:
+      - "Uma feature que divide o tráfego entre versões novas e antigas durante deploy"
+      - "Uma anotação (argocd.argoproj.io/sync-wave) que define a ordem de aplicação dos recursos — recursos de waves menores são aplicados e verificados antes dos de waves maiores"
+      - "Um método de rolling update que atualiza recursos em ondas de 10% por vez"
+      - "Uma configuração do Helm para controlar a ordem de instalação de charts"
+    answer: 1
+    explanation: "Sync Waves: anotação 'argocd.argoproj.io/sync-wave: \"0\"' (número inteiro, pode ser negativo). O ArgoCD aplica recursos em ordem crescente de wave, aguardando cada wave ser 'Healthy' antes de avançar. Use: wave -1 para Namespaces, wave 0 para CRDs, wave 1 para Deployments, wave 2 para jobs de teste."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/sync-waves/"
+    doc_section: "ArgoCD Docs → User Guide → Sync Waves"
+
+  - id: argocd-mid-002
+    cert: ArgoCD
+    topic: Application Management
+    difficulty: mid
+    type: multiple_choice
+    question: "O que é 'ApplicationSet' no ArgoCD e qual problema ele resolve?"
+    options:
+      - "Um conjunto de snapshots de Applications para rollback rápido"
+      - "Um CRD que gera múltiplas Applications automaticamente baseado em generators (cluster, git, list), eliminando a repetição de criar uma Application por ambiente"
+      - "Uma ferramenta para sincronizar múltiplas Applications simultaneamente"
+      - "Um tipo especial de AppProject para grandes organizações"
+    answer: 1
+    explanation: "ApplicationSet usa generators para criar Applications em escala: (1) ClusterGenerator: uma app por cluster registrado, (2) GitGenerator: uma app por pasta/branch no Git, (3) ListGenerator: uma app por item de uma lista. Elimina copiar/colar specs de Application para cada ambiente ou cluster."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/application-set/"
+    doc_section: "ArgoCD Docs → User Guide → ApplicationSet"
+
+  - id: argocd-mid-003
+    cert: ArgoCD
+    topic: Security
+    difficulty: mid
+    type: multiple_choice
+    question: "Como configurar RBAC no ArgoCD para que um time 'backend-team' só possa sincronizar Applications em um projeto específico 'backend'?"
+    options:
+      - "Adicionar backend-team ao ClusterRole admin do Kubernetes"
+      - "Criar uma policy no ConfigMap argocd-rbac-cm: 'p, role:backend-dev, applications, sync, backend/*, allow' e associar o grupo ao role"
+      - "Criar um RoleBinding no namespace argocd para o grupo backend-team"
+      - "Configurar um AppProject com backend-team como owner"
+    answer: 1
+    explanation: "ArgoCD RBAC usa policies no ConfigMap 'argocd-rbac-cm'. Formato: 'p, <subject>, <resource>, <action>, <object>, allow/deny'. Para grupos SSO: 'g, <group>, role:<rolename>'. O AppProject também tem roles próprios via spec.roles[]. Esse RBAC é independente do RBAC do Kubernetes."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/rbac/"
+    doc_section: "ArgoCD Docs → Operator Manual → RBAC"
+
+  - id: argocd-mid-004
+    cert: ArgoCD
+    topic: Sync Strategies
+    difficulty: mid
+    type: multiple_choice
+    question: "O que é 'prune' na sincronização do ArgoCD e quando pode ser perigoso?"
+    options:
+      - "Prune comprime os logs do ArgoCD para economizar espaço"
+      - "Prune deleta do cluster recursos que foram removidos do repositório Git; pode ser perigoso se usado sem revisão em produção"
+      - "Prune remove versões antigas de imagens do registry"
+      - "Prune otimiza as regras de rede para melhorar a performance"
+    answer: 1
+    explanation: "Prune: quando ativado (spec.syncPolicy.automated.prune: true ou --prune na CLI), o ArgoCD deleta recursos do cluster que não existem mais no Git. Perigoso sem cuidado: um delete acidental no Git pode derrubar produção. Mitigação: use 'argocd.argoproj.io/sync-options: Prune=false' em recursos críticos."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/#automatic-pruning"
+    doc_section: "ArgoCD Docs → User Guide → Automatic Pruning"
+
+  - id: argocd-mid-005
+    cert: ArgoCD
+    topic: Application Management
+    difficulty: mid
+    type: multiple_choice
+    question: "Como usar Kustomize com ArgoCD para ter configurações diferentes por ambiente (dev/staging/prod)?"
+    options:
+      - "Criar uma Application por ambiente com --path apontando para overlays/dev, overlays/staging, overlays/prod"
+      - "Usar uma única Application com --kustomize.env=production"
+      - "Criar branches separadas no Git para cada ambiente"
+      - "Usar Helm em vez de Kustomize para suporte multi-ambiente"
+    answer: 0
+    explanation: "Estrutura Kustomize típica: base/ (configs comuns), overlays/dev/ overlays/staging/ overlays/prod/ (cada um com um kustomization.yaml que refência base e aplica patches). ArgoCD detecta Kustomize automaticamente. Cada Application aponta para um overlay diferente com --path overlays/<env>."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/kustomize/"
+    doc_section: "ArgoCD Docs → User Guide → Kustomize"
+
+  - id: argocd-mid-006
+    cert: ArgoCD
+    topic: Architecture
+    difficulty: mid
+    type: multiple_choice
+    question: "O que é 'Managed Cluster' no ArgoCD e como adicionar um cluster externo?"
+    options:
+      - "Um cluster Kubernetes que roda o ArgoCD"
+      - "Um cluster de destino registrado no ArgoCD para deploy, diferente do cluster onde o ArgoCD está instalado"
+      - "Um cluster de alta disponibilidade gerenciado pelo ArgoCD"
+      - "Um namespace isolado tratado pelo ArgoCD como cluster separado"
+    answer: 1
+    explanation: "ArgoCD pode gerenciar múltiplos clusters. Para adicionar: 'argocd cluster add <context-name>' (o contexto deve estar no kubeconfig). O ArgoCD cria uma ServiceAccount no cluster de destino com permissões para criar recursos. O cluster local é referenciado como 'https://kubernetes.default.svc'."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/#clusters"
+    doc_section: "ArgoCD Docs → Operator Manual → Clusters"
+
+  - id: argocd-mid-007
+    cert: ArgoCD
+    topic: Sync Strategies
+    difficulty: mid
+    type: multiple_choice
+    question: "O que são 'Sync Options' e como usar 'CreateNamespace=true'?"
+    options:
+      - "Opções de performance para acelerar o processo de sync"
+      - "Configurações adicionais de sync: 'CreateNamespace=true' faz o ArgoCD criar o namespace de destino automaticamente se não existir"
+      - "Flags que controlam quantos recursos são sincronizados em paralelo"
+      - "Configurações de retry automático em caso de falha de sync"
+    answer: 1
+    explanation: "Sync Options são anotações ou campos spec.syncPolicy.syncOptions. Exemplos: CreateNamespace=true (cria namespace se não existir), Prune=false (protege recurso de ser deletado), Replace=true (usa replace em vez de apply), ServerSideApply=true (usa server-side apply), FailOnSharedResource=true (falha se recurso é gerenciado por outra app)."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/"
+    doc_section: "ArgoCD Docs → User Guide → Sync Options"
+
+  - id: argocd-mid-008
+    cert: ArgoCD
+    topic: Application Management
+    difficulty: mid
+    type: multiple_choice
+    question: "Como implantar um Helm chart do repositório oficial com ArgoCD e passar valores customizados?"
+    options:
+      - "argocd app create --repo https://charts.bitnami.com --chart nginx --helm-set replicaCount=3"
+      - "argocd app create --repo https://charts.bitnami.com/bitnami --chart nginx --revision 15.0.0 --dest-namespace web --helm-set replicaCount=3"
+      - "helm install nginx bitnami/nginx --argocd-sync"
+      - "argocd helm install nginx --chart bitnami/nginx --values custom-values.yaml"
+    answer: 1
+    explanation: "Para Helm repos: --repo aponta para o repositório Helm (não Git), --chart especifica o chart name, --revision é a versão do chart, --helm-set passa valores inline. Alternativamente, aponte --repo para um Git repo contendo o values.yaml e o chart como subchart, para versionamento dos valores."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/helm/"
+    doc_section: "ArgoCD Docs → User Guide → Helm"
+
+  - id: argocd-mid-009
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: mid
+    type: multiple_choice
+    question: "O que é o recurso 'Image Updater' para ArgoCD e qual problema ele resolve?"
+    options:
+      - "Uma ferramenta para atualizar a versão do ArgoCD automaticamente"
+      - "Um componente que monitora registries de container e atualiza automaticamente a tag da imagem no repositório Git quando uma nova versão é publicada"
+      - "Um scanner de vulnerabilidades integrado ao ArgoCD"
+      - "Uma ferramenta de rollback que restaura a versão anterior da imagem"
+    answer: 1
+    explanation: "ArgoCD Image Updater monitora registries (Docker Hub, ECR, GCR) e quando detecta uma nova tag que corresponde ao padrão configurado (semver, latest, regex), atualiza o valor da imagem no repositório Git (commit automático) ou diretamente na Application. Completa o loop GitOps para CD."
+    doc_url: "https://argocd-image-updater.readthedocs.io/"
+    doc_section: "ArgoCD Image Updater Docs"
+
+  - id: argocd-mid-010
+    cert: ArgoCD
+    topic: Sync Strategies
+    difficulty: mid
+    type: multiple_choice
+    question: "O que acontece com recursos que têm a anotação 'argocd.argoproj.io/managed-by' de outra Application?"
+    options:
+      - "O ArgoCD ignora esses recursos silenciosamente"
+      - "Por padrão, o ArgoCD considera um recurso compartilhado como erro se 'FailOnSharedResource=true' está configurado, ou o adota na Application atual se não houver conflito"
+      - "O segundo ArgoCD instance assume controle do recurso"
+      - "O recurso é imediatamente deletado"
+    answer: 1
+    explanation: "Recursos têm a annotation 'app.kubernetes.io/managed-by' indicando qual Application os gerencia. Se duas Applications tentam gerenciar o mesmo recurso, com FailOnSharedResource=true o sync falha. Sem essa opção, o comportamento pode ser imprevisível. Use namespaces separados por Application para evitar conflitos."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/"
+    doc_section: "ArgoCD Docs → User Guide → Sync Options"

@@ -1,0 +1,420 @@
+{{define "content"}}
+<style>
+.tutor-root { height:100vh; background:var(--bg); overflow:hidden; }
+.chat-wrap {
+    height:100%; max-width:760px; margin:0 auto;
+    display:flex; flex-direction:column; padding:0 20px;
+}
+
+/* ── header discreto ── */
+.chat-top {
+    display:flex; align-items:center; justify-content:flex-end; gap:10px;
+    padding:14px 2px 0; flex-shrink:0;
+}
+.llm-pill {
+    display:inline-flex; align-items:center; gap:7px;
+    padding:4px 12px; border-radius:999px; border:1px solid var(--border-2);
+    background:var(--surface-2); font-family:var(--mono); font-size:10px; color:var(--text-3);
+}
+
+/* ── área de conversa ── */
+.chat-log { flex:1; overflow-y:auto; padding:18px 2px 12px; scroll-behavior:smooth; }
+
+/* saudação (estado vazio) */
+.chat-hero { text-align:center; padding:9vh 12px 20px; animation:fadeUp .4s ease both; }
+.chat-hero .t-greet {
+    font-size:30px; font-weight:800; letter-spacing:-.5px; margin:18px 0 8px;
+    background:linear-gradient(92deg,var(--violet) 10%,#38bdf8 60%,var(--green) 110%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+.chat-hero .t-sub { font-size:13px; color:var(--text-3); margin-bottom:30px; }
+.sugg-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:560px; margin:0 auto; }
+.sugg {
+    text-align:left; padding:14px 16px; border-radius:14px;
+    border:1px solid var(--border-2); background:var(--surface-2);
+    cursor:pointer; transition:border-color .16s, transform .16s, box-shadow .2s;
+}
+.sugg:hover { border-color:var(--violet-b); transform:translateY(-2px); box-shadow:0 10px 30px -12px rgba(91,95,239,.35); }
+.sugg .s-ico { font-size:16px; margin-bottom:6px; }
+.sugg .s-t { font-size:12.5px; font-weight:700; color:var(--text); margin-bottom:2px; }
+.sugg .s-d { font-size:11px; color:var(--text-3); line-height:1.45; }
+@media (max-width:600px){ .sugg-grid { grid-template-columns:1fr; } }
+
+/* mensagens */
+.msg { display:flex; gap:12px; margin-bottom:22px; animation:fadeUp .28s ease both; }
+.msg.user { justify-content:flex-end; }
+.msg.user .bubble {
+    max-width:78%; padding:11px 16px; border-radius:18px 18px 4px 18px;
+    background:linear-gradient(135deg,rgba(124,130,247,.16),rgba(91,95,239,.10));
+    border:1px solid rgba(129,140,248,.28);
+    font-size:13.5px; color:var(--text); line-height:1.55; white-space:pre-wrap; word-break:break-word;
+}
+.msg.tutor .t-ava { flex-shrink:0; margin-top:2px; }
+.msg.tutor .t-content { max-width:85%; font-size:13.5px; color:var(--text-2); line-height:1.65; }
+.msg.tutor .t-content strong { color:var(--text); }
+.msg.tutor .t-content code {
+    font-family:var(--mono); font-size:12px; background:var(--surface-3);
+    padding:1px 6px; border-radius:4px; color:#93c5fd;
+}
+.typing { display:inline-flex; gap:4px; padding:6px 2px; }
+.typing i { width:6px; height:6px; border-radius:50%; background:var(--violet); opacity:.4; animation:tybl 1.2s infinite; }
+.typing i:nth-child(2){ animation-delay:.18s; } .typing i:nth-child(3){ animation-delay:.36s; }
+@keyframes tybl { 0%,60%,100%{opacity:.25;transform:translateY(0);} 30%{opacity:1;transform:translateY(-3px);} }
+
+/* cards dentro do chat */
+.chat-card {
+    margin-top:10px; border-radius:14px; border:1px solid var(--border-2);
+    background:var(--surface-2); padding:14px 16px;
+}
+.chat-card .cc-title { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--text-4); margin-bottom:10px; font-family:var(--mono); }
+
+/* ── barra de entrada (estilo Gemini) ── */
+.chat-input-zone { flex-shrink:0; padding:8px 0 18px; }
+.cert-row { display:flex; align-items:center; gap:6px; margin-bottom:8px; padding:0 4px; }
+.cert-chip {
+    padding:3px 11px; border-radius:999px; font-family:var(--mono); font-size:10px; font-weight:600;
+    color:var(--text-4); border:1px solid transparent; background:transparent; cursor:pointer;
+    transition:all .14s;
+}
+.cert-chip.active { color:var(--violet); border-color:var(--violet-glow); background:var(--violet-dim); }
+.chat-input {
+    position:relative; display:flex; align-items:flex-end; gap:8px;
+    border-radius:22px; border:1px solid var(--border-2); background:var(--surface-2);
+    padding:8px 8px 8px 20px; transition:border-color .2s, box-shadow .25s;
+}
+.chat-input:focus-within {
+    border-color:var(--violet-b);
+    box-shadow:0 0 0 1px var(--violet-glow), 0 12px 40px -14px rgba(91,95,239,.45);
+}
+.chat-input textarea {
+    flex:1; resize:none; border:none; outline:none; background:transparent;
+    color:var(--text); font-family:var(--sans); font-size:13.5px; line-height:1.5;
+    max-height:130px; padding:6px 0;
+}
+.chat-input textarea::placeholder { color:var(--text-4); }
+.send-btn {
+    width:38px; height:38px; border-radius:50%; border:none; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    background:linear-gradient(135deg,#7c82f7,#5b5fef); color:#fff;
+    transition:transform .15s, opacity .15s, box-shadow .2s;
+}
+.send-btn:hover { transform:scale(1.06); box-shadow:0 6px 18px -6px rgba(91,95,239,.7); }
+.send-btn:disabled { opacity:.35; cursor:default; transform:none; }
+.send-btn svg { width:16px; height:16px; }
+.chat-foot { text-align:center; font-size:10px; color:var(--text-4); margin-top:8px; font-family:var(--mono); }
+</style>
+
+<div class="shell">
+{{template "sidebar" .}}
+<div class="shell-main tutor-root">
+
+<div class="chat-wrap">
+
+    <div class="chat-top">
+        <div class="llm-pill">
+            <div id="llm-dot" style="width:6px;height:6px;border-radius:50%;background:var(--text-4);flex-shrink:0;"></div>
+            <span id="llm-text">verificando IA local...</span>
+        </div>
+    </div>
+
+    <div class="chat-log" id="chat-log">
+        <!-- Saudação -->
+        <div class="chat-hero" id="chat-hero">
+            <div style="display:flex;justify-content:center;">
+                <svg class="tutor-avatar" width="84" height="84" viewBox="0 0 64 64" fill="none" aria-label="Tutor">
+                    <defs>
+                        <linearGradient id="tgrad" x1="0" y1="0" x2="64" y2="64">
+                            <stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#38bdf8"/>
+                        </linearGradient>
+                    </defs>
+                    <line x1="32" y1="7" x2="32" y2="12" stroke="url(#tgrad)" stroke-width="2.5" stroke-linecap="round"/>
+                    <circle cx="32" cy="5.5" r="2.6" fill="#38bdf8"/>
+                    <rect x="4.5" y="26" width="4" height="11" rx="2" fill="#818cf8" opacity=".55"/>
+                    <rect x="55.5" y="26" width="4" height="11" rx="2" fill="#38bdf8" opacity=".55"/>
+                    <rect x="10" y="12" width="44" height="39" rx="12" stroke="url(#tgrad)" stroke-width="2.5" fill="rgba(129,140,248,.08)"/>
+                    <g class="ta-eye">
+                        <circle cx="23.5" cy="29" r="4.2" fill="#818cf8"/>
+                        <circle cx="40.5" cy="29" r="4.2" fill="#38bdf8"/>
+                        <circle cx="24.9" cy="27.6" r="1.4" fill="#fff" opacity=".95"/>
+                        <circle cx="41.9" cy="27.6" r="1.4" fill="#fff" opacity=".95"/>
+                    </g>
+                    <path d="M24 40c2.6 3.2 13.4 3.2 16 0" stroke="url(#tgrad)" stroke-width="2.6" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h1 class="t-greet" id="greet-text">Como posso te ajudar hoje?</h1>
+            <p class="t-sub">Peça um lab, cole uma URL de documentação, ou só converse sobre Kubernetes.</p>
+
+            <div class="sugg-grid">
+                <button class="sugg" onclick="sendSuggestion('crie um lab de storage nível 3 passo a passo')">
+                    <div class="s-ico">✦</div>
+                    <div class="s-t">Lab sob medida</div>
+                    <div class="s-d">"crie um lab de storage nível 3 passo a passo"</div>
+                </button>
+                <button class="sugg" onclick="sendSuggestion('modo incidente: quebre o cluster para eu consertar')">
+                    <div class="s-ico">🚨</div>
+                    <div class="s-t">Modo Incidente</div>
+                    <div class="s-d">o cluster chega quebrado — diagnostique e conserte</div>
+                </button>
+                <button class="sugg" onclick="sendSuggestion('quero fazer um simulado completo')">
+                    <div class="s-ico">🏆</div>
+                    <div class="s-t">Simulado de prova</div>
+                    <div class="s-d">16 questões · 2 horas · sem dicas · score report</div>
+                </button>
+                <button class="sugg" onclick="sendSuggestion('como está meu desempenho?')">
+                    <div class="s-ico">📊</div>
+                    <div class="s-t">Meu desempenho</div>
+                    <div class="s-d">pontos fortes, fracos e recomendações</div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="chat-input-zone">
+        <div class="cert-row" id="cert-row">
+            <span style="font-family:var(--mono);font-size:9px;color:var(--text-4);letter-spacing:.1em;">FOCO:</span>
+            <!-- chips renderizados dinamicamente do registro de certificações -->
+        </div>
+        <div class="chat-input">
+            <textarea id="chat-text" rows="1" placeholder="Pergunte, peça um lab, ou cole uma URL de documentação..."
+                onkeydown="chatKey(event)" oninput="autoGrow(this)"></textarea>
+            <button class="send-btn" id="send-btn" onclick="sendChat()" aria-label="Enviar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
+            </button>
+        </div>
+        <p class="chat-foot">Enter envia · Shift+Enter quebra linha · 100% local, custo zero</p>
+    </div>
+
+</div>
+</div>
+</div>
+
+<script>
+const TUTOR_MINI = '<svg width="26" height="26" viewBox="0 0 64 64" fill="none"><rect x="10" y="12" width="44" height="39" rx="12" stroke="#818cf8" stroke-width="4" fill="rgba(129,140,248,.1)"/><circle cx="23.5" cy="29" r="5" fill="#818cf8"/><circle cx="40.5" cy="29" r="5" fill="#38bdf8"/><path d="M24 40c2.6 3.2 13.4 3.2 16 0" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/></svg>';
+let chatCert = 'CKA';
+let chatBusy = false;
+
+// ── util ────────────────────────────────────────────────────
+function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function mdLite(s) {
+    return escH(s)
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\n/g, '<br>');
+}
+function scrollBottom() {
+    const log = document.getElementById('chat-log');
+    requestAnimationFrame(() => log.scrollTop = log.scrollHeight);
+}
+function hideHero() {
+    const h = document.getElementById('chat-hero');
+    if (h) h.remove();
+}
+
+// ── mensagens ───────────────────────────────────────────────
+function addUser(text) {
+    hideHero();
+    const el = document.createElement('div');
+    el.className = 'msg user';
+    el.innerHTML = `<div class="bubble">${escH(text)}</div>`;
+    document.getElementById('chat-log').appendChild(el);
+    scrollBottom();
+}
+function addTutor(html) {
+    hideHero();
+    const el = document.createElement('div');
+    el.className = 'msg tutor';
+    el.innerHTML = `<div class="t-ava">${TUTOR_MINI}</div><div class="t-content">${html}</div>`;
+    document.getElementById('chat-log').appendChild(el);
+    scrollBottom();
+    return el.querySelector('.t-content');
+}
+function addTyping() {
+    return addTutor('<span class="typing"><i></i><i></i><i></i></span>');
+}
+function updateTyping(slot, text) {
+    slot.innerHTML = mdLite(text);
+    scrollBottom();
+}
+
+// ── envio ───────────────────────────────────────────────────
+function pickCert(btn) {
+    chatCert = btn.dataset.cert;
+    document.querySelectorAll('.cert-chip').forEach(c => c.classList.toggle('active', c === btn));
+}
+
+// Board personalizável: chips vêm do registro (builtin + cadastradas via chat)
+function renderCertChips(certs) {
+    const row = document.getElementById('cert-row');
+    row.querySelectorAll('.cert-chip').forEach(c => c.remove());
+    (certs || ['CKA', 'CKAD', 'CKS', 'ArgoCD']).forEach(c => {
+        const b = document.createElement('button');
+        b.className = 'cert-chip' + (c === chatCert ? ' active' : '');
+        b.dataset.cert = c;
+        b.textContent = c;
+        b.onclick = () => pickCert(b);
+        row.appendChild(b);
+    });
+    const plus = document.createElement('button');
+    plus.className = 'cert-chip';
+    plus.title = 'Cadastrar nova certificação';
+    plus.textContent = '＋';
+    plus.onclick = () => {
+        const ta = document.getElementById('chat-text');
+        ta.value = 'criar certificação ';
+        ta.focus(); autoGrow(ta);
+    };
+    row.appendChild(plus);
+}
+async function refreshCerts() {
+    try {
+        const r = await fetch('/api/tutor/status');
+        const d = await r.json();
+        renderCertChips(d.certs);
+    } catch (e) { renderCertChips(null); }
+}
+function autoGrow(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 130) + 'px'; }
+function chatKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+}
+function sendSuggestion(text) {
+    document.getElementById('chat-text').value = text;
+    sendChat();
+}
+
+async function sendChat() {
+    const ta = document.getElementById('chat-text');
+    const text = ta.value.trim();
+    if (!text || chatBusy) return;
+    chatBusy = true;
+    document.getElementById('send-btn').disabled = true;
+    ta.value = ''; autoGrow(ta);
+
+    addUser(text);
+    const slot = addTyping();
+    try {
+        const r = await fetch('/api/tutor/chat/stream', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text, cert: chatCert })
+        });
+        const reader = r.body?.getReader();
+        const decoder = new TextDecoder();
+        let out = '';
+        if (reader) {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                out += decoder.decode(value, { stream: true });
+                slot.innerHTML = mdLite(out || '...');
+                scrollBottom();
+            }
+            out += decoder.decode();
+        }
+        slot.innerHTML = mdLite(out || '...');
+    } catch (e) {
+        slot.innerHTML = 'algo deu errado por aqui — tenta de novo?';
+    }
+    chatBusy = false;
+    document.getElementById('send-btn').disabled = false;
+    ta.focus();
+    scrollBottom();
+}
+
+// ── ações do tutor ──────────────────────────────────────────
+function renderAction(slot, a) {
+    if (a.type === 'session') {
+        slot.insertAdjacentHTML('beforeend',
+            `<div class="chat-card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                <span style="font-size:12px;color:var(--text-3);">${a.total} exercício(s) prontos, ambiente preparando</span>
+                <a class="btn btn-primary btn-sm" href="/lab/${escH(a.first)}?session=${escH(a.id)}">▶ Começar agora</a>
+             </div>`);
+    } else if (a.type === 'exam') {
+        slot.insertAdjacentHTML('beforeend',
+            `<div class="chat-card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                <span style="font-size:12px;color:var(--text-3);">16 questões · 120 min · sem dicas</span>
+                <button class="btn btn-primary btn-sm" onclick="startExam()">🏆 Iniciar Exame</button>
+             </div>`);
+    } else if (a.type === 'certs') {
+        refreshCerts();
+    } else if (a.type === 'stats') {
+        renderStatsCard(slot);
+    }
+    scrollBottom();
+}
+
+async function startExam() {
+    try {
+        const r = await fetch('/lab/session', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ certs: [chatCert], count: 16 })
+        });
+        const d = await r.json();
+        if (d.first) window.location.href = '/lab/' + d.first + '?session=' + d.id + '&exam=1';
+    } catch (e) {}
+}
+
+function scoreColor(s) { return s >= .7 ? 'var(--green)' : s >= .5 ? 'var(--amber)' : 'var(--red)'; }
+
+async function renderStatsCard(slot) {
+    try {
+        const r = await fetch('/api/tutor/status');
+        const d = await r.json();
+        const stats = (d.stats || []).filter(s => s.attempts > 0).sort((a, b) => a.score - b.score);
+        if (!stats.length) {
+            slot.insertAdjacentHTML('beforeend', '<div class="chat-card">ainda não tenho dados seus — resolve uns labs que eu começo a te conhecer 😉</div>');
+            return;
+        }
+        let rows = '';
+        stats.forEach(s => {
+            rows += `<div class="skill-row" style="grid-template-columns:1fr 70px 2fr 44px;">
+                <span class="skill-topic" style="font-size:12px;">${escH(s.topic)}</span>
+                <span class="skill-cert">${escH(s.cert)}·${s.attempts}x</span>
+                <div class="skill-bar"><div style="width:${Math.round(s.score*100)}%;background:${scoreColor(s.score)};"></div></div>
+                <span class="skill-meta">${Math.round(s.score*100)}%</span></div>`;
+        });
+        const weakest = stats[0];
+        let cta = '';
+        if (weakest && weakest.score < .65) {
+            cta = `<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="sendSuggestion('crie um lab de ${escH(weakest.topic.toLowerCase())} nível 3')">✦ Treinar ${escH(weakest.topic)} agora</button></div>`;
+        }
+        slot.insertAdjacentHTML('beforeend', `<div class="chat-card"><div class="cc-title">desempenho por tópico</div>${rows}${cta}</div>`);
+        scrollBottom();
+    } catch (e) {}
+}
+
+// ── boot: LLM pill + saudação proativa ──────────────────────
+(async function init() {
+    try {
+        const r = await fetch('/api/tutor/status');
+        const d = await r.json();
+        const dot = document.getElementById('llm-dot');
+        const txt = document.getElementById('llm-text');
+        renderCertChips(d.certs);
+        if (d.llm && d.llm.available) {
+            dot.style.background = 'var(--green)';
+            txt.textContent = 'IA local · ' + d.llm.model.split(':')[0];
+        } else {
+            txt.textContent = 'modo heurístico · instale o Ollama p/ conversa livre';
+        }
+        // recomendação vira mensagem proativa do tutor
+        const rec = (d.recommendations || [])[0];
+        if (rec) {
+            const slot = addTutor(mdLite('Percebi algo: ' + rec.reason));
+            slot.insertAdjacentHTML('beforeend',
+                `<div class="chat-card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                    <span style="font-size:12px;color:var(--text-3);">lab nível ${rec.level} de ${escH(rec.topic)}</span>
+                    <button class="btn btn-primary btn-sm" onclick="sendSuggestion('crie um lab de ${escH(rec.topic.toLowerCase())} nível ${rec.level}')">✦ Bora treinar</button>
+                 </div>`);
+        }
+        // saudação por hora do dia
+        const h = new Date().getHours();
+        const g = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
+        const gt = document.getElementById('greet-text');
+        if (gt) gt.textContent = g + '! Como posso te ajudar?';
+    } catch (e) {}
+    document.getElementById('chat-text').focus();
+    // deep-link: /tutor?q=... envia direto (paleta Ctrl+K usa isso)
+    const dq = new URLSearchParams(location.search).get('q');
+    if (dq) sendSuggestion(dq);
+})();
+</script>
+{{end}}

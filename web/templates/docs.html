@@ -1,0 +1,148 @@
+{{define "content"}}
+<div class="shell">
+{{template "sidebar" .}}
+<div class="shell-main">
+
+    <div style="flex:1;overflow-y:auto;padding:32px 28px 60px;">
+
+        <!-- Header -->
+        <div style="max-width:1280px;margin:0 auto 26px auto;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;">
+            <div>
+                <div class="term-prompt" style="margin-bottom:12px;">
+                    <span class="sym">❯</span><span>k8s-lab docs --all</span><span class="term-cursor"></span>
+                </div>
+                <h1 style="font-size:26px;font-weight:900;color:var(--text);letter-spacing:-.5px;">Referência &amp; Documentação</h1>
+                <p class="comment" style="margin-top:4px;">// tudo que você precisa para CKA · CKAD · CKS · ArgoCD</p>
+            </div>
+            <div class="search-box" style="width:300px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" id="docs-search" placeholder="Filtrar links..." oninput="filterDocs()" autocomplete="off">
+            </div>
+        </div>
+
+        <!-- Reference columns -->
+        <div class="docs-cols">
+
+            <div class="docs-group">
+                <div class="docs-group-title" style="color:var(--violet);">
+                    <img src="/static/vendor/kubernetes.svg" style="width:14px;height:14px;" alt=""> kubernetes core
+                </div>
+                <a class="docs-link" href="https://kubernetes.io/docs/home/" target="_blank">Documentação Oficial</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/reference/kubectl/quick-reference/" target="_blank">kubectl Quick Reference</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/reference/kubectl/cheatsheet/" target="_blank">kubectl Cheatsheet</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/reference/kubernetes-api/" target="_blank">API Reference</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/concepts/" target="_blank">Concepts</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/tasks/" target="_blank">Tasks (como fazer)</a>
+            </div>
+
+            <div class="docs-group">
+                <div class="docs-group-title" style="color:var(--green);">
+                    <img src="/static/vendor/kubernetes.svg" alt=""> CKA · administrator
+                </div>
+                <a class="docs-link" href="https://github.com/cncf/curriculum/blob/master/CKA_Curriculum.pdf" target="_blank">Currículo Oficial CKA</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/concepts/scheduling-eviction/" target="_blank">Scheduling &amp; Eviction</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/concepts/cluster-administration/" target="_blank">Cluster Administration</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/" target="_blank">kubeadm</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/concepts/storage/" target="_blank">Storage — PV, PVC, SC</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/concepts/services-networking/" target="_blank">Networking &amp; Services</a>
+                <a class="docs-link" href="https://github.com/alijahnas/CKA-practice-exercises" target="_blank">CKA Practice Exercises</a>
+            </div>
+
+            <div class="docs-group">
+                <div class="docs-group-title" style="color:#a78bfa;">
+                    <img src="/static/vendor/kubernetes.svg" alt=""> CKAD · developer
+                </div>
+                <a class="docs-link" href="https://github.com/cncf/curriculum/blob/master/CKAD_Curriculum.pdf" target="_blank">Currículo Oficial CKAD</a>
+                <a class="docs-link" href="https://github.com/dgkanatsios/CKAD-exercises" target="_blank">CKAD Exercises (GitHub)</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/concepts/workloads/" target="_blank">Workloads</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/concepts/configuration/" target="_blank">ConfigMaps &amp; Secrets</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/concepts/containers/" target="_blank">Containers &amp; Probes</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/" target="_blank">HPA — Auto Scaling</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/concepts/workloads/controllers/job/" target="_blank">Jobs &amp; CronJobs</a>
+            </div>
+
+            <div class="docs-group">
+                <div class="docs-group-title" style="color:var(--red);">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg> CKS · security
+                </div>
+                <a class="docs-link" href="https://github.com/walidshaari/Certified-Kubernetes-Security-Specialist" target="_blank">CKS Resources (GitHub)</a>
+                <a class="docs-link" href="https://github.com/cncf/curriculum/blob/master/CKS_Curriculum.pdf" target="_blank">Currículo Oficial CKS</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/concepts/security/" target="_blank">Security Concepts</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/reference/access-authn-authz/rbac/" target="_blank">RBAC</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/concepts/policy/pod-security-admission/" target="_blank">Pod Security Admission</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/" target="_blank">Encrypt Data at Rest</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/reference/access-authn-authz/audit/" target="_blank">Audit Logging</a>
+            </div>
+
+            <div class="docs-group">
+                <div class="docs-group-title" style="color:var(--orange);">
+                    <img src="https://raw.githubusercontent.com/cncf/artwork/main/projects/argo/icon/color/argo-icon-color.png" style="width:14px;height:14px;" alt=""> ArgoCD · gitops
+                </div>
+                <a class="docs-link" href="https://argo-cd.readthedocs.io/en/stable/" target="_blank">Docs Oficiais ArgoCD</a>
+                <a class="docs-link" href="https://argo-cd.readthedocs.io/en/stable/getting_started/" target="_blank">Getting Started</a>
+                <a class="docs-link" href="https://argo-cd.readthedocs.io/en/stable/user-guide/app-spec/" target="_blank">Application Spec</a>
+                <a class="docs-link" href="https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/" target="_blank">Sync Options</a>
+                <a class="docs-link" href="https://argo-cd.readthedocs.io/en/stable/user-guide/app-deletion/" target="_blank">App Deletion</a>
+                <a class="docs-link" href="https://github.com/argoproj/argo-cd" target="_blank">GitHub argoproj/argo-cd</a>
+            </div>
+
+            <div class="docs-group">
+                <div class="docs-group-title" style="color:var(--amber);">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> ferramentas
+                </div>
+                <a class="docs-link" href="https://helm.sh/docs/" target="_blank">Helm Docs</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/" target="_blank">Kustomize</a>
+                <a class="docs-link" href="https://minikube.sigs.k8s.io/docs/" target="_blank">Minikube Docs</a>
+                <a class="docs-link" href="https://github.com/ahmetb/kubectx" target="_blank">kubectx / kubens</a>
+                <a class="docs-link" href="https://k9scli.io/" target="_blank">k9s — TUI para K8s</a>
+                <a class="docs-link" href="https://github.com/stern/stern" target="_blank">stern — multi-pod logs</a>
+            </div>
+
+            <div class="docs-group">
+                <div class="docs-group-title" style="color:var(--green);">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> prática &amp; simulados
+                </div>
+                <a class="docs-link" href="https://killer.sh/" target="_blank">killer.sh (simulado oficial)</a>
+                <a class="docs-link" href="https://labs.play-with-k8s.com/" target="_blank">Play with Kubernetes</a>
+                <a class="docs-link" href="https://github.com/alijahnas/CKA-practice-exercises" target="_blank">CKA Practice Exercises</a>
+                <a class="docs-link" href="https://github.com/dgkanatsios/CKAD-exercises" target="_blank">CKAD Exercises</a>
+                <a class="docs-link" href="https://github.com/cncf/curriculum" target="_blank">CNCF Curriculum (todos)</a>
+            </div>
+
+            <div class="docs-group">
+                <div class="docs-group-title" style="color:#67e8f9;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></svg> workloads
+                </div>
+                <a class="docs-link" href="https://kubernetes.io/docs/concepts/workloads/controllers/deployment/" target="_blank">Deployments</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/" target="_blank">StatefulSets</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/" target="_blank">DaemonSets</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/concepts/services-networking/ingress/" target="_blank">Ingress</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/concepts/services-networking/network-policies/" target="_blank">NetworkPolicy</a>
+                <a class="docs-link" href="https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/" target="_blank">Liveness &amp; Readiness Probes</a>
+            </div>
+
+        </div>
+        <div class="empty-state" id="docs-empty" style="display:none;">// nenhum link corresponde</div>
+    </div>
+</div>
+
+</div>
+<script>
+function filterDocs() {
+    const q = (document.getElementById('docs-search').value || '').toLowerCase().trim();
+    let anyVisible = 0;
+    document.querySelectorAll('.docs-group').forEach(group => {
+        const title = group.querySelector('.docs-group-title').textContent.toLowerCase();
+        let groupVisible = 0;
+        group.querySelectorAll('.docs-link').forEach(link => {
+            const match = !q || link.textContent.toLowerCase().includes(q) || title.includes(q);
+            link.classList.toggle('hidden', !match);
+            if (match) groupVisible++;
+        });
+        group.classList.toggle('hidden', groupVisible === 0);
+        anyVisible += groupVisible;
+    });
+    document.getElementById('docs-empty').style.display = anyVisible === 0 ? 'block' : 'none';
+}
+</script>
+{{end}}

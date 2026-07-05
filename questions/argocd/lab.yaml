@@ -1,0 +1,773 @@
+questions:
+  # ── EASY: Core Concepts ───────────────────────────────────
+  - id: argocd-lab-001
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Liste todas as Applications ArgoCD no namespace **argocd** via kubectl."
+    options:
+      - "kubectl get apps -n argocd"
+      - "kubectl get applications.argoproj.io -n argocd"
+      - "argocd app list"
+      - "B e C estão corretas"
+    answer: 3
+    answer_command: "kubectl get applications.argoproj.io -n argocd"
+    explanation: "Applications são CRDs (Custom Resource Definitions) do ArgoCD. Via kubectl: 'kubectl get applications.argoproj.io -n argocd' ou 'kubectl get app -n argocd'. Via CLI: 'argocd app list'. Os recursos ficam no namespace onde o ArgoCD está instalado (tipicamente 'argocd')."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/app-overview/"
+    doc_section: "User Guide → Application Overview"
+
+  - id: argocd-lab-002
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Crie uma Application ArgoCD via CLI que sincronize o repositório **https://github.com/org/app** (path: **manifests/**) para o namespace **production**."
+    options:
+      - "argocd app create my-app --repo=https://github.com/org/app --path=manifests/ --dest-namespace=production --dest-server=https://kubernetes.default.svc"
+      - "kubectl create application my-app --git=https://github.com/org/app --path=manifests/ -n argocd"
+      - "argocd create app my-app --source=https://github.com/org/app --target=production"
+      - "argocd app new my-app --repository=https://github.com/org/app --path=manifests/ --namespace=production"
+    answer: 0
+    answer_command: "argocd app create my-app --repo=https://github.com/org/app --path=manifests/ --dest-namespace=production --dest-server=https://kubernetes.default.svc"
+    explanation: "argocd app create requer: --repo (URL Git), --path (diretório no repo), --dest-server (cluster destino), --dest-namespace (namespace destino). Para o cluster local: --dest-server=https://kubernetes.default.svc. Adicione --sync-policy=automated para auto-sync."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/app-overview/#creating-apps-via-cli"
+    doc_section: "User Guide → Creating Apps via CLI"
+
+  - id: argocd-lab-003
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Sincronize manualmente a Application **my-app** via CLI do ArgoCD."
+    options:
+      - "argocd app refresh my-app"
+      - "argocd app sync my-app"
+      - "kubectl apply -n argocd -l app=my-app"
+      - "argocd app update my-app --sync"
+    answer: 1
+    answer_command: "argocd app sync my-app"
+    explanation: "argocd app sync dispara uma sincronização imediata, aplicando os manifests do Git ao cluster. Adicione --force para ignorar diferenças e forçar substituição. --dry-run previews as mudanças. --prune remove recursos que não estão mais no Git."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/"
+    doc_section: "User Guide → Sync Options"
+
+  - id: argocd-lab-004
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Verifique o status de sincronização e saúde da Application **my-app**."
+    options:
+      - "argocd app status my-app"
+      - "kubectl describe application my-app -n argocd"
+      - "argocd app get my-app"
+      - "A e C estão corretas"
+    answer: 2
+    answer_command: "argocd app get my-app"
+    explanation: "argocd app get mostra: Sync Status (Synced/OutOfSync), Health Status (Healthy/Degraded/Progressing/Missing), condições de erro, e os recursos gerenciados. Para monitorar continuamente: argocd app wait my-app --health. kubectl describe também mostra status via CRD."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/app-overview/"
+    doc_section: "User Guide → Application Status"
+
+  - id: argocd-lab-005
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Faça login no servidor ArgoCD via CLI apontando para **https://argocd.example.com**."
+    options:
+      - "argocd connect --server=https://argocd.example.com --user=admin"
+      - "argocd login argocd.example.com"
+      - "kubectl config set-context argocd --server=https://argocd.example.com"
+      - "argocd auth login --endpoint=https://argocd.example.com"
+    answer: 1
+    answer_command: "argocd login argocd.example.com --username=admin --password=<password>"
+    explanation: "argocd login autentica contra o API server do ArgoCD. Sem porta: usa 443 para HTTPS. Use --insecure para ignorar TLS em ambientes de teste. O token é salvo em ~/.config/argocd/config. argocd logout encerra a sessão."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/commands/argocd_login/"
+    doc_section: "User Guide → CLI → argocd login"
+
+  - id: argocd-lab-006
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Adicione um repositório Git privado ao ArgoCD usando SSH key."
+    options:
+      - "argocd repo add https://github.com/private/repo --type=git --ssh-key=~/.ssh/id_rsa"
+      - "argocd repo add git@github.com:private/repo --ssh-private-key-path=~/.ssh/id_rsa"
+      - "kubectl create secret generic repo-key --from-file=sshPrivateKey=~/.ssh/id_rsa -n argocd"
+      - "argocd app create --repo=git@github.com:private/repo --ssh-key=~/.ssh/id_rsa"
+    answer: 1
+    answer_command: "argocd repo add git@github.com:private/repo --ssh-private-key-path=~/.ssh/id_rsa"
+    explanation: "argocd repo add adiciona repositórios ao ArgoCD. Para SSH: use URL git@ e --ssh-private-key-path. Para HTTPS privado: --username e --password (ou PAT). O ArgoCD armazena as credenciais como Secrets no namespace argocd."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/private-repositories/"
+    doc_section: "User Guide → Private Repositories"
+
+  - id: argocd-lab-007
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Liste todos os clusters registrados no ArgoCD."
+    options:
+      - "argocd cluster list"
+      - "kubectl get clusters -n argocd"
+      - "argocd app list --clusters"
+      - "kubectl get endpoints -n argocd"
+    answer: 0
+    answer_command: "argocd cluster list"
+    explanation: "argocd cluster list mostra todos os clusters registrados (SERVER URL, NAME, STATUS). O cluster local sempre aparece como 'https://kubernetes.default.svc'. Para adicionar um cluster externo: argocd cluster add <context-name> do seu kubeconfig."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/cluster-management/"
+    doc_section: "Operator Manual → Cluster Management"
+
+  - id: argocd-lab-008
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Qual é o endereço do cluster Kubernetes **local** (in-cluster) que deve ser usado ao criar uma Application ArgoCD que deploye no mesmo cluster?"
+    options:
+      - "https://localhost:6443"
+      - "https://kubernetes.default.svc"
+      - "https://127.0.0.1:6443"
+      - "https://cluster.local:443"
+    answer: 1
+    answer_command: "argocd app create app --dest-server=https://kubernetes.default.svc"
+    explanation: "https://kubernetes.default.svc é o endpoint da API Kubernetes acessível de dentro do cluster (via Service 'kubernetes' no namespace 'default'). O ArgoCD usa esse endpoint para deployar no mesmo cluster onde está instalado. Para clusters externos, use a URL do API server externo."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/#clusters"
+    doc_section: "Operator Manual → Declarative Setup → Clusters"
+
+  - id: argocd-lab-009
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Configure uma Application ArgoCD para sincronizar automaticamente quando há mudanças no repositório Git (**auto-sync**)."
+    options:
+      - "argocd app set my-app --sync-policy=auto"
+      - "argocd app set my-app --auto-sync"
+      - "argocd app set my-app --sync-policy=automated"
+      - "kubectl annotate application my-app argocd.argoproj.io/auto-sync=true -n argocd"
+    answer: 2
+    answer_command: "argocd app set my-app --sync-policy=automated"
+    explanation: "argocd app set --sync-policy=automated ativa o auto-sync (ArgoCD verifica o repo periodicamente e sincroniza automaticamente ao detectar diferenças). Adicione --self-heal para reverter mudanças manuais no cluster, e --auto-prune para deletar recursos removidos do Git."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/"
+    doc_section: "User Guide → Auto Sync"
+
+  - id: argocd-lab-010
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Visualize o diff entre o estado desejado (Git) e o estado atual do cluster para a Application **my-app**."
+    options:
+      - "argocd app status my-app --show-diff"
+      - "argocd app diff my-app"
+      - "kubectl diff -f manifests/ -n production"
+      - "argocd app compare my-app"
+    answer: 1
+    answer_command: "argocd app diff my-app"
+    explanation: "argocd app diff mostra as diferenças entre Git (desejado) e cluster (atual) — similar a 'kubectl diff'. Útil antes de sincronizar para revisar o que será aplicado. Status 'OutOfSync' significa que existe diff. Sem diff = 'Synced'."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/app-overview/#app-diff"
+    doc_section: "User Guide → App Diff"
+
+  - id: argocd-lab-011
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Delete a Application **old-app** do ArgoCD **sem** deletar os recursos Kubernetes associados."
+    options:
+      - "argocd app delete old-app --keep-resources"
+      - "argocd app delete old-app --non-cascade"
+      - "argocd app delete old-app"
+      - "kubectl delete application old-app -n argocd"
+    answer: 1
+    answer_command: "argocd app delete old-app --non-cascade"
+    explanation: "--non-cascade remove apenas o objeto Application do ArgoCD, mantendo os recursos Kubernetes (Deployments, Services, etc.) que foram criados por ele. Sem a flag, a deleção é cascade (deleta Application + todos os recursos gerenciados). Use --non-cascade quando quer manter o app rodando mas parar de gerenciá-lo via GitOps."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/app-overview/#deleting-an-application"
+    doc_section: "User Guide → Deleting an Application"
+
+  - id: argocd-lab-012
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Atualize a imagem de um Deployment via GitOps com ArgoCD. Qual é a abordagem correta?"
+    options:
+      - "kubectl set image deployment/app container=new-image:v2 → ArgoCD vai reverter a mudança (self-heal)"
+      - "Fazer commit da mudança de imagem no repositório Git → ArgoCD sincroniza automaticamente"
+      - "argocd app set my-app --image=new-image:v2"
+      - "argocd app patch my-app --image=new-image:v2"
+    answer: 1
+    answer_command: "git commit -m 'feat: update image to v2' && git push"
+    explanation: "GitOps: Git é a fonte de verdade. Toda mudança deve ir via commit no repositório. Com self-heal ativado, mudanças manuais diretas no cluster são revertidas pelo ArgoCD. O fluxo: PR → review → merge → ArgoCD detecta → sincroniza automaticamente."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/#automatic-self-healing"
+    doc_section: "User Guide → Auto Sync → Self Healing"
+
+  - id: argocd-lab-013
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Rotacione a senha do usuário **admin** do ArgoCD."
+    options:
+      - "argocd account update-password --current-password=<old> --new-password=<new>"
+      - "kubectl edit secret argocd-initial-admin-secret -n argocd"
+      - "argocd admin set-password --password=<new>"
+      - "kubectl patch secret argocd-secret -n argocd --password=<new>"
+    answer: 0
+    answer_command: "argocd account update-password --account=admin --current-password=<old> --new-password=<new>"
+    explanation: "argocd account update-password atualiza a senha via API. A senha inicial do admin fica em 'argocd-initial-admin-secret'. Para gerenciamento de usuários via declarativo: ConfigMap 'argocd-cm' (users) e 'argocd-rbac-cm' (roles). Prefira SSO (OIDC/SAML) para usuários humanos."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/commands/argocd_account_update-password/"
+    doc_section: "User Guide → CLI → argocd account"
+
+  - id: argocd-lab-014
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "A Application **my-app** está **OutOfSync**. Qual é a diferença entre **Refresh** e **Sync** no ArgoCD?"
+    options:
+      - "Refresh e Sync fazem a mesma coisa — são sinônimos"
+      - "Refresh compara Git vs cluster e atualiza o status; Sync aplica as mudanças do Git ao cluster"
+      - "Refresh reinicia os pods; Sync atualiza a imagem"
+      - "Refresh atualiza o cache local; Sync push para o Git"
+    answer: 1
+    answer_command: "argocd app get my-app --refresh && argocd app sync my-app"
+    explanation: "Refresh (Hard Refresh): ArgoCD faz novo fetch do Git e compara com o estado atual — atualiza o status da Application (Synced/OutOfSync) mas NÃO aplica mudanças. Sync: efetivamente aplica os manifests do Git ao cluster. Use Hard Refresh se o status estiver desatualizado."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/"
+    doc_section: "User Guide → Sync Options"
+
+  - id: argocd-lab-015
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Configure uma Application ArgoCD via **manifesto YAML declarativo** (Application CRD). Qual campo define a URL do repositório Git?"
+    options:
+      - "spec.source.git"
+      - "spec.source.repoURL"
+      - "spec.repository"
+      - "spec.gitRepo"
+    answer: 1
+    answer_command: "kubectl apply -f application.yaml -n argocd"
+    explanation: "Application CRD tem spec.source.repoURL (URL do Git), spec.source.path (diretório no repo), spec.source.targetRevision (branch/tag/commit), spec.destination.server (cluster) e spec.destination.namespace. Declarar Applications via YAML (GitOps-level) é a melhor prática — 'App of Apps pattern'."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/#applications"
+    doc_section: "Operator Manual → Declarative Setup → Applications"
+
+  # ── MID: Advanced Features ────────────────────────────────
+  - id: argocd-lab-016
+    cert: ArgoCD
+    topic: Helm
+    difficulty: mid
+    type: lab
+    question: "Crie uma Application ArgoCD que deploy um chart Helm do repositório **https://charts.bitnami.com/bitnami** (chart: postgresql, namespace: db)."
+    options:
+      - "argocd app create postgres --repo=https://charts.bitnami.com/bitnami --chart=postgresql --dest-namespace=db --dest-server=https://kubernetes.default.svc"
+      - "argocd app create postgres --helm-repo=https://charts.bitnami.com/bitnami --helm-chart=postgresql --namespace=db"
+      - "argocd helm install postgres bitnami/postgresql --namespace=db"
+      - "argocd app create postgres --source=helm:bitnami/postgresql --target=db"
+    answer: 0
+    answer_command: "argocd app create postgres --repo=https://charts.bitnami.com/bitnami --chart=postgresql --revision=12.0.0 --dest-namespace=db --dest-server=https://kubernetes.default.svc"
+    explanation: "Para Helm charts direto de um Helm repository (não Git): use --chart (nome do chart) em vez de --path. --revision especifica a versão do chart. Para sobrescrever values: adicione --helm-set key=value ou --values-literal-file values.yaml."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/helm/"
+    doc_section: "User Guide → Helm"
+
+  - id: argocd-lab-017
+    cert: ArgoCD
+    topic: Helm
+    difficulty: mid
+    type: lab
+    question: "Passe **values customizados** para um Helm chart gerenciado pelo ArgoCD sem modificar o Chart.yaml no repositório."
+    options:
+      - "argocd app set my-helm-app --helm-set image.tag=v2.0 --helm-set replicaCount=3"
+      - "argocd app set my-helm-app --values=custom-values.yaml"
+      - "kubectl apply -f helm-values-configmap.yaml -n argocd"
+      - "argocd app create --override image.tag=v2.0"
+    answer: 0
+    answer_command: "argocd app set my-helm-app --helm-set image.tag=v2.0 --helm-set replicaCount=3"
+    explanation: "--helm-set aplica overrides de values (equivalente ao -f ou --set do helm). Múltiplos --helm-set são acumulativos. Alternativa: --helm-set-file para valores de arquivos, --helm-values para múltiplos arquivos values.yaml do repositório."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/helm/#helm-set"
+    doc_section: "User Guide → Helm → helm set"
+
+  - id: argocd-lab-018
+    cert: ArgoCD
+    topic: GitOps
+    difficulty: mid
+    type: lab
+    question: "Configure a Application para **sincronizar automaticamente e reverter mudanças manuais** feitas diretamente no cluster (self-healing)."
+    options:
+      - "argocd app set my-app --sync-policy=automated --self-heal"
+      - "argocd app set my-app --auto-sync --revert-manual"
+      - "argocd app set my-app --sync-policy=self-heal"
+      - "kubectl annotate application my-app argocd.argoproj.io/self-heal=true -n argocd"
+    answer: 0
+    answer_command: "argocd app set my-app --sync-policy=automated --self-heal"
+    explanation: "--self-heal faz o ArgoCD reverter automaticamente mudanças feitas manualmente no cluster (fora do Git). Garante que Git é sempre a fonte de verdade. Combine com --auto-prune para deletar recursos não presentes no Git. Essencial para GitOps rigoroso."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/#automatic-self-healing"
+    doc_section: "User Guide → Auto Sync → Self Healing"
+
+  - id: argocd-lab-019
+    cert: ArgoCD
+    topic: GitOps
+    difficulty: mid
+    type: lab
+    question: "Implemente o **App of Apps pattern** do ArgoCD. Qual é o conceito fundamental?"
+    options:
+      - "Um Deployment que gerencia múltiplos pods de diferentes aplicações"
+      - "Uma Application raiz que gerencia outras Applications ArgoCD via manifests YAML no Git"
+      - "Um script que cria múltiplas Applications via argocd CLI em loop"
+      - "Um Helm chart que instala múltiplos charts ao mesmo tempo"
+    answer: 1
+    answer_command: "argocd app create root-app --repo=... --path=apps/ --dest-server=... --dest-namespace=argocd"
+    explanation: "App of Apps: uma Application 'root' aponta para um diretório Git que contém Application YAMLs. O ArgoCD gerencia as Applications filho automaticamente. Permite bootstrapping completo de um cluster a partir do Git. As Applications filho apontam para os apps reais."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/cluster-bootstrapping/"
+    doc_section: "Operator Manual → Cluster Bootstrapping → App of Apps"
+
+  - id: argocd-lab-020
+    cert: ArgoCD
+    topic: GitOps
+    difficulty: mid
+    type: lab
+    question: "Qual é a diferença entre **sync waves** e **resource hooks** no ArgoCD?"
+    options:
+      - "São a mesma coisa — terminologias diferentes para o mesmo recurso"
+      - "Sync waves definem ordem de sincronização por grupos de recursos; resource hooks executam Jobs em fases específicas (PreSync, Sync, PostSync)"
+      - "Sync waves são para Helm; resource hooks são para Kustomize"
+      - "Sync waves controlam rollback; resource hooks controlam health checks"
+    answer: 1
+    answer_command: "# Wave: kubectl annotate resource argocd.argoproj.io/sync-wave: '2'"
+    explanation: "Sync Waves (argocd.argoproj.io/sync-wave): recursos com wave menor são aplicados primeiro. Resource Hooks (argocd.argoproj.io/hook: PreSync/Sync/PostSync/SyncFail/PostDelete): Jobs executados em fases específicas do sync (ex: migration antes do deploy, smoke test depois). Ambos controlam a ordem e podem ser combinados."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/sync-waves/"
+    doc_section: "User Guide → Sync Waves"
+
+  - id: argocd-lab-021
+    cert: ArgoCD
+    topic: Kustomize
+    difficulty: mid
+    type: lab
+    question: "Configure uma Application ArgoCD usando **Kustomize** com overlay de produção localizado em **overlays/production/**."
+    options:
+      - "argocd app create my-app --repo=... --path=overlays/production/ --dest-namespace=production --dest-server=... --kustomize=true"
+      - "argocd app create my-app --repo=... --kustomize-path=overlays/production/ --dest-namespace=production"
+      - "argocd app create my-app --repo=... --path=overlays/production/ --dest-namespace=production --dest-server=..."
+      - "argocd app create my-app --repo=... --kustomize=overlays/production/ --namespace=production"
+    answer: 2
+    answer_command: "argocd app create my-app --repo=https://github.com/org/app --path=overlays/production/ --dest-namespace=production --dest-server=https://kubernetes.default.svc"
+    explanation: "ArgoCD detecta automaticamente Kustomize quando há um kustomization.yaml no --path. Não é necessário flag especial. O ArgoCD roda 'kustomize build' internamente. Para sobrescrever images: --kustomize-image nginx=nginx:v2 ou via spec.source.kustomize.images."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/kustomize/"
+    doc_section: "User Guide → Kustomize"
+
+  - id: argocd-lab-022
+    cert: ArgoCD
+    topic: RBAC
+    difficulty: mid
+    type: lab
+    question: "Configure RBAC no ArgoCD para que o usuário **alice** tenha acesso de **leitura** a todas as Applications mas não possa sincronizar."
+    options:
+      - "argocd rbac create-role reader --permission=get,list --resource=applications"
+      - "Editar o ConfigMap argocd-rbac-cm: adicionar 'p, alice, applications, get, */*, allow'"
+      - "kubectl create role argocd-reader --verb=get,list --resource=applications -n argocd"
+      - "argocd account update alice --role=readonly"
+    answer: 1
+    answer_command: "kubectl edit configmap argocd-rbac-cm -n argocd"
+    explanation: "ArgoCD RBAC é configurado no ConfigMap 'argocd-rbac-cm'. Sintaxe Casbin: 'p, subject, resource, action, object, allow/deny'. Exemplo: 'p, alice, applications, get, */*, allow' e 'p, alice, applications, sync, */*, deny'. Roles built-in: role:admin, role:readonly."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/rbac/"
+    doc_section: "Operator Manual → RBAC"
+
+  - id: argocd-lab-023
+    cert: ArgoCD
+    topic: GitOps
+    difficulty: mid
+    type: lab
+    question: "Configure o ArgoCD para **ignorar diferenças** específicas em um recurso (ex: campo **spec.replicas** gerenciado pelo HPA)."
+    options:
+      - "argocd app set my-app --ignore-field=spec.replicas"
+      - "Adicionar spec.ignoreDifferences com group, kind e jsonPointers na Application YAML"
+      - "kubectl annotate deployment app argocd.argoproj.io/ignore-diff=spec.replicas"
+      - "argocd app set my-app --sync-exclude=spec.replicas"
+    answer: 1
+    answer_command: "kubectl edit application my-app -n argocd # adicionar spec.ignoreDifferences"
+    explanation: "spec.ignoreDifferences permite que o ArgoCD ignore campos específicos ao calcular diff (não considera OutOfSync). Essencial para recursos gerenciados por controllers externos (HPA muda spec.replicas, webhooks adicionam annotations). Use jsonPointers: [\"/spec/replicas\"]."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/diffing/"
+    doc_section: "User Guide → Diffing"
+
+  - id: argocd-lab-024
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: mid
+    type: lab
+    question: "Configure um **ApplicationSet** para criar Applications automaticamente para cada diretório em um repositório Git."
+    options:
+      - "argocd appset create --git-dir-generator --repo=..."
+      - "Criar ApplicationSet com spec.generators[].git.directories[] apontando para os diretórios"
+      - "argocd app create --auto-discover=true --repo=..."
+      - "kubectl create applicationset --git-discovery --repo=..."
+    answer: 1
+    answer_command: "kubectl apply -f applicationset.yaml -n argocd"
+    explanation: "ApplicationSet é um CRD que usa generators para criar múltiplas Applications automaticamente. Git Directory Generator descobre diretórios/arquivos no repo. Outros generators: List, Cluster, Matrix. Permite gerenciar dezenas/centenas de Applications com um único recurso declarativo."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/"
+    doc_section: "Operator Manual → ApplicationSet"
+
+  - id: argocd-lab-025
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: mid
+    type: lab
+    question: "Monitore o histórico de sincronizações da Application **my-app** para auditoria."
+    options:
+      - "argocd app logs my-app --history"
+      - "argocd app history my-app"
+      - "kubectl get events -n argocd --field-selector=involvedObject.name=my-app"
+      - "B e C fornecem informações complementares"
+    answer: 1
+    answer_command: "argocd app history my-app"
+    explanation: "argocd app history lista todas as sincronizações com ID, data, usuário que triggerou, revisão do Git (commit SHA) e resultado. Útil para auditoria e para rollback: 'argocd app rollback my-app <history-id>'. Cada sync bem-sucedido é salvo como revision history."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/commands/argocd_app_history/"
+    doc_section: "User Guide → CLI → argocd app history"
+
+  # ── HARD: Advanced GitOps ─────────────────────────────────
+  - id: argocd-lab-026
+    cert: ArgoCD
+    topic: GitOps
+    difficulty: hard
+    type: lab
+    question: "Implemente uma estratégia de **Progressive Delivery** com Argo Rollouts: qual recurso substitui o Deployment para suportar Canary e Blue/Green nativamente?"
+    options:
+      - "ArgoCD Application com spec.syncPolicy.progressive=true"
+      - "Rollout (argo-rollouts.argoproj.io/v1alpha1) com spec.strategy.canary ou spec.strategy.blueGreen"
+      - "Deployment com annotation argocd.argoproj.io/rollout=canary"
+      - "ArgoCD ApplicationSet com progressive sync"
+    answer: 1
+    answer_command: "kubectl apply -f rollout.yaml && kubectl argo rollouts get rollout my-app --watch"
+    explanation: "Argo Rollouts adiciona o CRD 'Rollout' que substitui Deployment com suporte a Canary (weights, análise automática, promotion manual) e Blue/Green (activeService/previewService, auto-promotion). Integra com Prometheus, Datadog para análise de métricas durante o rollout."
+    doc_url: "https://argoproj.github.io/argo-rollouts/"
+    doc_section: "Argo Rollouts → Progressive Delivery"
+
+  - id: argocd-lab-027
+    cert: ArgoCD
+    topic: GitOps
+    difficulty: hard
+    type: lab
+    question: "Configure o **ArgoCD Image Updater** para atualizar automaticamente a imagem de um Deployment quando uma nova versão é publicada no registry. Qual annotation é necessária na Application?"
+    options:
+      - "argocd.argoproj.io/image-update: auto"
+      - "argocd-image-updater.argoproj.io/image-list: my-image=registry/image:~1.x"
+      - "argocd.argoproj.io/auto-image: registry/image:latest"
+      - "image-updater.argoproj.io/update=semver:^1.0"
+    answer: 1
+    answer_command: "kubectl annotate application my-app -n argocd argocd-image-updater.argoproj.io/image-list='nginx=nginx:~1.21'"
+    explanation: "ArgoCD Image Updater escaneia registries e atualiza Applications quando novas imagens são publicadas. Annotation argocd-image-updater.argoproj.io/image-list especifica o alias e a constraint de versão. Strategies: semver, latest, digest, name. Para repos Git: commita mudanças automaticamente."
+    doc_url: "https://argocd-image-updater.readthedocs.io/"
+    doc_section: "ArgoCD Image Updater"
+
+  - id: argocd-lab-028
+    cert: ArgoCD
+    topic: GitOps
+    difficulty: hard
+    type: lab
+    question: "Configure multi-tenancy no ArgoCD com **Projects** para isolar as Applications da equipe **team-a** (apenas namespace **team-a-prod**) e **team-b** (apenas namespace **team-b-prod**)."
+    options:
+      - "kubectl create namespace team-a && argocd app set --namespace=team-a"
+      - "Criar AppProject para cada equipe com spec.destinations restringindo namespace e spec.sourceRepos limitando repositórios"
+      - "argocd project create team-a --namespace=team-a-prod --repo=https://github.com/team-a/*"
+      - "B e C estão corretos — B via YAML e C via CLI"
+    answer: 3
+    answer_command: "argocd proj create team-a --dest 'https://kubernetes.default.svc,team-a-prod' --src 'https://github.com/team-a/*'"
+    explanation: "AppProject implementa multi-tenancy: spec.destinations restringe clusters/namespaces de destino, spec.sourceRepos limita repositórios Git, spec.roles define usuários/grupos com permissões específicas ao projeto. Applications devem referenciar spec.project='team-a'. Sem AppProject, tudo vai para 'default' project."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/#projects"
+    doc_section: "Operator Manual → Projects"
+
+  - id: argocd-lab-029
+    cert: ArgoCD
+    topic: GitOps
+    difficulty: hard
+    type: lab
+    question: "Configure **Notifications** no ArgoCD para enviar alertas no Slack quando uma Application vai para estado **Degraded**."
+    options:
+      - "argocd app set my-app --notify=slack --channel=#alerts --on=degraded"
+      - "Configurar argocd-notifications-cm (templates e triggers) + argocd-notifications-secret (token Slack) + annotation na Application"
+      - "kubectl create secret slack-webhook --url=https://hooks.slack.com/... -n argocd"
+      - "argocd notification create --type=slack --channel=#alerts --trigger=degraded"
+    answer: 1
+    answer_command: "kubectl edit configmap argocd-notifications-cm -n argocd"
+    explanation: "ArgoCD Notifications usa: (1) argocd-notifications-cm com templates (mensagens) e triggers (condições), (2) argocd-notifications-secret com credenciais (Slack token, webhook URL), (3) annotation na Application: notifications.argoproj.io/subscribe.on-degraded.slack=alerts-channel."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/notifications/"
+    doc_section: "Operator Manual → Notifications"
+
+  - id: argocd-lab-030
+    cert: ArgoCD
+    topic: GitOps
+    difficulty: hard
+    type: lab
+    question: "Como fazer **disaster recovery** do ArgoCD: restaurar todas as Applications após perda do cluster. Qual é a abordagem GitOps correta?"
+    options:
+      - "Fazer backup do etcd e restaurar o cluster do snapshot"
+      - "Instalar ArgoCD novo + aplicar o Application root (App of Apps) do repositório Git — todas as Applications são recriadas automaticamente"
+      - "argocd restore --from-backup=argocd-backup.tar.gz"
+      - "kubectl apply -f argocd-export.yaml --force"
+    answer: 1
+    answer_command: "kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml && argocd app create root --repo=... --path=apps/ ..."
+    explanation: "GitOps disaster recovery: se toda a configuração (Applications, Projects, etc.) está no Git via App of Apps, recuperar é simples: (1) instalar ArgoCD zerado, (2) criar a Application root apontando para o Git. O ArgoCD recria todo o resto automaticamente. Isso é o poder do GitOps — o cluster é descartável."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/disaster_recovery/"
+    doc_section: "Operator Manual → Disaster Recovery"
+
+  - id: argocd-lab-031
+    cert: ArgoCD
+    topic: GitOps
+    difficulty: hard
+    type: lab
+    question: "Configure um **health check customizado** no ArgoCD para um CRD não reconhecido (ex: MyCRD da sua empresa). Onde e como configurar?"
+    options:
+      - "kubectl annotate crd mycrd.example.com argocd.argoproj.io/health-check=true"
+      - "Adicionar script Lua em argocd-cm ConfigMap sob resource.customizations.health.<group>/<kind>"
+      - "argocd config add health-check --crd=mycrd.example.com --script=lua"
+      - "kubectl create configmap argocd-health-mycrd --from-file=health.lua -n argocd"
+    answer: 1
+    answer_command: "kubectl edit configmap argocd-cm -n argocd # adicionar resource.customizations.health"
+    explanation: "Custom health checks são scripts Lua configurados em argocd-cm sob resource.customizations.health.<apiGroup>/<kind>. O script recebe o objeto como 'obj' e deve retornar um objeto com 'status' (Healthy/Degraded/Progressing/Missing/Unknown) e 'message'. Permite que o ArgoCD entenda o estado de CRDs customizados."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/health/"
+    doc_section: "Operator Manual → Custom Health Checks"
+
+  - id: argocd-lab-032
+    cert: ArgoCD
+    topic: GitOps
+    difficulty: hard
+    type: lab
+    question: "Integre o ArgoCD com um pipeline CI/CD: o CI deve **disparar um sync** do ArgoCD após push de nova imagem. Qual abordagem é recomendada?"
+    options:
+      - "CI faz 'kubectl set image' direto no cluster de produção"
+      - "CI faz commit no repositório Git atualizando a tag da imagem → ArgoCD detecta e sincroniza"
+      - "CI chama 'argocd app sync my-app' via CLI diretamente no pipeline"
+      - "CI usa 'argocd app set --helm-set image.tag=new' para atualizar"
+    answer: 1
+    answer_command: "git commit -m 'ci: update image tag to $NEW_TAG' && git push"
+    explanation: "Abordagem GitOps: CI atualiza o repositório de config (separado do repositório de código), ArgoCD detecta e sincroniza. Evite chamar argocd sync no CI — viola o princípio GitOps (Git como fonte de verdade). Use ArgoCD Image Updater para automatizar ainda mais. Separe repositório de código e repositório de configuração."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/ci_automation/"
+    doc_section: "User Guide → CI Automation"
+
+  - id: argocd-lab-033
+    cert: ArgoCD
+    topic: GitOps
+    difficulty: hard
+    type: lab
+    question: "Configure o ArgoCD para fazer deploy em **múltiplos clusters** (dev, staging, prod) a partir do mesmo repositório Git usando **ApplicationSet com Cluster Generator**."
+    options:
+      - "Criar uma Application por cluster manualmente com --dest-server diferente"
+      - "ApplicationSet com spec.generators[].clusters{} que gera uma Application por cluster registrado com labels específicas"
+      - "argocd app create multi-cluster --dest-servers=dev,staging,prod"
+      - "Usar argocd proj create --clusters=dev,staging,prod"
+    answer: 1
+    answer_command: "kubectl apply -f applicationset-clusters.yaml -n argocd"
+    explanation: "Cluster Generator do ApplicationSet cria uma Application para cada cluster registrado no ArgoCD (ou filtrado por labels). Permite gerenciar deploy em N clusters com uma única definição. O template usa variáveis como {{name}} e {{server}} do cluster. Adicione matchExpressions para filtrar clusters."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/generators-cluster/"
+    doc_section: "Operator Manual → ApplicationSet → Cluster Generator"
+
+  - id: argocd-lab-034
+    cert: ArgoCD
+    topic: GitOps
+    difficulty: hard
+    type: lab
+    question: "Configure **SSO via OIDC** (Google) no ArgoCD para substituir o login local com usuário/senha."
+    options:
+      - "argocd admin sso configure --provider=google --client-id=... --client-secret=..."
+      - "Configurar argocd-cm com oidc.config (issuer, clientID, clientSecret, scopes) e argocd-secret com o clientSecret"
+      - "kubectl create secret oidc-google --client-id=... --client-secret=... -n argocd"
+      - "argocd config set oidc.issuer=https://accounts.google.com"
+    answer: 1
+    answer_command: "kubectl edit configmap argocd-cm -n argocd # adicionar oidc.config"
+    explanation: "SSO OIDC no ArgoCD: adicionar oidc.config no argocd-cm com name, issuer, clientID, clientSecret (referência ao secret), requestedScopes, requestedIDTokenClaims. Depois configurar argocd-rbac-cm para mapear grupos OIDC a roles do ArgoCD (g, <group>, role:admin)."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/user-management/google/"
+    doc_section: "Operator Manual → User Management → Google"
+
+  - id: argocd-lab-035
+    cert: ArgoCD
+    topic: GitOps
+    difficulty: hard
+    type: lab
+    question: "Faça **rollback** de uma Application ArgoCD para uma revisão anterior usando o histórico de sincronizações."
+    options:
+      - "argocd app rollback my-app --previous"
+      - "argocd app rollback my-app <ID-from-history>"
+      - "kubectl rollout undo -n argocd application/my-app"
+      - "argocd app sync my-app --revision=<git-commit-sha>"
+    answer: 1
+    answer_command: "argocd app history my-app && argocd app rollback my-app 3"
+    explanation: "argocd app rollback usa o ID do histórico (não o commit SHA diretamente). Primeiro: 'argocd app history my-app' para ver os IDs. Depois: 'argocd app rollback my-app <ID>'. O rollback sincroniza com a revisão Git do histórico especificado. Alternativa: 'argocd app sync my-app --revision=<sha>'."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/commands/argocd_app_rollback/"
+    doc_section: "User Guide → CLI → argocd app rollback"
+
+  # ── NOVOS LABS INTERATIVOS (ArgoCD) ───────────────────────
+  - id: argocd-lab-036
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Verifique se o ArgoCD está instalado: liste os pods do namespace **argocd** e confira se o **argocd-server** está Running."
+    options:
+      - "kubectl get pods --namespace argocd"
+      - "kubectl get pods -n kube-system | grep argocd"
+      - "kubectl describe namespace argocd"
+      - "argocd version"
+    answer: 0
+    answer_command: "kubectl get pods -n argocd"
+    hint: "Se o ArgoCD não estiver instalado, use a página ArgoCD deste app para instalá-lo primeiro."
+    goals:
+      - description: "Namespace **argocd** existe"
+        hint: "Se não existe, instale via página ArgoCD → Instalar ArgoCD"
+        validation:
+          command: "kubectl get namespace argocd -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "argocd"
+      - description: "Pod **argocd-server** está presente"
+        validation:
+          command: "kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-server -o jsonpath='{.items[0].metadata.name}' 2>/dev/null"
+          expected_contains: "argocd-server"
+      - description: "Deployment **argocd-server** tem réplicas disponíveis"
+        validation:
+          command: "kubectl get deployment argocd-server -n argocd -o jsonpath='{.status.availableReplicas}' 2>/dev/null"
+          expected_contains: "1"
+    explanation: "kubectl get pods -n argocd mostra todos os componentes do ArgoCD: argocd-server (UI/API), argocd-repo-server (clone git), argocd-application-controller (reconciliation loop), argocd-dex-server (SSO), redis (cache). Todos devem estar Running."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/getting_started/"
+    doc_section: "Getting Started → ArgoCD Installation"
+
+  - id: argocd-lab-037
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: lab
+    question: "Obtenha a senha inicial de admin do ArgoCD (armazenada como Secret **argocd-initial-admin-secret** no namespace **argocd**) e decodifique-a."
+    options:
+      - "kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d"
+      - "argocd admin get-password"
+      - "kubectl get secret argocd-admin -n argocd -o yaml"
+      - "kubectl describe secret argocd-admin -n argocd"
+    answer: 0
+    answer_command: "kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d"
+    hint: "kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d"
+    goals:
+      - description: "Secret **argocd-initial-admin-secret** existe no namespace **argocd**"
+        hint: "Se não existe, o ArgoCD ainda não foi instalado. Instale primeiro via página ArgoCD."
+        validation:
+          command: "kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "argocd-initial-admin-secret"
+      - description: "Campo **password** está presente no secret"
+        validation:
+          command: "kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' 2>/dev/null | wc -c"
+          expected_contains: "1"
+    explanation: "O secret argocd-initial-admin-secret é criado automaticamente na instalação. A senha é base64-encoded — use | base64 -d para decodificar. Após fazer login pela primeira vez, altere a senha com 'argocd account update-password' e delete o secret inicial por segurança."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/getting_started/#4-login-using-the-cli"
+    doc_section: "Getting Started → Login using CLI"
+
+  - id: argocd-lab-038
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: mid
+    type: lab
+    question: "Liste as Applications ArgoCD existentes via kubectl e verifique o status de sync de cada uma. Quantas estão no namespace **argocd**?"
+    options:
+      - "kubectl get applications.argoproj.io -n argocd"
+      - "kubectl get apps -n argocd"
+      - "kubectl get application -A"
+      - "A e B estão corretas"
+    answer: 0
+    answer_command: "kubectl get applications.argoproj.io -n argocd -o wide"
+    hint: "kubectl get applications.argoproj.io -n argocd"
+    goals:
+      - description: "Comando para listar Applications funciona (ArgoCD CRD instalado)"
+        hint: "kubectl get applications.argoproj.io -n argocd"
+        validation:
+          command: "kubectl get crd applications.argoproj.io -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "applications.argoproj.io"
+    explanation: "Applications são Custom Resources do ArgoCD (CRD: applications.argoproj.io). 'kubectl get app' funciona como alias. -o wide mostra colunas adicionais como SYNC STATUS e HEALTH STATUS. Use -o yaml para ver a spec completa incluindo source.repoURL e destination."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/app-overview/"
+    doc_section: "User Guide → Application Overview"
+
+  - id: argocd-lab-039
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: mid
+    type: lab
+    question: "Crie manualmente via kubectl um Application ArgoCD chamado **test-app** que sincronize o repositório de exemplo do ArgoCD (**https://github.com/argoproj/argocd-example-apps**, path: **guestbook**) para o namespace **default** do cluster local."
+    options:
+      - "kubectl apply -f test-app.yaml -n argocd"
+      - "argocd app create test-app --repo=https://github.com/argoproj/argocd-example-apps --path=guestbook --dest-namespace=default --dest-server=https://kubernetes.default.svc"
+      - "A e B estão corretas"
+      - "kubectl create application test-app -n argocd"
+    answer: 2
+    hint: |
+      Crie via YAML:
+        apiVersion: argoproj.io/v1alpha1
+        kind: Application
+        metadata:
+          name: test-app
+          namespace: argocd
+        spec:
+          project: default
+          source:
+            repoURL: https://github.com/argoproj/argocd-example-apps
+            targetRevision: HEAD
+            path: guestbook
+          destination:
+            server: https://kubernetes.default.svc
+            namespace: default
+          syncPolicy:
+            automated: {prune: true, selfHeal: true}
+    answer_command: "kubectl apply -f test-app.yaml -n argocd"
+    goals:
+      - description: "Application **test-app** existe no namespace **argocd**"
+        hint: "Crie via YAML com kind: Application e namespace: argocd"
+        validation:
+          command: "kubectl get application test-app -n argocd -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "test-app"
+      - description: "repoURL aponta para o repositório correto"
+        validation:
+          command: "kubectl get application test-app -n argocd -o jsonpath='{.spec.source.repoURL}' 2>/dev/null"
+          expected_contains: "argocd-example-apps"
+      - description: "path está configurado como **guestbook**"
+        validation:
+          command: "kubectl get application test-app -n argocd -o jsonpath='{.spec.source.path}' 2>/dev/null"
+          expected_contains: "guestbook"
+    teardown:
+      - "kubectl delete application test-app -n argocd --ignore-not-found=true"
+    explanation: "Applications ArgoCD podem ser criadas via YAML (kubectl apply) ou CLI (argocd app create). syncPolicy.automated ativa sync automático quando o Git muda. prune remove recursos deletados do Git. selfHeal restaura recursos modificados manualmente no cluster."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/app-overview/#creating-apps-via-ui"
+    doc_section: "User Guide → Creating Apps"
+
+  - id: argocd-lab-040
+    cert: ArgoCD
+    topic: GitOps
+    difficulty: hard
+    type: lab
+    question: "Crie um **AppProject** ArgoCD chamado **team-alpha** que restrinja: (1) repositórios de origem apenas a **https://github.com/myorg/*** e (2) destino apenas ao cluster local no namespace **alpha**."
+    options:
+      - "argocd proj create team-alpha --src=https://github.com/myorg/* --dest=https://kubernetes.default.svc,alpha"
+      - "kubectl create appproject team-alpha -n argocd --source=github.com/myorg"
+      - "Criar via YAML: kind: AppProject com spec.sourceRepos e spec.destinations"
+      - "A e C estão corretas"
+    answer: 3
+    hint: |
+      Via CLI:
+        argocd proj create team-alpha \
+          --src 'https://github.com/myorg/*' \
+          --dest 'https://kubernetes.default.svc,alpha'
+      Ou via YAML com kind: AppProject.
+    answer_command: "argocd proj create team-alpha --src='https://github.com/myorg/*' --dest='https://kubernetes.default.svc,alpha'"
+    goals:
+      - description: "AppProject **team-alpha** existe no namespace **argocd**"
+        hint: "argocd proj create team-alpha --src='https://github.com/myorg/*' --dest='https://kubernetes.default.svc,alpha'"
+        validation:
+          command: "kubectl get appproject team-alpha -n argocd -o jsonpath='{.metadata.name}' 2>/dev/null"
+          expected_contains: "team-alpha"
+      - description: "sourceRepos restringe a repositórios **github.com/myorg**"
+        validation:
+          command: "kubectl get appproject team-alpha -n argocd -o jsonpath='{.spec.sourceRepos[0]}' 2>/dev/null"
+          expected_contains: "myorg"
+      - description: "destinations restringe ao namespace **alpha**"
+        validation:
+          command: "kubectl get appproject team-alpha -n argocd -o jsonpath='{.spec.destinations[0].namespace}' 2>/dev/null"
+          expected_contains: "alpha"
+    teardown:
+      - "kubectl delete appproject team-alpha -n argocd --ignore-not-found=true"
+    explanation: "AppProjects isolam times e aplicações: restringem repos de origem, destinos permitidos, e recursos K8s que podem ser gerenciados. O projeto 'default' é irrestrito. Para times: crie projetos dedicados com fontes e destinos explícitos. ClusterResourceWhitelist controla quais recursos cluster-scoped são permitidos."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/projects/"
+    doc_section: "User Guide → Projects"

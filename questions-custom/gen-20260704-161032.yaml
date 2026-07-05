@@ -1,0 +1,23 @@
+questions:
+    - id: custom-39c90d64
+      cert: CKA
+      topic: Custom
+      difficulty: mid
+      type: lab
+      question: |-
+        Da documentação que você forneceu: execute a operação abaixo e confira o resultado.
+
+        `kubectl Cheat Sheet`
+
+        Dica: leia cada flag antes de rodar.
+      options: []
+      answer: 0
+      explanation: Exercício gerado da sua documentação. Pratique até conseguir reproduzir sem olhar a dica.
+      doc_url: ""
+      doc_section: ""
+      hint: kubectl Cheat Sheet
+      answer_command: kubectl Cheat Sheet
+      validation: null
+      goals: []
+      setup: []
+      teardown: []

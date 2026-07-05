@@ -1,0 +1,23 @@
+questions:
+    - id: custom-01298790
+      cert: CKA
+      topic: Custom
+      difficulty: mid
+      type: lab
+      question: |-
+        Da documentação que você forneceu: execute a operação abaixo e confira o resultado.
+
+        `kubectl get nodes`
+
+        Dica: leia cada flag antes de rodar.
+      options: []
+      answer: 0
+      explanation: Exercício gerado da sua documentação. Pratique até conseguir reproduzir sem olhar a dica.
+      doc_url: ""
+      doc_section: ""
+      hint: kubectl get nodes
+      answer_command: kubectl get nodes
+      validation: null
+      goals: []
+      setup: []
+      teardown: []

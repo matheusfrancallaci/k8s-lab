@@ -1,0 +1,107 @@
+{{define "content"}}
+<div style="min-height:100vh;display:flex;flex-direction:column;background:var(--bg);">
+
+    <!-- Top bar -->
+    <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:0 18px;height:46px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:8px;">
+            <img src="/static/vendor/kubernetes.svg" style="width:18px;height:18px;opacity:.8;" alt="K8s">
+            {{if .Cert}}
+            <span class="badge badge-cyan">{{.Cert}}</span>
+            {{end}}
+            {{if .Difficulty}}
+            <span class="badge
+                {{if eq .Difficulty "easy"}}badge-green
+                {{else if eq .Difficulty "mid"}}badge-yellow
+                {{else}}badge-red{{end}}">
+                {{if eq .Difficulty "easy"}}easy{{else if eq .Difficulty "mid"}}medium{{else}}hard{{end}}
+            </span>
+            {{end}}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--primary);">
+            <svg style="width:12px;height:12px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <span id="timer">59:59</span>
+        </div>
+    </div>
+
+    <!-- Progress -->
+    <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:10px 18px 12px;flex-shrink:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:11px;font-weight:700;color:var(--text);font-family:'JetBrains Mono',monospace;">Q{{.Number}}<span style="color:var(--muted);">/{{.Total}}</span></span>
+            <span style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;">acertos: <span style="color:var(--green);font-weight:700;">{{.Score}}</span></span>
+        </div>
+        <div style="display:flex;gap:3px;">
+            {{range $i, $a := .Answers}}
+            <div class="q-dash {{if ge $a 0}}done{{else if eq $i $.Current}}current{{end}}"></div>
+            {{end}}
+        </div>
+    </div>
+
+    <!-- Content -->
+    <div style="flex:1;overflow-y:auto;">
+        <div style="max-width:680px;margin:0 auto;padding:28px 18px;display:flex;flex-direction:column;gap:14px;">
+
+            <!-- Question card -->
+            <div class="q-card" style="display:flex;flex-direction:column;gap:14px;">
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                    {{if eq .Question.Type "lab"}}
+                    <span class="badge badge-green">⎈ prática</span>
+                    {{else}}
+                    <span class="badge badge-cyan">◈ teoria</span>
+                    {{end}}
+                    <span class="badge badge-gray">{{.Question.Topic}}</span>
+                </div>
+                <p style="font-size:14px;line-height:1.7;color:var(--text);font-weight:500;">{{.Question.Question}}</p>
+            </div>
+
+            <!-- Options -->
+            <form action="/quiz/{{.SessionID}}/answer" method="POST" id="quiz-form" style="display:flex;flex-direction:column;gap:8px;">
+                {{$letters := slice "A" "B" "C" "D"}}
+                {{range $i, $opt := .Question.Options}}
+                <label class="opt-card">
+                    <input type="radio" name="answer" value="{{$i}}" required class="sr-only">
+                    <div class="opt-letter">{{index $letters $i}}</div>
+                    <span class="opt-text">{{$opt}}</span>
+                </label>
+                {{end}}
+            </form>
+
+            <!-- Action row -->
+            <div style="display:flex;align-items:center;justify-content:space-between;padding-top:4px;">
+                <a href="/" style="font-size:11px;color:var(--muted);text-decoration:none;font-family:'JetBrains Mono',monospace;" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">← sair</a>
+                <button form="quiz-form" type="submit" class="btn-primary" style="padding:10px 28px;">
+                    Confirmar →
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<script>
+let total = 59 * 60 + 59;
+const el = document.getElementById('timer');
+const t = setInterval(() => {
+    if (total <= 0) { clearInterval(t); el.textContent = '00:00'; return; }
+    total--;
+    const m = String(Math.floor(total/60)).padStart(2,'0');
+    const s = String(total%60).padStart(2,'0');
+    el.textContent = m + ':' + s;
+    if (total < 120) el.style.color = '#f87171';
+}, 1000);
+
+document.addEventListener('keydown', e => {
+    const keys = {'1':0,'2':1,'3':2,'4':3,'a':0,'b':1,'c':2,'d':3};
+    if (e.key in keys && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const radios = document.querySelectorAll('input[name="answer"]');
+        if (radios[keys[e.key]]) radios[keys[e.key]].checked = true;
+    }
+    if (e.key === 'Enter') {
+        const checked = document.querySelector('input[name="answer"]:checked');
+        if (checked) document.getElementById('quiz-form').submit();
+    }
+});
+</script>
+{{end}}

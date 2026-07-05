@@ -1,0 +1,469 @@
+{{define "content"}}
+<style>
+.cloud-root { min-height:100vh; background:var(--bg); }
+.step-item {
+    display:flex; align-items:flex-start; gap:12px;
+    padding:10px 14px; border-radius:8px; background:var(--surface-2);
+    border:1px solid var(--border); margin-bottom:6px;
+}
+.step-icon { width:20px; text-align:center; font-size:14px; flex-shrink:0; margin-top:1px; }
+.step-desc { font-size:12.5px; color:var(--text-2); flex:1; line-height:1.4; }
+.step-out  { font-size:10.5px; color:var(--text-3); font-family:'JetBrains Mono',monospace;
+             margin-top:4px; white-space:pre-wrap; }
+.info-card {
+    background:var(--surface-2); border:1px solid var(--border); border-radius:12px;
+    padding:20px; margin-bottom:14px;
+}
+.info-card-title {
+    font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--text-3); margin-bottom:12px;
+}
+.mono { font-family:'JetBrains Mono',monospace; }
+.copy-btn {
+    padding:3px 10px; border-radius:4px; font-size:10px; font-weight:600;
+    background:#1e2e3e; color:#38bdf8; border:1px solid rgba(56,189,248,.2);
+    cursor:pointer; transition:opacity .15s;
+}
+.copy-btn:hover { opacity:.75; }
+</style>
+
+<div class="shell">
+{{template "sidebar" .}}
+<div class="shell-main cloud-root">
+
+<div class="page-head">
+    <div class="ph-title"><span class="ph-ico">☁</span> Cloud · Azure AKS</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:10px;color:var(--text-3);">alvo ativo:</span>
+        <div id="ctx-dot" style="width:6px;height:6px;border-radius:50%;background:var(--muted2);"></div>
+        <span id="ctx-label" style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;">...</span>
+    </div>
+</div>
+
+<div style="max-width:720px;margin:0 auto;padding:32px 20px;">
+
+    <!-- Hero -->
+    <div style="margin-bottom:22px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">
+            <img src="/static/vendor/azure.svg"
+                 style="width:44px;height:44px;" alt="Azure">
+            <div>
+                <h1 style="font-size:20px;font-weight:800;color:var(--text);margin-bottom:2px;">Kubernetes na Nuvem</h1>
+                <p style="font-size:12px;color:var(--text-3);">Azure Kubernetes Service (AKS) — cluster real para os labs</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cost banner -->
+    <div style="background:var(--amber-dim);border:1px solid rgba(251,191,36,.25);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;gap:10px;">
+        <span style="font-size:15px;">💸</span>
+        <p style="font-size:11.5px;color:var(--amber);line-height:1.6;margin:0;">
+            O cluster gera custo <strong>enquanto está ligado</strong>. Use <strong>Parar</strong> ao terminar de estudar —
+            <span class="mono">az aks stop</span> pausa o faturamento de compute. Há <strong>auto-stop</strong> após
+            <span id="idle-min">45</span> min de inatividade. Perfil barato: 1 nó <span id="node-size" class="mono">standard_d2als_v7</span>, tier Free.
+        </p>
+    </div>
+
+    <!-- Abas de ambiente — nuvens conectadas geram novas guias automaticamente -->
+    <div style="display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:18px;flex-wrap:wrap;" id="cloud-tabs">
+        <button class="lab-tab active ctab" id="ctab-aks" data-pane="aks" onclick="showCloudTab('aks')">☁ AZURE AKS</button>
+        <button class="lab-tab ctab" id="ctab-multi" data-pane="multi" onclick="showCloudTab('multi')">➕ CONECTAR NUVEM</button>
+    </div>
+
+    <!-- panes dinâmicos de contexto entram aqui -->
+    <div id="dyn-panes"></div>
+
+    <!-- ══ ABA OUTRAS NUVENS (multi-cloud via kubeconfig) ══ -->
+    <div id="cpane-multi" style="display:none;">
+        <div class="info-card">
+            <p class="info-card-title">Conectar qualquer cluster — EKS, GKE, OKE, k3s...</p>
+            <p style="font-size:12px;color:var(--text-2);line-height:1.6;margin-bottom:12px;">
+                Os labs rodam em <strong>qualquer cluster</strong> presente no seu kubeconfig — a plataforma segue o
+                contexto do kubectl, independente da nuvem. Conecte pelo terminal e o contexto aparece aqui:
+            </p>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;">
+                <div style="background:var(--surface);border-radius:6px;padding:10px 12px;border:1px solid var(--border);">
+                    <p style="font-size:10px;color:var(--text-3);margin-bottom:4px;">AWS EKS</p>
+                    <code class="mono" style="font-size:11px;color:var(--violet);">aws eks update-kubeconfig --name meu-cluster --region us-east-1</code>
+                </div>
+                <div style="background:var(--surface);border-radius:6px;padding:10px 12px;border:1px solid var(--border);">
+                    <p style="font-size:10px;color:var(--text-3);margin-bottom:4px;">Google GKE</p>
+                    <code class="mono" style="font-size:11px;color:var(--violet);">gcloud container clusters get-credentials meu-cluster --zone us-central1-a</code>
+                </div>
+                <div style="background:var(--surface);border-radius:6px;padding:10px 12px;border:1px solid var(--border);">
+                    <p style="font-size:10px;color:var(--text-3);margin-bottom:4px;">Qualquer outro (k3s, OKE, on-prem remoto...)</p>
+                    <code class="mono" style="font-size:11px;color:var(--violet);">exporte o kubeconfig do provedor — o contexto aparece abaixo</code>
+                </div>
+            </div>
+            <p class="info-card-title">Contextos disponíveis no kubeconfig</p>
+            <div id="ctx-list" style="display:flex;flex-direction:column;gap:6px;">
+                <p style="font-size:12px;color:var(--text-4);">carregando...</p>
+            </div>
+            <p style="font-size:10.5px;color:var(--text-3);margin-top:12px;">
+                🔒 Credenciais ficam apenas no seu kubeconfig local — a plataforma nunca as lê nem envia para fora.
+            </p>
+        </div>
+    </div>
+
+    <!-- ══ ABA AZURE AKS ══ -->
+    <div id="cpane-aks">
+    <!-- Azure account -->
+    <div class="info-card">
+        <p class="info-card-title">Conta Azure</p>
+        <div id="az-content" style="display:flex;align-items:center;gap:10px;">
+            <div id="az-dot" style="width:10px;height:10px;border-radius:50%;background:var(--text-4);"></div>
+            <span id="az-text" style="font-size:13px;color:var(--text-3);">Verificando...</span>
+        </div>
+        <div id="az-actions" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;"></div>
+        <div id="az-log" style="display:none;margin-top:14px;"></div>
+    </div>
+
+    <!-- Cluster -->
+    <div class="info-card" id="cluster-card" style="display:none;">
+        <p class="info-card-title">Cluster AKS — <span id="cluster-name" class="mono" style="color:var(--text-2);">-</span></p>
+        <div id="cluster-content" style="display:flex;align-items:center;gap:10px;">
+            <div id="cl-dot" style="width:10px;height:10px;border-radius:50%;background:var(--text-4);"></div>
+            <span id="cl-text" style="font-size:13px;color:var(--text-3);">-</span>
+        </div>
+        <div id="cluster-actions" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;"></div>
+        <div id="cluster-progress" style="display:none;margin-top:16px;"><div id="cluster-steps"></div></div>
+    </div>
+
+    <!-- Quick reference -->
+    <div class="info-card">
+        <p class="info-card-title">Quick Reference — Azure CLI</p>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+            {{range .CLIExamples}}
+            <div style="background:var(--surface);border-radius:6px;padding:10px 12px;border:1px solid var(--border);">
+                <p style="font-size:10px;color:var(--text-3);margin-bottom:4px;">{{.Desc}}</p>
+                <code style="font-size:11.5px;color:var(--violet);font-family:'JetBrains Mono',monospace;">{{.Cmd}}</code>
+            </div>
+            {{end}}
+        </div>
+    </div>
+    </div><!-- /cpane-aks -->
+
+</div>
+</div>
+</div>
+
+<script>
+let busy = false;
+
+// ── Abas de ambiente (dinâmicas: uma por nuvem conectada) ───
+function showCloudTab(name) {
+    document.querySelectorAll('.ctab').forEach(t =>
+        t.classList.toggle('active', t.dataset.pane === name));
+    document.querySelectorAll('[id^=cpane-]').forEach(p =>
+        p.style.display = (p.id === 'cpane-' + name) ? 'block' : 'none');
+    if (name === 'multi') loadContexts();
+}
+
+// Cada contexto do kubeconfig fora de {minikube, AKS gerenciado} vira uma
+// guia própria — conectou EKS/GKE/OKE, a guia nasce sozinha.
+function renderDynTabs(d) {
+    // limpa dinâmicos antigos
+    document.querySelectorAll('.ctab.dyn, .cpane-dyn').forEach(el => el.remove());
+    const extras = (d.contexts || []).filter(c => c !== d.local && c !== d.aks);
+    const tabBar = document.getElementById('cloud-tabs');
+    const anchor = document.getElementById('ctab-multi');
+    const panes = document.getElementById('dyn-panes');
+
+    extras.forEach((c, i) => {
+        const pane = 'dyn' + i;
+        const isCur = c === d.current;
+        const short = c.length > 22 ? c.slice(0, 20) + '…' : c;
+
+        const tab = document.createElement('button');
+        tab.className = 'lab-tab ctab dyn';
+        tab.dataset.pane = pane;
+        tab.innerHTML = '🌐 ' + escC(short.toUpperCase());
+        tab.onclick = () => showCloudTab(pane);
+        tabBar.insertBefore(tab, anchor);
+
+        const div = document.createElement('div');
+        div.id = 'cpane-' + pane;
+        div.className = 'cpane-dyn';
+        div.style.display = 'none';
+        div.innerHTML = `
+            <div class="info-card">
+                <p class="info-card-title">Cluster conectado — <span class="mono" style="color:var(--text-2);">${escC(c)}</span></p>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                    <div style="width:10px;height:10px;border-radius:50%;background:${isCur ? 'var(--green)' : 'var(--text-4)'};"></div>
+                    <span style="font-size:13px;color:${isCur ? 'var(--green)' : 'var(--text-3)'};">${isCur ? 'alvo ativo dos labs ✓' : 'conectado via kubeconfig'}</span>
+                </div>
+                <p style="font-size:12px;color:var(--text-2);line-height:1.6;margin-bottom:14px;">
+                    Todos os labs, o terminal e as validações rodam neste cluster quando ele é o alvo.
+                    Custos e ciclo de vida são gerenciados no console do provedor.
+                </p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    ${isCur ? '' : `<button class="btn btn-primary" onclick="useContext('${escC(c)}')">Usar como alvo dos labs</button>`}
+                    <button class="btn btn-outline" onclick="testContext('${escC(c)}', this)">Testar conexão</button>
+                </div>
+                <div class="mono" id="test-${pane}" style="display:none;margin-top:12px;font-size:11px;color:var(--text-3);white-space:pre-wrap;"></div>
+            </div>`;
+        panes.appendChild(div);
+    });
+}
+
+async function testContext(name, btn) {
+    btn.disabled = true; btn.textContent = 'testando...';
+    try {
+        const r = await fetch('/api/context/test', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ context: name })
+        });
+        const d = await r.json();
+        const out = btn.closest('.info-card').querySelector('[id^=test-]');
+        out.style.display = 'block';
+        out.style.color = d.success ? 'var(--green)' : 'var(--red)';
+        out.textContent = d.output || (d.success ? 'ok' : 'falhou');
+    } catch (e) {}
+    btn.disabled = false; btn.textContent = 'Testar conexão';
+}
+
+// ── Multi-cloud: contextos do kubeconfig ────────────────────
+async function loadContexts() {
+    const list = document.getElementById('ctx-list');
+    try {
+        const r = await fetch('/api/contexts');
+        const d = await r.json();
+        renderDynTabs(d);
+        list.innerHTML = '';
+        (d.contexts || []).forEach(c => {
+            const isCur = c === d.current;
+            const label = c === d.local ? ' (local)' : c === d.aks ? ' (Azure AKS)' : '';
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--surface);border:1px solid ' + (isCur ? 'var(--violet-b)' : 'var(--border)') + ';border-radius:8px;padding:10px 12px;';
+            row.innerHTML =
+                `<span class="mono" style="font-size:12px;color:${isCur ? 'var(--violet)' : 'var(--text-2)'};">${escC(c)}<span style="color:var(--text-4);">${label}</span>${isCur ? ' · alvo ativo ✓' : ''}</span>` +
+                (isCur ? '' : `<button class="btn btn-outline btn-sm" onclick="useContext('${escC(c)}')">Usar como alvo</button>`);
+            list.appendChild(row);
+        });
+        if (!(d.contexts || []).length) {
+            list.innerHTML = '<p style="font-size:12px;color:var(--text-4);">nenhum contexto no kubeconfig</p>';
+        }
+    } catch(e) {
+        list.innerHTML = '<p style="font-size:12px;color:var(--red);">erro ao listar contextos</p>';
+    }
+}
+
+async function useContext(name) {
+    try {
+        const r = await fetch('/api/context', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ context: name })
+        });
+        const d = await r.json();
+        if (!d.success) alert('Falha: ' + (d.output || ''));
+    } catch(e) {}
+    loadContexts(); refresh();
+}
+
+function escC(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;'); }
+
+async function refresh() {
+    try {
+        const r = await fetch('/api/cloud/status');
+        applyStatus(await r.json());
+    } catch(e) {}
+}
+
+function ctxIndicator(active, clusterName) {
+    const dot = document.getElementById('ctx-dot');
+    const lbl = document.getElementById('ctx-label');
+    const isCloud = active && active === clusterName;
+    dot.style.background = active ? (isCloud ? '#38bdf8' : '#34d399') : 'var(--text-3)';
+    lbl.style.color = active ? (isCloud ? '#38bdf8' : '#34d399') : 'var(--text-3)';
+    lbl.textContent = active || '(nenhum)';
+
+    // (pills removidas — abas dinâmicas assumiram o papel)
+}
+
+function applyStatus(d) {
+    document.getElementById('idle-min').textContent = d.idle_minutes;
+    document.getElementById('node-size').textContent = d.node_size;
+    document.getElementById('cluster-name').textContent = d.cluster_name;
+    ctxIndicator(d.active_context, d.cluster_name);
+
+    const azDot = document.getElementById('az-dot');
+    const azText = document.getElementById('az-text');
+    const azActions = document.getElementById('az-actions');
+    const clusterCard = document.getElementById('cluster-card');
+
+    if (busy) return; // não redesenhar botões enquanto uma ação SSE roda
+
+    if (!d.az_installed) {
+        azDot.style.background = '#f87171';
+        azText.style.color = '#f87171';
+        azText.textContent = 'Azure CLI não instalado no WSL';
+        azActions.innerHTML = '<button class="btn btn-primary" onclick="installAz()">Instalar Azure CLI</button>';
+        clusterCard.style.display = 'none';
+        return;
+    }
+    if (!d.logged_in) {
+        azDot.style.background = '#fbbf24';
+        azText.style.color = '#fbbf24';
+        azText.textContent = 'Não autenticado';
+        azActions.innerHTML = '<button class="btn btn-primary" onclick="login()">Fazer login no Azure</button>';
+        clusterCard.style.display = 'none';
+        return;
+    }
+
+    azDot.style.background = '#34d399';
+    azText.style.color = '#34d399';
+    azText.innerHTML = 'Logado · subscription <strong class="mono">' + escHtml(d.subscription) + '</strong>';
+    azActions.innerHTML = '';
+    clusterCard.style.display = 'block';
+    renderCluster(d);
+}
+
+function renderCluster(d) {
+    const dot = document.getElementById('cl-dot');
+    const text = document.getElementById('cl-text');
+    const actions = document.getElementById('cluster-actions');
+
+    const sub = { set textContent(v) {} }; // pill removida
+
+    if (!d.cluster_exists) {
+        dot.style.background = 'var(--text-3)';
+        text.style.color = 'var(--text-3)';
+        text.textContent = 'Cluster não existe';
+        sub.textContent = 'Azure AKS · não criado';
+        actions.innerHTML = '<button class="btn btn-primary" onclick="createCluster()">Criar cluster AKS (~5-10 min)</button>';
+        return;
+    }
+
+    const running = d.power_state === 'Running';
+    dot.style.background = running ? '#34d399' : '#fbbf24';
+    text.style.color = running ? '#34d399' : '#fbbf24';
+    text.textContent = running
+        ? (d.connected ? 'Running · conectado (alvo ativo)' : 'Running')
+        : (d.power_state || 'Desconhecido');
+    sub.textContent = 'Azure AKS · ' + (running ? 'rodando' : (d.power_state || '?').toLowerCase());
+
+    let btns = '';
+    if (running) {
+        if (!d.connected) btns += '<button class="btn btn-primary" onclick="act(\'connect\',\'Conectando...\')">Usar como alvo</button>';
+        btns += '<button class="btn btn-warn" onclick="act(\'stop\',\'Parando cluster...\')">Parar</button>';
+    } else {
+        btns += '<button class="btn btn-ghost" onclick="act(\'start\',\'Ligando cluster... (~2-3 min)\')">Iniciar</button>';
+    }
+    btns += '<button class="btn btn-danger" onclick="del()">Excluir</button>';
+    actions.innerHTML = btns;
+}
+
+// ── Ações simples (fetch POST) ──────────────────────────────
+async function act(path, label) {
+    const actions = document.getElementById('cluster-actions');
+    actions.innerHTML = '<span style="font-size:12px;color:var(--text-2);">' + label + '</span>';
+    try {
+        await fetch('/api/cloud/' + path, { method: 'POST' });
+    } catch(e) {}
+    refresh();
+}
+
+function del() {
+    if (!confirm('Excluir o cluster AKS? Isso remove tudo e é irreversível.')) return;
+    act('delete', 'Excluindo cluster...');
+}
+
+async function setTarget(target) {
+    try {
+        const r = await fetch('/api/context', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target })
+        });
+        const d = await r.json();
+        if (!d.success) alert('Falha ao trocar contexto:\n' + (d.output || ''));
+    } catch(e) {}
+    refresh();
+}
+
+// ── Ações SSE (streaming) ───────────────────────────────────
+function installAz() {
+    runSSE('/api/cloud/install-az', 'az-log', document.getElementById('az-log'));
+}
+function login() {
+    runSSE('/api/cloud/login', 'az-log', document.getElementById('az-log'));
+}
+function createCluster() {
+    const box = document.getElementById('cluster-progress');
+    box.style.display = 'block';
+    document.getElementById('cluster-steps').innerHTML = '';
+    document.getElementById('cluster-actions').innerHTML =
+        '<span style="font-size:12px;color:var(--text-2);">Criando... acompanhe abaixo.</span>';
+    busy = true;
+    const es = new EventSource('/api/cloud/create');
+    es.onmessage = e => {
+        const m = JSON.parse(e.data);
+        if (m.type === 'step') renderStep('cluster-steps', 'cl-step-' + m.index, m.desc, m.status);
+        else if (m.type === 'line') appendLine('cluster-steps', m.line);
+        else if (m.type === 'done') { es.close(); busy = false; refresh(); }
+    };
+    es.onerror = () => { es.close(); busy = false; refresh(); };
+}
+
+function runSSE(url, logId, logEl) {
+    logEl.style.display = 'block';
+    logEl.innerHTML = '<div class="step-item"><div class="step-icon"><div style="color:#38bdf8;animation:spin 1s linear infinite;display:inline-block;">⟳</div></div><div class="step-desc" id="' + logId + '-lines"></div></div>';
+    busy = true;
+    const es = new EventSource(url);
+    es.onmessage = e => {
+        const m = JSON.parse(e.data);
+        if (m.type === 'line') {
+            const el = document.getElementById(logId + '-lines');
+            el.innerHTML += escHtml(m.line) + '<br>';
+        } else if (m.type === 'done') {
+            es.close(); busy = false;
+            setTimeout(refresh, 500);
+        }
+    };
+    es.onerror = () => { es.close(); busy = false; refresh(); };
+}
+
+// ── Render helpers (padrão argocd) ──────────────────────────
+function renderStep(containerId, id, desc, status) {
+    let el = document.getElementById(id);
+    if (!el) {
+        el = document.createElement('div');
+        el.id = id;
+        el.className = 'step-item';
+        document.getElementById(containerId).appendChild(el);
+    }
+    let icon = '';
+    if (status === 'running') icon = '<div style="color:#38bdf8;animation:spin 1s linear infinite;display:inline-block;">⟳</div>';
+    else if (status === 'done') icon = '<span style="color:#4ade80;">✓</span>';
+    else if (status === 'warn') icon = '<span style="color:#fbbf24;">⚠</span>';
+    el.innerHTML = '<div class="step-icon">' + icon + '</div><div class="step-desc">' + escHtml(desc) + '</div>';
+}
+
+function appendLine(containerId, line) {
+    if (!line) return;
+    const steps = document.getElementById(containerId).querySelectorAll('.step-item');
+    const last = steps[steps.length - 1];
+    if (!last) return;
+    let out = last.querySelector('.step-out');
+    if (!out) {
+        out = document.createElement('div');
+        out.className = 'step-out';
+        last.querySelector('.step-desc').appendChild(out);
+    }
+    out.textContent = line.slice(0, 200);
+}
+
+function copyText(id) {
+    const txt = document.getElementById(id).textContent;
+    navigator.clipboard.writeText(txt);
+}
+function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Init ────────────────────────────────────────────────────
+refresh();
+loadContexts();
+setInterval(() => { if (!busy) refresh(); }, 8000);
+</script>
+{{end}}

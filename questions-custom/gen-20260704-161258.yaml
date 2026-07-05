@@ -1,0 +1,25 @@
+questions:
+    - id: custom-3eff21f8
+      cert: CKA
+      topic: Custom
+      difficulty: mid
+      type: multiple_choice
+      question: Qual é a principal diferença entre um pod e uma replicação?
+      options:
+        - Um pod é uma unidade de execução isolada, enquanto uma replicação é um grupo de pods identicamente igual.
+        - Um pod é um grupo de replicações, enquanto uma replicação é uma unidade de execução isolada.
+        - Uma replicação é um grupo de pods identicamente igual, enquanto um pod é um grupo de replicações.
+        - Uma replicação é uma unidade de execução isolada, enquanto um pod é um grupo de replicações identicamente igual.
+      answer: 1
+      explanation: |-
+        A primeira opção está correta porque um pod é uma unidade de execução isolada que contém aplicativos executados em containers, enquanto uma replicação é um grupo de pods identicamente igual.
+
+        (gerada pela IA local a partir da sua documentação)
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []

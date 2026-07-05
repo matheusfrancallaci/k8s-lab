@@ -1,0 +1,241 @@
+questions:
+  # ── Core Concepts ──────────────────────────────────────────
+  - id: argocd-easy-001
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: multiple_choice
+    question: "O que é ArgoCD e qual problema ele resolve?"
+    options:
+      - "Uma ferramenta de monitoramento de recursos Kubernetes"
+      - "Uma ferramenta GitOps de entrega contínua declarativa que mantém o cluster sincronizado com o repositório Git"
+      - "Um substituto para o kubectl para aplicar manifests"
+      - "Uma ferramenta de scan de vulnerabilidades para containers"
+    answer: 1
+    explanation: "ArgoCD implementa GitOps: monitora repositórios Git e sincroniza automaticamente o estado do cluster com o estado declarado nos manifests. Elimina deploys manuais e garante auditabilidade (todo deploy é um commit no Git)."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/core_concepts/"
+    doc_section: "ArgoCD Docs → Core Concepts"
+
+  - id: argocd-easy-002
+    cert: ArgoCD
+    topic: Application Management
+    difficulty: easy
+    type: multiple_choice
+    question: "O que é uma 'Application' no ArgoCD?"
+    options:
+      - "Um microserviço rodando no cluster Kubernetes"
+      - "Um CRD que representa um conjunto de recursos a ser implantado de uma fonte (Git/Helm/OCI) para um destino (cluster/namespace)"
+      - "Um pipeline de CI/CD que compila o código"
+      - "Um namespace dedicado para controlar deploys"
+    answer: 1
+    explanation: "Application é o CRD central do ArgoCD. Define: source (repositório Git, path, targetRevision), destination (cluster, namespace), e syncPolicy. O ArgoCD monitora essa Application e mantém o cluster no estado definido."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/core_concepts/"
+    doc_section: "ArgoCD Docs → Core Concepts → Application"
+
+  - id: argocd-easy-003
+    cert: ArgoCD
+    topic: Sync Strategies
+    difficulty: easy
+    type: multiple_choice
+    question: "O que significa o status 'OutOfSync' em uma Application do ArgoCD?"
+    options:
+      - "A aplicação está com erro e não funciona"
+      - "O estado atual do cluster diverge do estado desejado definido no repositório Git"
+      - "A aplicação perdeu conexão com o cluster Kubernetes"
+      - "O repositório Git está inacessível ou retornou erro"
+    answer: 1
+    explanation: "OutOfSync indica que o ArgoCD detectou diferenças entre o Git (estado desejado) e o cluster (estado atual). Causas: alguém editou recursos manualmente no cluster, um deployment falhou, ou um novo commit foi feito no Git. Sync resolve essa diferença."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/"
+    doc_section: "ArgoCD Docs → User Guide → Sync Options"
+
+  - id: argocd-easy-004
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual é o princípio central do GitOps implementado pelo ArgoCD?"
+    options:
+      - "O cluster sempre aplica mudanças antes do Git ser atualizado"
+      - "O Git é a fonte única de verdade (single source of truth) para o estado desejado da infraestrutura"
+      - "Deploys são feitos manualmente via argocd CLI em cada ambiente"
+      - "O ArgoCD substitui o repositório Git com seu próprio banco de dados"
+    answer: 1
+    explanation: "GitOps: o repositório Git é a única fonte de verdade. Toda mudança passa pelo Git (PR/merge). O ArgoCD garante que o cluster reflita exatamente o estado do Git. Benefícios: auditoria completa via git log, rollback via git revert, revisão via PR."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/core_concepts/"
+    doc_section: "ArgoCD Docs → Core Concepts"
+
+  - id: argocd-easy-005
+    cert: ArgoCD
+    topic: Architecture
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual componente do ArgoCD compara continuamente o estado do cluster com o Git e dispara sincronizações?"
+    options:
+      - "argocd-server (API/UI)"
+      - "argocd-repo-server (clona o Git)"
+      - "argocd-application-controller"
+      - "argocd-dex-server (autenticação)"
+    answer: 2
+    explanation: "O argocd-application-controller é o coração do ArgoCD: monitora Applications, chama o repo-server para obter os manifests do Git, compara com o cluster via API, e determina o status (Synced/OutOfSync). Também executa hooks de sync e dispara notificações."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/architecture/"
+    doc_section: "ArgoCD Docs → Operator Manual → Architecture"
+
+  - id: argocd-easy-006
+    cert: ArgoCD
+    topic: Application Management
+    difficulty: easy
+    type: multiple_choice
+    question: "Como criar uma Application ArgoCD que sincroniza o diretório 'apps/nginx' da branch 'main' de um repositório Git para o namespace 'production'?"
+    options:
+      - "argocd app create nginx --repo https://github.com/org/repo --path apps/nginx --dest-namespace production --dest-server https://kubernetes.default.svc"
+      - "kubectl create application nginx --git https://github.com/org/repo --path apps/nginx"
+      - "argocd deploy nginx --from-git https://github.com/org/repo --branch main"
+      - "kubectl apply -f argocd-app.yaml no namespace argocd"
+    answer: 0
+    explanation: "O comando argocd app create cria uma Application. Parâmetros essenciais: --repo (URL do Git), --path (pasta com os manifests), --dest-server (URL do cluster, default: https://kubernetes.default.svc para o cluster local), --dest-namespace. Adicione --revision main para branch específica."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/app-create/"
+    doc_section: "ArgoCD Docs → User Guide → Creating Apps"
+
+  - id: argocd-easy-007
+    cert: ArgoCD
+    topic: Sync Strategies
+    difficulty: easy
+    type: multiple_choice
+    question: "O que faz a opção 'Auto-Sync' em uma Application ArgoCD?"
+    options:
+      - "Sincroniza automaticamente a cada 1 hora"
+      - "Aplica automaticamente mudanças ao cluster quando detecta diferença entre Git e cluster, sem intervenção manual"
+      - "Atualiza automaticamente o repositório Git quando o cluster muda"
+      - "Faz sync apenas quando aprovado por um administrador"
+    answer: 1
+    explanation: "Auto-Sync (spec.syncPolicy.automated) faz o ArgoCD sincronizar automaticamente quando detecta OutOfSync. Opções: prune (deleta recursos removidos do Git) e selfHeal (reverte mudanças manuais no cluster). Recomendado para ambientes de desenvolvimento; use com cuidado em produção."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/"
+    doc_section: "ArgoCD Docs → User Guide → Automated Sync"
+
+  - id: argocd-easy-008
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual é a diferença entre os health status 'Healthy', 'Progressing' e 'Degraded' em uma Application ArgoCD?"
+    options:
+      - "Healthy = sincronizado; Progressing = em atualização; Degraded = desatualizado"
+      - "Healthy = todos recursos funcionando; Progressing = deploy em andamento; Degraded = algum recurso com problema (pod crashando, PVC não bound)"
+      - "São apenas nomes estéticos sem significado técnico"
+      - "Healthy = zero erros; Progressing = aguardando aprovação; Degraded = falha no Git"
+    answer: 1
+    explanation: "Health status reflete o estado dos recursos Kubernetes: Healthy (Deployment pronto, pods running), Progressing (rollout em andamento, pods inicializando), Degraded (pod em CrashLoopBackOff, PVC Pending, etc.), Missing (recurso não existe no cluster). ArgoCD tem health checks para tipos comuns de recursos."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/health/"
+    doc_section: "ArgoCD Docs → Operator Manual → Health Checks"
+
+  - id: argocd-easy-009
+    cert: ArgoCD
+    topic: Application Management
+    difficulty: easy
+    type: multiple_choice
+    question: "O que é um AppProject no ArgoCD?"
+    options:
+      - "Um projeto GitHub integrado ao ArgoCD para automação de CI"
+      - "Um recurso que agrupa Applications e define restrições: repositórios Git permitidos, clusters de destino e namespaces acessíveis"
+      - "Uma template de Application reutilizável"
+      - "Um namespace Kubernetes dedicado para o ArgoCD"
+    answer: 1
+    explanation: "AppProject define boundaries para Applications: (1) sourceRepos: quais Git repos são permitidos, (2) destinations: quais clusters/namespaces podem ser alvo, (3) clusterResourceWhitelist/namespaceResourceWhitelist: quais tipos de recursos podem ser criados. Essencial para multi-tenancy e controle de acesso."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/projects/"
+    doc_section: "ArgoCD Docs → User Guide → Projects"
+
+  - id: argocd-easy-010
+    cert: ArgoCD
+    topic: Architecture
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual tipo de fonte (source) o ArgoCD suporta além de repositórios Git com manifests YAML puro?"
+    options:
+      - "Apenas Git com YAML"
+      - "Git YAML, Helm charts (repositórios Helm ou Git), Kustomize e OCI Artifacts"
+      - "Apenas Helm charts"
+      - "Git YAML e Terraform"
+    answer: 1
+    explanation: "ArgoCD suporta: (1) Git com YAML/JSON puro, (2) Helm charts (de repos Helm ou Git), (3) Kustomize (auto-detectado por kustomization.yaml), (4) OCI Artifacts (desde Argo CD 2.6), (5) Directory (arquivos YAML/JSON em uma pasta Git), (6) Plugins customizados via Config Management Plugins (CMP)."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/tool_detection/"
+    doc_section: "ArgoCD Docs → User Guide → Tool Detection"
+
+  - id: argocd-easy-011
+    cert: ArgoCD
+    topic: Sync Strategies
+    difficulty: easy
+    type: multiple_choice
+    question: "O que é 'selfHeal' na política de auto-sync do ArgoCD e quando usar?"
+    options:
+      - "Reinicia pods que crasham automaticamente"
+      - "Reverte mudanças manuais feitas diretamente no cluster de volta para o estado do Git"
+      - "Faz rollback automático quando uma versão nova falha"
+      - "Corrige erros de sintaxe no repositório Git"
+    answer: 1
+    explanation: "selfHeal: true (dentro de spec.syncPolicy.automated) faz o ArgoCD detectar mudanças manuais no cluster (alguém editou um ConfigMap via kubectl edit) e reverter para o estado do Git. Garante que o cluster NUNCA diverge do Git. Use com prune: true para também deletar recursos que foram removidos do Git."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/#automatic-self-healing"
+    doc_section: "ArgoCD Docs → User Guide → Automatic Self-Healing"
+
+  - id: argocd-easy-012
+    cert: ArgoCD
+    topic: Application Management
+    difficulty: easy
+    type: multiple_choice
+    question: "Como fazer o sync manual de uma Application ArgoCD via CLI?"
+    options:
+      - "kubectl apply -f /argocd/sync.yaml"
+      - "argocd app sync <nome-da-application>"
+      - "argocd sync --app <nome-da-application>"
+      - "kubectl label application <nome> sync=true"
+    answer: 1
+    explanation: "'argocd app sync' dispara uma sincronização imediata. Útil quando Auto-Sync está desativado ou para forçar um sync urgente. Flags úteis: --prune (deleta recursos extras), --force (ignora diferenças de hash), --dry-run (simula sem aplicar), --strategy=apply ou hook."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/"
+    doc_section: "ArgoCD Docs → User Guide → Sync"
+
+  - id: argocd-easy-013
+    cert: ArgoCD
+    topic: Architecture
+    difficulty: easy
+    type: multiple_choice
+    question: "Como o ArgoCD se autentica em repositórios Git privados?"
+    options:
+      - "Usa as credenciais do usuário kubectl atual"
+      - "Armazena credenciais (SSH key, HTTPS username/password, GitHub token) como Secrets no namespace argocd"
+      - "Acessa Git anonimamente sempre"
+      - "Usa o Service Account do cluster para acessar o Git"
+    answer: 1
+    explanation: "ArgoCD suporta: (1) SSH keys (argocd repo add --ssh-private-key-path), (2) HTTPS com usuário/senha ou token (--username/--password), (3) GitHub App credentials, (4) GnuPG para verificação de commits assinados. As credenciais são armazenadas como Secrets no namespace argocd."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/private-repositories/"
+    doc_section: "ArgoCD Docs → User Guide → Private Repositories"
+
+  - id: argocd-easy-014
+    cert: ArgoCD
+    topic: Core Concepts
+    difficulty: easy
+    type: multiple_choice
+    question: "O que são 'Sync Hooks' (PreSync, Sync, PostSync) no ArgoCD?"
+    options:
+      - "Webhooks GitHub que disparam quando há commits"
+      - "Jobs ou outros recursos que rodam em fases específicas do sync: antes (PreSync), durante (Sync) ou após (PostSync) a sincronização"
+      - "Funções Lambda que validam manifests antes do deploy"
+      - "Regras de validação YAML executadas pelo kube-apiserver"
+    answer: 1
+    explanation: "Sync Hooks são Jobs/Pods anotados com argocd.argoproj.io/hook: PreSync/Sync/PostSync/SyncFail. Usos comuns: PreSync (rodar migrations de banco), PostSync (smoke tests), SyncFail (notificações de falha). O ArgoCD aguarda cada hook completar antes de prosseguir."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/resource_hooks/"
+    doc_section: "ArgoCD Docs → User Guide → Resource Hooks"
+
+  - id: argocd-easy-015
+    cert: ArgoCD
+    topic: Application Management
+    difficulty: easy
+    type: multiple_choice
+    question: "O que é 'App of Apps' pattern no ArgoCD?"
+    options:
+      - "Um único manifesto YAML que define múltiplos containers no mesmo pod"
+      - "Uma Application ArgoCD que gerencia outras Applications, permitindo implantar múltiplas apps de forma centralizada"
+      - "Uma estratégia de deploy em que apps são deployadas em ordem alfabética"
+      - "Um tipo especial de Helm chart para múltiplos serviços"
+    answer: 1
+    explanation: "App of Apps: uma Application 'root' cujo source contém manifests de outras Applications ArgoCD. O ArgoCD aplica a root app, que cria as child apps, que por sua vez sincronizam seus próprios recursos. Ideal para bootstrap de clusters e gestão de múltiplos times/ambientes."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/operator-manual/cluster-bootstrapping/"
+    doc_section: "ArgoCD Docs → Operator Manual → Cluster Bootstrapping"

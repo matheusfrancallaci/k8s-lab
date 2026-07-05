@@ -1,0 +1,241 @@
+questions:
+  # ── Troubleshooting ───────────────────────────────────────
+  - id: cka-hard-001
+    cert: CKA
+    topic: Troubleshooting
+    difficulty: hard
+    type: multiple_choice
+    question: "Um pod está em estado 'CrashLoopBackOff'. Qual sequência de diagnóstico é mais eficaz?"
+    options:
+      - "kubectl delete pod e recriar"
+      - "kubectl logs <pod> --previous && kubectl describe pod <pod> para checar Events"
+      - "kubectl exec -it <pod> -- /bin/sh e verificar o processo"
+      - "Reiniciar o kubelet no nó"
+    answer: 1
+    explanation: "'kubectl logs --previous' mostra os logs da execução anterior (que causou o crash). 'kubectl describe' mostra eventos recentes e o reason do restart. CrashLoopBackOff indica que o container inicia mas falha repetidamente — o backoff aumenta exponencialmente (10s, 20s, 40s...)."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/"
+    doc_section: "Tasks → Debug → Debug Pods"
+
+  - id: cka-hard-002
+    cert: CKA
+    topic: etcd
+    difficulty: hard
+    type: multiple_choice
+    question: "Como fazer um backup correto do etcd em um cluster kubeadm?"
+    options:
+      - "kubectl backup etcd --output=/tmp/etcd.bak"
+      - "etcdctl snapshot save /tmp/snapshot.db --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key"
+      - "cp -r /etc/kubernetes/etcd /tmp/backup"
+      - "kubeadm etcd backup /tmp/snapshot.db"
+    answer: 1
+    explanation: "etcdctl snapshot save requer os certificados TLS do etcd para autenticação. No kubeadm, os certificados ficam em /etc/kubernetes/pki/etcd/. Use ETCDCTL_API=3 antes do comando. Verifique o backup com 'etcdctl snapshot status'."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/#backing-up-an-etcd-cluster"
+    doc_section: "Tasks → Administer Cluster → Configure etcd → Backing up"
+
+  - id: cka-hard-003
+    cert: CKA
+    topic: Networking
+    difficulty: hard
+    type: multiple_choice
+    question: "Um pod não consegue resolver nomes DNS dentro do cluster. Qual componente verificar primeiro e como diagnosticar?"
+    options:
+      - "kube-scheduler — verificar logs do scheduler"
+      - "kube-proxy — reiniciar o DaemonSet do kube-proxy"
+      - "CoreDNS — verificar pods do CoreDNS no namespace kube-system e testar com nslookup dentro de um pod"
+      - "etcd — verificar conectividade com o etcd"
+    answer: 2
+    explanation: "CoreDNS é o servidor DNS padrão do Kubernetes. Diagnóstico: (1) kubectl get pods -n kube-system -l k8s-app=kube-dns, (2) kubectl logs -n kube-system <coredns-pod>, (3) kubectl exec -it <test-pod> -- nslookup kubernetes.default. Também verifique o ConfigMap 'coredns' em kube-system."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/"
+    doc_section: "Tasks → Administer Cluster → Debug DNS Resolution"
+
+  - id: cka-hard-004
+    cert: CKA
+    topic: Security
+    difficulty: hard
+    type: multiple_choice
+    question: "O que acontece quando você define 'automountServiceAccountToken: false' em um pod?"
+    options:
+      - "O pod não consegue criar outros pods"
+      - "O token da service account não é montado automaticamente em /var/run/secrets/kubernetes.io/serviceaccount/"
+      - "O pod não consegue acessar o kube-apiserver por nenhuma via"
+      - "A service account é desassociada do pod permanentemente"
+    answer: 1
+    explanation: "Por padrão, o Kubernetes monta o token da service account em cada pod. Definir 'automountServiceAccountToken: false' impede essa montagem, reduzindo a superfície de ataque. O pod pode ainda usar tokens projetados via volumes explícitos com 'serviceAccountToken' projection."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#opt-out-of-api-credential-automounting"
+    doc_section: "Tasks → Configure Service Account → Opt Out of Token Automounting"
+
+  - id: cka-hard-005
+    cert: CKA
+    topic: Cluster Architecture
+    difficulty: hard
+    type: multiple_choice
+    question: "Qual componente do control plane monitora o estado do cluster e executa loops de reconciliação para atingir o estado desejado?"
+    options:
+      - "kube-apiserver"
+      - "kube-scheduler"
+      - "kube-controller-manager"
+      - "cloud-controller-manager"
+    answer: 2
+    explanation: "O kube-controller-manager executa múltiplos controllers em um único binário: Node Controller, Replication Controller, Endpoints Controller, ServiceAccount Controller etc. Cada controller usa um loop de reconciliação (watch→compare→act) para manter o estado desejado."
+    doc_url: "https://kubernetes.io/docs/concepts/architecture/controller/"
+    doc_section: "Concepts → Architecture → Controllers"
+
+  - id: cka-hard-006
+    cert: CKA
+    topic: Security
+    difficulty: hard
+    type: multiple_choice
+    question: "Você quer verificar se um usuário 'john' tem permissão para deletar pods no namespace 'production'. Qual comando usar?"
+    options:
+      - "kubectl get rbac --user=john -n production"
+      - "kubectl auth can-i delete pods --as=john -n production"
+      - "kubectl describe role --user=john -n production"
+      - "kubectl check permission john pods delete -n production"
+    answer: 1
+    explanation: "'kubectl auth can-i' verifica permissões de um usuário/serviceaccount. Com '--as' você pode impersonar qualquer usuário. Retorna 'yes' ou 'no'. Também útil: 'kubectl auth can-i --list -n production --as=john' para listar todas as permissões."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/authorization/#checking-api-access"
+    doc_section: "Reference → Authorization → Checking API Access"
+
+  - id: cka-hard-007
+    cert: CKA
+    topic: Troubleshooting
+    difficulty: hard
+    type: multiple_choice
+    question: "Um Deployment tem pods em ImagePullBackOff. Qual a ordem correta de investigação?"
+    options:
+      - "Deletar o Deployment e recriar"
+      - "kubectl describe pod <pod> para ver o Events, verificar o nome/tag da imagem e credenciais de registry privado"
+      - "Reiniciar o containerd no nó"
+      - "kubectl logs <pod> para ver os erros de pull"
+    answer: 1
+    explanation: "ImagePullBackOff indica falha ao baixar a imagem. Diagnóstico: (1) kubectl describe pod mostra o erro exato nos Events (image not found, unauthorized, etc.), (2) verificar nome/tag da imagem no yaml, (3) para registry privado verificar se o Secret do tipo docker-registry está referenciado em imagePullSecrets."
+    doc_url: "https://kubernetes.io/docs/concepts/containers/images/#using-a-private-registry"
+    doc_section: "Concepts → Containers → Images → Private Registry"
+
+  - id: cka-hard-008
+    cert: CKA
+    topic: Cluster Maintenance
+    difficulty: hard
+    type: multiple_choice
+    question: "Qual é o processo correto para atualizar um nó worker em um cluster kubeadm de forma segura?"
+    options:
+      - "Reiniciar o nó diretamente"
+      - "kubectl cordon → kubectl drain → upgrade kubeadm/kubelet/kubectl → kubectl uncordon"
+      - "kubectl taint node NoExecute → upgrade → kubectl taint remove"
+      - "Apenas reiniciar o kubelet após o upgrade"
+    answer: 1
+    explanation: "Processo de upgrade de nó worker: (1) cordon para impedir novos pods, (2) drain para evacuar pods existentes, (3) apt upgrade kubeadm → kubeadm upgrade node → apt upgrade kubelet kubectl → systemctl restart kubelet, (4) uncordon para retornar ao pool. Para o control plane, use 'kubeadm upgrade apply' primeiro."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/"
+    doc_section: "Tasks → Administer Cluster → kubeadm upgrade"
+
+  - id: cka-hard-009
+    cert: CKA
+    topic: Networking
+    difficulty: hard
+    type: multiple_choice
+    question: "Um serviço ClusterIP tem endpoints mas os pods não respondem. Qual é a causa mais provável e como verificar?"
+    options:
+      - "O kube-proxy não está rodando — verificar logs do kube-proxy"
+      - "As liveness/readiness probes estão falhando, removendo os pods dos endpoints"
+      - "O CoreDNS está com problemas — reiniciar o CoreDNS"
+      - "O Service não tem o campo 'selector' configurado"
+    answer: 1
+    explanation: "Se o Service tem endpoints mas pods não respondem, verifique readiness probes: pods com readiness failing são removidos dos Endpoints. Diagnóstico: (1) kubectl get endpoints <svc>, (2) kubectl describe pod para ver probe failures, (3) kubectl get events. O kube-proxy gerencia iptables/ipvs rules baseado nos Endpoints."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/"
+    doc_section: "Tasks → Debug → Debug Services"
+
+  - id: cka-hard-010
+    cert: CKA
+    topic: Security
+    difficulty: hard
+    type: multiple_choice
+    question: "Como criar um certificado TLS para um usuário 'jane' e configurar acesso ao cluster?"
+    options:
+      - "kubectl create user jane --cert-type=tls"
+      - "Gerar chave privada + CSR → CertificateSigningRequest no K8s → kubectl certificate approve → criar kubeconfig com o certificado"
+      - "kubectl create serviceaccount jane → kubectl create token jane"
+      - "Adicionar jane no arquivo /etc/kubernetes/users.csv"
+    answer: 1
+    explanation: "Processo: (1) openssl genrsa → openssl req (CSR), (2) kubectl apply CertificateSigningRequest (base64 do CSR), (3) kubectl certificate approve <csr>, (4) kubectl get csr -o jsonpath='{.status.certificate}' | base64 -d > jane.crt, (5) kubectl config set-credentials jane --client-certificate=jane.crt --client-key=jane.key"
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/"
+    doc_section: "Reference → Certificate Signing Requests"
+
+  - id: cka-hard-011
+    cert: CKA
+    topic: Storage
+    difficulty: hard
+    type: multiple_choice
+    question: "Um PVC está em estado 'Lost' após o PV ser deletado manualmente. O que acontece com os dados e como resolver?"
+    options:
+      - "Os dados são recuperados automaticamente quando o PV é recriado com o mesmo nome"
+      - "Os dados são perdidos; a PVC deve ser deletada e recriada, e o PV recriado com os dados restaurados"
+      - "O Kubernetes faz backup automático e restaura o PV"
+      - "Basta fazer kubectl apply no PV original para rebind"
+    answer: 1
+    explanation: "Quando um PV é deletado enquanto uma PVC ainda está associada, a PVC entra em 'Lost'. Os dados no storage subjacente podem ainda existir, mas o bind está quebrado. Para recuperar: (1) recriar o PV com os mesmos dados (se o storage subjacente foi mantido), (2) adicionar 'claimRef' no PV apontando para a PVC existente para forçar o rebind."
+    doc_url: "https://kubernetes.io/docs/concepts/storage/persistent-volumes/#reserving-a-persistentvolume"
+    doc_section: "Concepts → Storage → Reserving a PersistentVolume"
+
+  - id: cka-hard-012
+    cert: CKA
+    topic: Cluster Architecture
+    difficulty: hard
+    type: multiple_choice
+    question: "O kubelet em um nó worker não consegue se comunicar com o kube-apiserver. Quais logs verificar e como diagnosticar?"
+    options:
+      - "Verificar logs do kube-proxy com journalctl -u kube-proxy"
+      - "Verificar journalctl -u kubelet, certificado do kubelet, e conectividade com o endpoint do apiserver"
+      - "Verificar logs do etcd no control plane"
+      - "Reiniciar o containerd e verificar os pods do nó"
+    answer: 1
+    explanation: "Diagnóstico do kubelet: (1) journalctl -u kubelet -f para logs em tempo real, (2) verificar /etc/kubernetes/kubelet.conf (kubeconfig do kubelet), (3) verificar se o certificado do kubelet expirou (/var/lib/kubelet/pki/), (4) testar conectividade com curl -k https://<apiserver>:6443/healthz, (5) verificar se o nó aparece em 'kubectl get nodes'."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-cluster/"
+    doc_section: "Tasks → Debug → Debug Cluster"
+
+  - id: cka-hard-013
+    cert: CKA
+    topic: Scheduling
+    difficulty: hard
+    type: multiple_choice
+    question: "Você quer que pods críticos de produção não sejam evictos em favor de outros pods. Qual mecanismo usar?"
+    options:
+      - "Definir ResourceQuota alto para o namespace de produção"
+      - "Usar PodDisruptionBudget com minAvailable"
+      - "Criar uma PriorityClass com valor alto e configurar preemption=Never"
+      - "Adicionar taints NoExecute em todos os nós de produção"
+    answer: 2
+    explanation: "PriorityClass com valor alto garante que pods críticos têm prioridade de scheduling. Com preemptionPolicy=Never, eles têm alta prioridade mas não expulsam outros pods. PodDisruptionBudget protege durante manutenções voluntárias, mas não evita evicção por pressão de recursos."
+    doc_url: "https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/"
+    doc_section: "Concepts → Scheduling → Pod Priority and Preemption"
+
+  - id: cka-hard-014
+    cert: CKA
+    topic: Networking
+    difficulty: hard
+    type: multiple_choice
+    question: "Como garantir que pods de um namespace 'frontend' não possam fazer egress para nenhum destino exceto o namespace 'backend' e o kube-dns?"
+    options:
+      - "Configurar um Ingress com regras de bloqueio"
+      - "Criar uma NetworkPolicy no namespace 'frontend' com egress apenas para namespace 'backend' (por namespaceSelector) e porta 53 (DNS)"
+      - "Adicionar annotation no namespace frontend bloqueando egress"
+      - "Usar um Service Mesh como Istio para bloquear tráfego"
+    answer: 1
+    explanation: "NetworkPolicy com regras de egress: (1) allow egress para pods no namespace 'backend' usando namespaceSelector, (2) allow egress na porta 53 (UDP e TCP) para kube-dns. Sem regras de egress em uma NetworkPolicy que seleciona os pods, todo egress é bloqueado por padrão."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-deny-all-egress-traffic"
+    doc_section: "Concepts → Network Policies → Default Deny Egress"
+
+  - id: cka-hard-015
+    cert: CKA
+    topic: etcd
+    difficulty: hard
+    type: multiple_choice
+    question: "Como restaurar um cluster Kubernetes de um snapshot do etcd?"
+    options:
+      - "kubectl restore etcd --from=/tmp/snapshot.db"
+      - "etcdctl snapshot restore /tmp/snapshot.db --data-dir=/var/lib/etcd-restored → atualizar o pod estático do etcd para usar o novo data-dir"
+      - "Copiar snapshot.db para /var/lib/etcd/ e reiniciar o etcd"
+      - "kubeadm etcd restore /tmp/snapshot.db"
+    answer: 1
+    explanation: "Processo de restore: (1) Parar o kube-apiserver (mover o manifest de /etc/kubernetes/manifests/), (2) etcdctl snapshot restore com --data-dir apontando para novo diretório, (3) atualizar /etc/kubernetes/manifests/etcd.yaml com o novo hostPath, (4) o etcd reinicia automaticamente, (5) mover o manifest do apiserver de volta."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/#restoring-an-etcd-cluster"
+    doc_section: "Tasks → Administer Cluster → Restore etcd"

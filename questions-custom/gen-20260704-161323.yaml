@@ -1,0 +1,156 @@
+questions:
+    - id: custom-bdf121ae
+      cert: CKA
+      topic: Application Design
+      difficulty: easy
+      type: lab
+      question: |-
+        Init containers, passo a passo:
+
+        1. Aplique:
+        ```
+        kubectl apply -f - <<EOF
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: nova-api
+        spec:
+          initContainers:
+          - name: prepara
+            image: busybox:1.35
+            command: ['sh', '-c', 'echo preparando && sleep 3']
+          containers:
+          - name: app
+            image: nginx:1.21
+        EOF
+        ```
+        2. Observe: `kubectl get pod nova-api -w` — status passa por **Init:0/1** antes de **Running**
+
+        O container principal só inicia quando TODOS os init completam.
+      options: []
+      answer: 0
+      explanation: 'Init containers rodam um a um, em ordem, até completarem — só então os containers principais iniciam. Casos clássicos: aguardar um Service ficar disponível, popular um volume compartilhado, rodar migrations. Se um init falha, o kubelet o reinicia conforme a restartPolicy; o pod fica em Init:Error/CrashLoopBackOff. kubectl logs <pod> -c <init> inspeciona.'
+      doc_url: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
+      doc_section: Concepts → Pods → Init Containers
+      hint: 'spec.initContainers: [{name, image: busybox:1.35, command: [''sh'',''-c'',''...'']}] antes de containers.'
+      answer_command: 'kubectl apply -f pod.yaml  # pod nova-api com initContainers busybox + container nginx'
+      validation: null
+      goals:
+        - description: Pod **nova-api** tem um **initContainer** busybox
+          hint: Use exatamente o YAML do passo 1 — initContainers fica no mesmo nível de containers.
+          validation:
+            command: kubectl get pod nova-api -o jsonpath='{.spec.initContainers[0].image}' 2>/dev/null
+            expected_contains: busybox
+            expected_output: ""
+        - description: Pod chegou a **Running** (init completou)
+          hint: kubectl get pod nova-api — Init:0/1 → PodInitializing → Running. Se travar em Init, veja kubectl logs nova-api -c prepara.
+          validation:
+            command: kubectl get pod nova-api -o jsonpath='{.status.phase}' 2>/dev/null
+            expected_contains: Running
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete pod nova-api --ignore-not-found=true
+    - id: custom-a95b463c
+      cert: CKA
+      topic: Application Design
+      difficulty: easy
+      type: lab
+      question: |-
+        Health checks, passo a passo:
+
+        1. `kubectl edit deployment atlas-auth`
+        2. Em spec.template.spec.containers[0], adicione:
+        ```
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+        ```
+        3. Salve — o Deployment faz rollout automático
+
+        readiness controla tráfego; liveness reinicia container travado.
+      options: []
+      answer: 0
+      explanation: Probes são o contrato de saúde do container. readiness falhou → pod sai dos endpoints (sem tráfego), mas NÃO reinicia. liveness falhou → kubelet reinicia o container. Há ainda startupProbe para apps lentos no boot. Sem probes, rolling updates podem mandar tráfego para pods ainda não prontos.
+      doc_url: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+      doc_section: Tasks → Configure Probes
+      hint: 'Em containers[0]: readinessProbe e livenessProbe com httpGet {path: /, port: 80}'
+      answer_command: 'kubectl edit deployment atlas-auth  # adicionar readinessProbe/livenessProbe httpGet / :80'
+      validation: null
+      goals:
+        - description: '**readinessProbe** httpGet configurada'
+          hint: 'No kubectl edit, dentro do container, cole o bloco readinessProbe do passo 2 (indentação: mesmo nível de image).'
+          validation:
+            command: kubectl get deploy atlas-auth -o jsonpath='{.spec.template.spec.containers[0].readinessProbe.httpGet.path}' 2>/dev/null
+            expected_contains: /
+            expected_output: ""
+        - description: '**livenessProbe** httpGet na porta **80**'
+          hint: Bloco livenessProbe igual ao readiness — só muda o nome da chave.
+          validation:
+            command: kubectl get deploy atlas-auth -o jsonpath='{.spec.template.spec.containers[0].livenessProbe.httpGet.port}' 2>/dev/null
+            expected_contains: "80"
+            expected_output: ""
+      setup:
+        - description: Criando o Deployment atlas-auth...
+          command: kubectl create deployment atlas-auth --image=nginx:1.21 --replicas=1 2>/dev/null || true
+        - description: Aguardando pod ficar pronto...
+          command: kubectl rollout status deployment/atlas-auth --timeout=90s 2>/dev/null || true
+      teardown:
+        - kubectl delete deployment atlas-auth --ignore-not-found=true
+    - id: custom-ecfe7768
+      cert: CKA
+      topic: Application Design
+      difficulty: easy
+      type: lab
+      question: |-
+        Init containers, passo a passo:
+
+        1. Aplique:
+        ```
+        kubectl apply -f - <<EOF
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: lunar-auth
+        spec:
+          initContainers:
+          - name: prepara
+            image: busybox:1.35
+            command: ['sh', '-c', 'echo preparando && sleep 3']
+          containers:
+          - name: app
+            image: nginx:1.21
+        EOF
+        ```
+        2. Observe: `kubectl get pod lunar-auth -w` — status passa por **Init:0/1** antes de **Running**
+
+        O container principal só inicia quando TODOS os init completam.
+      options: []
+      answer: 0
+      explanation: 'Init containers rodam um a um, em ordem, até completarem — só então os containers principais iniciam. Casos clássicos: aguardar um Service ficar disponível, popular um volume compartilhado, rodar migrations. Se um init falha, o kubelet o reinicia conforme a restartPolicy; o pod fica em Init:Error/CrashLoopBackOff. kubectl logs <pod> -c <init> inspeciona.'
+      doc_url: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
+      doc_section: Concepts → Pods → Init Containers
+      hint: 'spec.initContainers: [{name, image: busybox:1.35, command: [''sh'',''-c'',''...'']}] antes de containers.'
+      answer_command: 'kubectl apply -f pod.yaml  # pod lunar-auth com initContainers busybox + container nginx'
+      validation: null
+      goals:
+        - description: Pod **lunar-auth** tem um **initContainer** busybox
+          hint: Use exatamente o YAML do passo 1 — initContainers fica no mesmo nível de containers.
+          validation:
+            command: kubectl get pod lunar-auth -o jsonpath='{.spec.initContainers[0].image}' 2>/dev/null
+            expected_contains: busybox
+            expected_output: ""
+        - description: Pod chegou a **Running** (init completou)
+          hint: kubectl get pod lunar-auth — Init:0/1 → PodInitializing → Running. Se travar em Init, veja kubectl logs lunar-auth -c prepara.
+          validation:
+            command: kubectl get pod lunar-auth -o jsonpath='{.status.phase}' 2>/dev/null
+            expected_contains: Running
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete pod lunar-auth --ignore-not-found=true

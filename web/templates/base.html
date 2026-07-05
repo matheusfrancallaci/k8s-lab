@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Kubernetes study lab com labs práticos, quiz, tutor local e integração com cluster real.">
+    <meta property="og:title" content="K8s Study Lab">
+    <meta property="og:description" content="Ambiente de estudo para Kubernetes com labs práticos e tutor local.">
+    <title>{{if .PageTitle}}{{.PageTitle}} · K8s Study Lab{{else}}K8s Study Lab{{end}}</title>
+    <script>
+        // Aplica o tema salvo ANTES do primeiro paint (evita flash)
+        (function () {
+            var t = null;
+            try { t = localStorage.getItem('k8slab-theme'); } catch (e) {}
+            if (t && t !== 'dark') document.documentElement.setAttribute('data-theme', t);
+        })();
+    </script>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/main.css">
+</head>
+<body>
+    {{block "content" .}}{{end}}
+
+    <!-- Theme switcher (global) -->
+    <div class="theme-fab" id="theme-fab">
+        <button class="theme-fab-btn" onclick="toggleThemePop(event)" aria-label="Mudar tema" title="Tema">
+            <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="4"/>
+                <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32 1.41-1.41"/>
+            </svg>
+        </button>
+        <div class="theme-pop" id="theme-pop">
+            <p class="theme-pop-title">idioma · language</p>
+            <div style="display:flex;gap:6px;padding:2px 10px 10px;">
+                <button class="theme-opt" data-lang-opt="pt" onclick="setLang('pt')" style="flex:1;justify-content:center;">🇧🇷 Português <span class="check">✓</span></button>
+                <button class="theme-opt" data-lang-opt="en" onclick="setLang('en')" style="flex:1;justify-content:center;">🇺🇸 English <span class="check">✓</span></button>
+            </div>
+            <p class="theme-pop-title">tema</p>
+            <button class="theme-opt" data-theme-opt="dark" onclick="setTheme('dark')">
+                <span class="swatches"><span class="sw" style="background:#050510;"></span><span class="sw" style="background:#818cf8;"></span><span class="sw" style="background:#eef0ff;"></span></span>
+                Dark <span class="check">✓</span>
+            </button>
+            <button class="theme-opt" data-theme-opt="dimmed" onclick="setTheme('dimmed')">
+                <span class="swatches"><span class="sw" style="background:#1c2128;"></span><span class="sw" style="background:#818cf8;"></span><span class="sw" style="background:#adbac7;"></span></span>
+                Dark dimmed <span class="check">✓</span>
+            </button>
+            <button class="theme-opt" data-theme-opt="contrast" onclick="setTheme('contrast')">
+                <span class="swatches"><span class="sw" style="background:#010409;"></span><span class="sw" style="background:#a5b4fc;"></span><span class="sw" style="background:#ffffff;"></span></span>
+                High contrast <span class="check">✓</span>
+            </button>
+            <button class="theme-opt" data-theme-opt="light" onclick="setTheme('light')">
+                <span class="swatches"><span class="sw" style="background:#ffffff;"></span><span class="sw" style="background:#4f46e5;"></span><span class="sw" style="background:#1f2328;"></span></span>
+                Light <span class="check">✓</span>
+            </button>
+        </div>
+    </div>
+    <!-- Paleta de comandos (Ctrl+K) -->
+    <div class="pal-overlay" id="pal-overlay" onclick="if(event.target===this)closePal()">
+        <div class="pal">
+            <input id="pal-input" placeholder="Para onde vamos? (páginas, labs, ações...)" oninput="palFilter()" onkeydown="palKey(event)">
+            <div class="pal-list" id="pal-list"></div>
+            <div class="pal-foot">↑↓ navega · Enter abre · Esc fecha</div>
+        </div>
+    </div>
+    <script>
+        const PAL_ITEMS = [
+            { ico: '🏠', label: 'Início', url: '/' },
+            { ico: '📝', label: 'Practice Test (quiz)', url: '/practice' },
+            { ico: '🧪', label: 'Laboratórios', url: '/lab' },
+            { ico: '🤖', label: 'Tutor (IA local)', url: '/tutor' },
+            { ico: '🚨', label: 'Modo Incidente — quebrar e consertar', url: '/tutor?q=incidente' },
+            { ico: '🏆', label: 'Simulado de prova (Modo Exame)', url: '/tutor?q=simulado' },
+            { ico: '☁', label: 'Cloud (Azure AKS · multi-cloud)', url: '/cloud' },
+            { ico: '🖥', label: 'On-premise (minikube)', url: '/onpremise' },
+            { ico: '🐙', label: 'ArgoCD', url: '/argocd' },
+            { ico: '🧰', label: 'Instalações — Helm, Grafana, Ingress...', url: '/tools' },
+            { ico: '📚', label: 'Docs — referência rápida', url: '/docs' },
+        ];
+        let palSel = 0;
+        function openPal() {
+            document.getElementById('pal-overlay').classList.add('open');
+            const inp = document.getElementById('pal-input');
+            inp.value = ''; palSel = 0; palFilter(); inp.focus();
+        }
+        function closePal() { document.getElementById('pal-overlay').classList.remove('open'); }
+        function palVisible() {
+            const q = document.getElementById('pal-input').value.toLowerCase();
+            return PAL_ITEMS.filter(i => !q || i.label.toLowerCase().includes(q));
+        }
+        function palFilter() {
+            const items = palVisible();
+            if (palSel >= items.length) palSel = 0;
+            const list = document.getElementById('pal-list');
+            list.innerHTML = items.map((i, idx) =>
+                `<div class="pal-item${idx === palSel ? ' sel' : ''}" onclick="location.href='${i.url}'">
+                    <span class="pi-ico">${i.ico}</span>${i.label}
+                    ${idx === palSel ? '<span class="pi-kbd">enter</span>' : ''}</div>`).join('')
+                || '<div class="pal-item">nada por aqui…</div>';
+        }
+        function palKey(e) {
+            const items = palVisible();
+            if (e.key === 'ArrowDown') { e.preventDefault(); palSel = (palSel + 1) % items.length; palFilter(); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); palSel = (palSel - 1 + items.length) % items.length; palFilter(); }
+            else if (e.key === 'Enter' && items[palSel]) { location.href = items[palSel].url; }
+            else if (e.key === 'Escape') { closePal(); }
+        }
+        document.addEventListener('keydown', e => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPal(); }
+            if (e.key === 'Escape') closePal();
+        });
+
+        // ── i18n — PT/EN (termos de Kubernetes ficam SEMPRE em inglês) ──
+        const I18N = {
+            'nav.study':      { pt: 'estudar', en: 'study' },
+            'nav.platform':   { pt: 'plataforma', en: 'platform' },
+            'nav.home':       { pt: 'Início', en: 'Home' },
+            'nav.labs':       { pt: 'Laboratórios', en: 'Labs' },
+            'labs.title':     { pt: 'Laboratórios Práticos', en: 'Hands-on Labs' },
+            'labs.sub':       { pt: 'Terminal real, validação automática e ambiente preparado para você.', en: 'Real terminal, automatic validation and a pre-provisioned environment.' },
+            'labs.study':     { pt: 'Sessão de Estudo', en: 'Study Session' },
+            'labs.study.d':   { pt: 'configure abaixo: hints, solution e tutor liberados', en: 'configure below: hints, solution and tutor enabled' },
+            'labs.exam':      { pt: 'Modo Exame', en: 'Exam Mode' },
+            'labs.exam.d':    { pt: '16 questões · 2h · sem dicas · score report', en: '16 questions · 2h · no hints · score report' },
+            'labs.incident':  { pt: 'Modo Incidente', en: 'Incident Mode' },
+            'labs.incident.d':{ pt: 'o cluster chega quebrado — diagnostique e conserte', en: 'the cluster arrives broken — diagnose and fix it' },
+            'labs.start':     { pt: 'INICIAR SESSÃO', en: 'START SESSION' },
+            'labs.env':       { pt: 'ambiente do cluster', en: 'cluster environment' },
+            'labs.qty':       { pt: 'quantidade de questões', en: 'number of questions' },
+            'labs.diff':      { pt: 'dificuldade', en: 'difficulty' },
+            'labs.cert':      { pt: 'certificação', en: 'certification' },
+            'labs.topics':    { pt: 'tópicos', en: 'topics' },
+            'home.mode':      { pt: 'escolha um modo', en: 'pick a mode' },
+            'nav.practice':   { pt: 'Prova Teórica', en: 'Practice Test' },
+            'home.quiz.t':    { pt: 'Prova Teórica', en: 'Practice Test' },
+            'home.hero':      { pt: 'Kubernetes<br><em>Certification</em><br>Practice', en: 'Kubernetes<br><em>Certification</em><br>Practice', html: true },
+            'home.desc':      { pt: 'CKA · CKAD · CKS · ArgoCD — questões de teoria e labs práticos com kubectl real no seu cluster.', en: 'CKA · CKAD · CKS · ArgoCD — theory questions and hands-on labs with real kubectl on your cluster.' },
+            'practice.title': { pt: 'Prova Teórica', en: 'Practice Test' },
+            'practice.sub':   { pt: '// questões de teoria — configure e inicie', en: '// theory questions — configure and start' },
+            'practice.start': { pt: 'INICIAR PROVA TEÓRICA', en: 'START PRACTICE TEST' },
+            'home.resume':    { pt: 'Continuar de onde parou', en: 'Resume where you left off' },
+            'home.quiz.d':    { pt: 'Questões de teoria e conceitos. Escolha certificação, dificuldade e quantidade.', en: 'Theory and concept questions. Pick certification, difficulty and amount.' },
+            'home.lab.t':     { pt: 'Laboratório Prático', en: 'Hands-on Lab' },
+            'home.lab.d':     { pt: 'Terminal real com kubectl, vim e tab completion. Sessões com validação automática.', en: 'Real terminal with kubectl, vim and tab completion. Auto-validated sessions.' },
+            'home.progress':  { pt: 'seu progresso', en: 'your progress' },
+            'home.checks':    { pt: 'checks feitos', en: 'checks done' },
+            'home.rate':      { pt: 'taxa de acerto', en: 'success rate' },
+            'home.done':      { pt: 'labs concluídos', en: 'labs completed' },
+            'home.daily':     { pt: '⚡ Revisão do dia — 5 questões dos seus pontos fracos', en: '⚡ Daily review — 5 questions on your weak spots' },
+        };
+        function currentLang() {
+            try { return localStorage.getItem('k8slab-lang') || 'pt'; } catch (e) { return 'pt'; }
+        }
+        function applyLang() {
+            const l = currentLang();
+            document.documentElement.lang = l === 'en' ? 'en' : 'pt-BR';
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const t = I18N[el.dataset.i18n];
+                if (t && t[l]) { if (t.html) el.innerHTML = t[l]; else el.textContent = t[l]; }
+            });
+            document.querySelectorAll('[data-lang-opt]').forEach(el =>
+                el.classList.toggle('active', el.dataset.langOpt === l));
+        }
+        function setLang(l) {
+            try { localStorage.setItem('k8slab-lang', l); } catch (e) {}
+            applyLang();
+            document.getElementById('theme-pop').classList.remove('open');
+            window.dispatchEvent(new CustomEvent('k8slab-lang', { detail: l }));
+        }
+        document.addEventListener('DOMContentLoaded', applyLang);
+        applyLang();
+
+        function currentTheme() {
+            return document.documentElement.getAttribute('data-theme') || 'dark';
+        }
+        function markActiveTheme() {
+            var cur = currentTheme();
+            document.querySelectorAll('[data-theme-opt]').forEach(function (el) {
+                el.classList.toggle('active', el.getAttribute('data-theme-opt') === cur);
+            });
+        }
+        function setTheme(name) {
+            if (name === 'dark') document.documentElement.removeAttribute('data-theme');
+            else document.documentElement.setAttribute('data-theme', name);
+            try { localStorage.setItem('k8slab-theme', name); } catch (e) {}
+            markActiveTheme();
+            document.getElementById('theme-pop').classList.remove('open');
+            // Notifica componentes interessados (ex.: terminal xterm)
+            window.dispatchEvent(new CustomEvent('k8slab-theme', { detail: name }));
+        }
+        function toggleThemePop(ev) {
+            ev.stopPropagation();
+            markActiveTheme();
+            document.getElementById('theme-pop').classList.toggle('open');
+        }
+        document.addEventListener('click', function (ev) {
+            var fab = document.getElementById('theme-fab');
+            if (fab && !fab.contains(ev.target)) {
+                document.getElementById('theme-pop').classList.remove('open');
+            }
+        });
+    </script>
+</body>
+</html>

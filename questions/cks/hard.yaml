@@ -1,0 +1,160 @@
+questions:
+  - id: cks-hard-001
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: hard
+    type: multiple_choice
+    question: "Como habilitar encryption at rest para Secrets no etcd em um cluster kubeadm e verificar que está funcionando?"
+    options:
+      - "kubectl apply secret-encryption.yaml e reiniciar o cluster"
+      - "Criar EncryptionConfiguration YAML, referenciar em --encryption-provider-config no kube-apiserver, reiniciar o apiserver, depois kubectl get secrets -A -o yaml | grep encrypt"
+      - "kubeadm init --encrypt-secrets e verificar no dashboard"
+      - "Configurar TLS no etcd automaticamente encripta Secrets"
+    answer: 1
+    explanation: "Processo: (1) Criar EncryptionConfiguration com provider (ex: aescbc com chave base64), (2) Copiar para /etc/kubernetes/enc/enc.yaml, (3) Adicionar --encryption-provider-config=/etc/kubernetes/enc/enc.yaml ao kube-apiserver manifest, (4) Reiniciar apiserver, (5) Verificar: 'kubectl get secret -n default <name> -o yaml' | 'etcdctl get <path>' deve mostrar dados criptografados."
+    doc_url: "https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/"
+    doc_section: "Tasks → Administer Cluster → Encrypt Data at Rest"
+
+  - id: cks-hard-002
+    cert: CKS
+    topic: Runtime Security
+    difficulty: hard
+    type: multiple_choice
+    question: "Como criar e aplicar um perfil seccomp customizado que bloqueia a syscall 'unshare' em um pod?"
+    options:
+      - "Adicionar annotation seccomp: unshare=false no pod"
+      - "Criar JSON de perfil seccomp com 'unshare' em defaultAction SCMP_ACT_ERRNO, copiar para /var/lib/kubelet/seccomp/, e referenciar via securityContext.seccompProfile.type: Localhost"
+      - "kubectl apply seccompprofile block-unshare.yaml no namespace"
+      - "Usar AppArmor para bloquear a syscall unshare"
+    answer: 1
+    explanation: "Perfil seccomp customizado: (1) Criar JSON com 'syscalls: [{names: [unshare], action: SCMP_ACT_ERRNO}]', (2) Copiar para /var/lib/kubelet/seccomp/block-unshare.json no nó, (3) No pod: securityContext.seccompProfile.type: Localhost, seccompProfile.localhostProfile: block-unshare.json. Requer que o arquivo exista em TODOS os nós onde o pod pode rodar."
+    doc_url: "https://kubernetes.io/docs/tutorials/security/seccomp/"
+    doc_section: "Tutorials → Security → Seccomp"
+
+  - id: cks-hard-003
+    cert: CKS
+    topic: Supply Chain Security
+    difficulty: hard
+    type: multiple_choice
+    question: "Como usar Kyverno para bloquear imagens de registries não confiáveis e exigir assinatura cosign?"
+    options:
+      - "Criar um NetworkPolicy bloqueando acesso a registries externos"
+      - "Criar uma ClusterPolicy Kyverno com regras verifyImages (signature check) e validate (registry allowlist)"
+      - "Usar imagePullPolicy: Never em todos os pods para bloquear pulls externos"
+      - "Configurar o containerd com um allowlist de registries"
+    answer: 1
+    explanation: "Kyverno ClusterPolicy: (1) 'verifyImages' rule verifica assinaturas cosign antes de permitir o deploy, (2) 'validate' rule com 'deny' block checa se a imagem inicia com registry permitido (ex: gcr.io/mycompany/). O Admission Webhook do Kyverno bloqueia o CREATE/UPDATE se as políticas falharem."
+    doc_url: "https://kubernetes.io/docs/concepts/security/supply-chain-security/"
+    doc_section: "Concepts → Security → Supply Chain Security"
+
+  - id: cks-hard-004
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: hard
+    type: multiple_choice
+    question: "Um atacante comprometeu um pod com acesso à ServiceAccount montada. Quais são os próximos passos para investigar o raio de blast e remediar?"
+    options:
+      - "Deletar o pod e reiniciar o Deployment"
+      - "Rotacionar o token da SA, auditar o audit log para ações feitas com esse token, verificar RBAC da SA, investigar o vetor de comprometimento do pod"
+      - "Deletar a ServiceAccount e criar uma nova"
+      - "Reiniciar todos os pods do namespace"
+    answer: 1
+    explanation: "Resposta a incidente: (1) Verificar permissões da SA (kubectl auth can-i --list --as=system:serviceaccount:ns:sa), (2) Buscar no audit log pelo UID do token/SA para ver ações feitas, (3) Revogar o token (deletar secret do token ou usar token curto via TokenRequest), (4) Isolar o namespace com NetworkPolicy, (5) Investigar como o container foi comprometido (CVE, misconfiguration)."
+    doc_url: "https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/"
+    doc_section: "Reference → Service Accounts Administration"
+
+  - id: cks-hard-005
+    cert: CKS
+    topic: Runtime Security
+    difficulty: hard
+    type: multiple_choice
+    question: "Como o Falco detecta um ataque de 'container escape' tentando montar /proc do host?"
+    options:
+      - "Falco analisa requisições HTTP ao kube-apiserver"
+      - "Falco monitora syscalls via eBPF/kernel module e dispara regras como 'Create Privileged Container' ou 'Mount Sensitive Host Path' quando detecta padrões suspeitos"
+      - "Falco escaneia os logs do container procurando strings suspeitas"
+      - "Falco analisa o tráfego de rede do pod"
+    answer: 1
+    explanation: "Falco usa regras baseadas em eventos de syscall. Regra de exemplo: 'container.privileged=true or fd.name startswith /proc' dispara alerta. Falco tem regras built-in para container escapes comuns: mount de /proc, /dev, nsenter, capsh. Use falco-exporter para enviar alertas para SIEM ou Prometheus."
+    doc_url: "https://kubernetes.io/docs/concepts/security/cloud-native-security/"
+    doc_section: "Concepts → Security → Cloud Native Security"
+
+  - id: cks-hard-006
+    cert: CKS
+    topic: Network Security
+    difficulty: hard
+    type: multiple_choice
+    question: "Como implementar mutual TLS (mTLS) automático entre todos os serviços em um namespace usando Istio?"
+    options:
+      - "Criar certificados TLS para cada pod manualmente"
+      - "Aplicar uma PeerAuthentication com mode: STRICT no namespace para forçar mTLS em todo o tráfego"
+      - "Configurar NetworkPolicy para permitir apenas tráfego HTTPS"
+      - "Criar um Secret TLS e montá-lo em cada pod"
+    answer: 1
+    explanation: "Istio com PeerAuthentication STRICT: todos os sidecars Envoy negociam mTLS automaticamente. Certificados são gerenciados pelo istiod (rotação automática). Sem Istio, mTLS manual requereria distribuição, rotação e validação de certificados em cada serviço — complexidade inviável em larga escala."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/"
+    doc_section: "Concepts → Services and Networking"
+
+  - id: cks-hard-007
+    cert: CKS
+    topic: Cluster Hardening
+    difficulty: hard
+    type: multiple_choice
+    question: "O que é um 'audit policy' no Kubernetes e como configurar para registrar apenas eventos de Secrets e operações de delete em produção?"
+    options:
+      - "Uma política de backup automático do audit log"
+      - "Um arquivo YAML com regras que definem quais eventos registrar, em qual nível de detalhe (None, Metadata, Request, RequestResponse)"
+      - "Uma policy do OPA que filtra eventos de segurança"
+      - "Uma configuração do Prometheus para métricas de auditoria"
+    answer: 1
+    explanation: "AuditPolicy YAML define regras em ordem: (1) {level: RequestResponse, resources: [{group: '', resources: [secrets]}]} para logar Secrets com detalhes, (2) {level: Metadata, verbs: [delete, deletecollection]} para logar deletes, (3) {level: None} para ignorar o resto. Passe com --audit-policy-file ao apiserver."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/"
+    doc_section: "Tasks → Debug → Auditing"
+
+  - id: cks-hard-008
+    cert: CKS
+    topic: Minimizing Microservice Vulnerabilities
+    difficulty: hard
+    type: multiple_choice
+    question: "Como prevenir um ataque de 'Secret enumeration' em que um pod comprometido lê Secrets de outros namespaces?"
+    options:
+      - "Desabilitar acesso ao kube-apiserver de dentro de pods"
+      - "Combinar: automountServiceAccountToken: false nos pods que não precisam, RBAC mínimo para SAs, NetworkPolicy para bloquear egress ao apiserver, e encryption at rest"
+      - "Criptografar todos os Secrets com uma chave por pod"
+      - "Usar apenas ConfigMaps em vez de Secrets"
+    answer: 1
+    explanation: "Defesa em profundidade: (1) automountServiceAccountToken: false para pods que não acessam a API — sem token, sem acesso, (2) RBAC mínimo nas SAs que precisam — apenas os recursos e verbos necessários, (3) Encryption at rest para que o etcd não exponha dados em texto claro, (4) Auditoria ativa para detectar acesso anômalo a Secrets."
+    doc_url: "https://kubernetes.io/docs/concepts/security/rbac-good-practices/"
+    doc_section: "Concepts → Security → RBAC Good Practices"
+
+  - id: cks-hard-009
+    cert: CKS
+    topic: Supply Chain Security
+    difficulty: hard
+    type: multiple_choice
+    question: "Como implementar um pipeline CI/CD seguro que bloqueia deploy se a imagem tiver CVEs críticas (CVSS >= 9.0)?"
+    options:
+      - "Configurar imagePullPolicy: IfNotPresent para evitar pull de imagens vulneráveis"
+      - "Integrar Trivy no CI (trivy image --exit-code 1 --severity CRITICAL), bloquear o merge/deploy se exit code != 0, e usar admission webhook no cluster para re-verificar"
+      - "Usar docker scan antes do push e ignorar resultados abaixo de 9.0"
+      - "Configurar um LimitRange que bloqueia imagens com CVEs"
+    answer: 1
+    explanation: "Pipeline seguro: (1) 'trivy image --exit-code 1 --severity CRITICAL image:tag' falha o CI se CVEs críticas encontradas, (2) Bloquear merge até corrigir (atualizar pacotes base), (3) No cluster, um Validating Webhook (Kyverno/Gatekeeper + trivy operator) re-verifica antes do deploy. Defense-in-depth: CI + cluster."
+    doc_url: "https://kubernetes.io/docs/concepts/security/supply-chain-security/"
+    doc_section: "Concepts → Security → Supply Chain Security"
+
+  - id: cks-hard-010
+    cert: CKS
+    topic: Runtime Security
+    difficulty: hard
+    type: multiple_choice
+    question: "O que é 'privilege escalation via hostPID: true' e por que é uma vulnerabilidade crítica?"
+    options:
+      - "hostPID aumenta a performance do container compartilhando o PID namespace"
+      - "hostPID: true compartilha o namespace de processos do host: o container vê TODOS os processos do host e pode interagir com eles (kill, ptrace), potencialmente comprometendo o nó inteiro"
+      - "hostPID permite que o container use mais memória que o limit definido"
+      - "hostPID causa conflito de portas entre containers no mesmo host"
+    answer: 1
+    explanation: "Com hostPID: true, o container compartilha o PID namespace do host. O invasor pode: (1) ver todos os processos do host (kubelet, containerd, etc.), (2) enviar signals (ex: kill -9 ao kubelet), (3) acessar /proc/<pid>/mem de outros processos para ler memória, (4) usar ferramentas como nsenter para entrar em outros namespaces. É proibido no PSS Baseline e Restricted."
+    doc_url: "https://kubernetes.io/docs/concepts/security/pod-security-standards/#baseline"
+    doc_section: "Concepts → Security → Pod Security Standards → Baseline"

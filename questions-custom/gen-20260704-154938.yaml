@@ -1,0 +1,100 @@
+questions:
+    - id: custom-dd3d2b17
+      cert: CKA
+      topic: Core Concepts
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie o namespace **lab-nova** com **ResourceQuota** de **5 pods** e um pod nginx dentro dele.
+
+        Dica: `kubectl create ns` + `kubectl create quota --hard=pods=5 -n ...`.
+      options: []
+      answer: 0
+      explanation: 'Namespace é a unidade de multi-tenancy; a quota (hard: pods=5) rejeita a criação do 6º pod com erro claro.'
+      doc_url: https://kubernetes.io/docs/concepts/policy/resource-quotas/
+      doc_section: Concepts → Policy → Resource Quotas
+      hint: kubectl create ns lab-nova; kubectl create quota lab-nova-quota --hard=pods=5 -n lab-nova; kubectl run nova-api --image=nginx:1.21 -n lab-nova
+      answer_command: kubectl create ns lab-nova; kubectl create quota lab-nova-quota --hard=pods=5 -n lab-nova; kubectl run nova-api --image=nginx:1.21 -n lab-nova
+      validation: null
+      goals:
+        - description: Quota de **5 pods** ativa no namespace **lab-nova**
+          hint: kubectl create quota --hard=pods=5 -n <ns>
+          validation:
+            command: kubectl get quota -n lab-nova -o jsonpath='{.items[0].spec.hard.pods}' 2>/dev/null
+            expected_contains: "5"
+            expected_output: ""
+        - description: Pod **nova-api** Running dentro de **lab-nova**
+          hint: kubectl run ... -n <ns>
+          validation:
+            command: kubectl get pod nova-api -n lab-nova -o jsonpath='{.status.phase}' 2>/dev/null
+            expected_contains: Running
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete namespace lab-nova --ignore-not-found=true --wait=false
+    - id: custom-40028897
+      cert: CKA
+      topic: Core Concepts
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie o namespace **lab-ember** com **ResourceQuota** de **5 pods** e um pod nginx dentro dele.
+
+        Dica: `kubectl create ns` + `kubectl create quota --hard=pods=5 -n ...`.
+      options: []
+      answer: 0
+      explanation: 'Namespace é a unidade de multi-tenancy; a quota (hard: pods=5) rejeita a criação do 6º pod com erro claro.'
+      doc_url: https://kubernetes.io/docs/concepts/policy/resource-quotas/
+      doc_section: Concepts → Policy → Resource Quotas
+      hint: kubectl create ns lab-ember; kubectl create quota lab-ember-quota --hard=pods=5 -n lab-ember; kubectl run ember-gateway --image=nginx:1.21 -n lab-ember
+      answer_command: kubectl create ns lab-ember; kubectl create quota lab-ember-quota --hard=pods=5 -n lab-ember; kubectl run ember-gateway --image=nginx:1.21 -n lab-ember
+      validation: null
+      goals:
+        - description: Quota de **5 pods** ativa no namespace **lab-ember**
+          hint: kubectl create quota --hard=pods=5 -n <ns>
+          validation:
+            command: kubectl get quota -n lab-ember -o jsonpath='{.items[0].spec.hard.pods}' 2>/dev/null
+            expected_contains: "5"
+            expected_output: ""
+        - description: Pod **ember-gateway** Running dentro de **lab-ember**
+          hint: kubectl run ... -n <ns>
+          validation:
+            command: kubectl get pod ember-gateway -n lab-ember -o jsonpath='{.status.phase}' 2>/dev/null
+            expected_contains: Running
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete namespace lab-ember --ignore-not-found=true --wait=false
+    - id: custom-957ae861
+      cert: CKA
+      topic: Core Concepts
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie o namespace **lab-nova** com **ResourceQuota** de **5 pods** e um pod nginx dentro dele.
+
+        Dica: `kubectl create ns` + `kubectl create quota --hard=pods=5 -n ...`.
+      options: []
+      answer: 0
+      explanation: 'Namespace é a unidade de multi-tenancy; a quota (hard: pods=5) rejeita a criação do 6º pod com erro claro.'
+      doc_url: https://kubernetes.io/docs/concepts/policy/resource-quotas/
+      doc_section: Concepts → Policy → Resource Quotas
+      hint: kubectl create ns lab-nova; kubectl create quota lab-nova-quota --hard=pods=5 -n lab-nova; kubectl run nova-gateway --image=nginx:1.21 -n lab-nova
+      answer_command: kubectl create ns lab-nova; kubectl create quota lab-nova-quota --hard=pods=5 -n lab-nova; kubectl run nova-gateway --image=nginx:1.21 -n lab-nova
+      validation: null
+      goals:
+        - description: Quota de **5 pods** ativa no namespace **lab-nova**
+          hint: kubectl create quota --hard=pods=5 -n <ns>
+          validation:
+            command: kubectl get quota -n lab-nova -o jsonpath='{.items[0].spec.hard.pods}' 2>/dev/null
+            expected_contains: "5"
+            expected_output: ""
+        - description: Pod **nova-gateway** Running dentro de **lab-nova**
+          hint: kubectl run ... -n <ns>
+          validation:
+            command: kubectl get pod nova-gateway -n lab-nova -o jsonpath='{.status.phase}' 2>/dev/null
+            expected_contains: Running
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete namespace lab-nova --ignore-not-found=true --wait=false

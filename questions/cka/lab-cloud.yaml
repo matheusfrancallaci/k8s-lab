@@ -1,0 +1,101 @@
+questions:
+  # ══════════════════════════════════════════════════════════════════
+  # CLOUD (AKS) — provisionar, conectar e operar um cluster real na Azure
+  # Pré-requisito: Azure CLI instalado e cluster criado pela página /cloud
+  # ══════════════════════════════════════════════════════════════════
+
+  # ── 068 — Verificar autenticação na Azure ────────────────────────
+  - id: cka-lab-068
+    cert: CKA
+    topic: Cloud (AKS)
+    difficulty: easy
+    type: lab
+    question: "Antes de usar o Kubernetes na nuvem, confirme que o **Azure CLI** está autenticado na sua conta.\n\nUse o terminal para verificar sua subscription ativa com **az account show**. Se não estiver logado, use **az login --use-device-code**."
+    hint: "az account show   (se falhar: az login --use-device-code)"
+    answer_command: "az account show"
+    goals:
+      - description: "Azure CLI está **autenticado** (subscription ativa)"
+        hint: "az login --use-device-code — abra a URL no navegador e digite o código."
+        validation:
+          command: "az account show -o none 2>/dev/null && echo LOGGED-IN || echo NOT-LOGGED"
+          expected_contains: "LOGGED-IN"
+    explanation: "O Azure CLI (az) guarda tokens da sua conta após 'az login'. O fluxo --use-device-code é ideal para terminais sem navegador: você abre a URL em qualquer dispositivo e digita o código. Toda operação de nuvem (criar/parar cluster, credenciais) depende dessa autenticação."
+    doc_url: "https://learn.microsoft.com/cli/azure/authenticate-azure-cli"
+    doc_section: "Azure CLI → Authentication"
+
+  # ── 069 — Conectar o kubectl ao cluster AKS ──────────────────────
+  - id: cka-lab-069
+    cert: CKA
+    topic: Cloud (AKS)
+    difficulty: mid
+    type: lab
+    question: "Conecte o **kubectl** ao cluster **k8s-study-lab** (resource group **k8s-study-lab-rg**) na Azure:\n\n1. Baixe as credenciais com **az aks get-credentials**.\n2. Torne o AKS o **contexto ativo** do kubectl.\n\nAo final, o cluster deve responder com seus nós **Ready**.\n\n⚠️ Se o cluster estiver parado, ligue-o antes: `az aks start -g k8s-study-lab-rg -n k8s-study-lab`"
+    hint: "az aks get-credentials -g k8s-study-lab-rg -n k8s-study-lab --overwrite-existing && kubectl config use-context k8s-study-lab"
+    answer_command: "az aks get-credentials -g k8s-study-lab-rg -n k8s-study-lab --overwrite-existing; kubectl config use-context k8s-study-lab"
+    goals:
+      - description: "O contexto ativo do kubectl é **k8s-study-lab**"
+        hint: "kubectl config use-context k8s-study-lab"
+        validation:
+          command: "kubectl config current-context 2>/dev/null"
+          expected_contains: "k8s-study-lab"
+      - description: "☁️ O cluster AKS responde e o nó está **Ready**"
+        hint: "Cluster parado? az aks start -g k8s-study-lab-rg -n k8s-study-lab (leva ~2-3 min)"
+        validation:
+          command: "kubectl get nodes --request-timeout=15s --no-headers 2>/dev/null | grep -q ' Ready' && echo CLOUD-READY || echo DOWN"
+          expected_contains: "CLOUD-READY"
+    explanation: "az aks get-credentials busca o kubeconfig do cluster na Azure e o funde em ~/.kube/config, criando um contexto com o nome do cluster. kubectl config use-context alterna entre clusters (local ↔ nuvem) — o mesmo mecanismo usado pela página /cloud do lab."
+    doc_url: "https://learn.microsoft.com/azure/aks/control-kubeconfig-access"
+    doc_section: "AKS → kubeconfig"
+
+  # ── 070 — Deploy em um cluster de nuvem real ─────────────────────
+  - id: cka-lab-070
+    cert: CKA
+    topic: Cloud (AKS)
+    difficulty: mid
+    type: lab
+    question: "Com o contexto apontando para o **AKS**, faça um deploy real na nuvem: crie o Deployment **cloud-web** com a imagem **nginx:1.25** e **2 réplicas**, e confirme que os pods rodam em um nó **da Azure**."
+    hint: "kubectl create deployment cloud-web --image=nginx:1.25 --replicas=2"
+    answer_command: "kubectl create deployment cloud-web --image=nginx:1.25 --replicas=2"
+    setup:
+      - description: "Verificando que o contexto ativo é o AKS..."
+        command: "kubectl config current-context 2>/dev/null | grep -q k8s-study-lab || echo 'AVISO: troque o contexto para k8s-study-lab primeiro'"
+    goals:
+      - description: "Deployment **cloud-web** com **2 réplicas** prontas"
+        hint: "kubectl create deployment cloud-web --image=nginx:1.25 --replicas=2"
+        validation:
+          command: "kubectl get deploy cloud-web -o jsonpath='{.status.readyReplicas}' 2>/dev/null"
+          expected_contains: "2"
+      - description: "☁️ Os pods rodam em um **nó AKS** (nome começa com aks-)"
+        hint: "kubectl get pods -o wide — veja a coluna NODE."
+        validation:
+          command: "kubectl get pods -l app=cloud-web -o jsonpath='{.items[0].spec.nodeName}' 2>/dev/null | grep -q '^aks-' && echo ON-AZURE || echo NOT-ON-AZURE"
+          expected_contains: "ON-AZURE"
+    teardown:
+      - "kubectl delete deployment cloud-web --ignore-not-found=true"
+    explanation: "O fluxo de trabalho é idêntico ao local — essa é a graça do Kubernetes: a API é a mesma em qualquer lugar. A diferença está na infraestrutura: no AKS os nós são VMs reais da Azure (nomes aks-nodepool...), com rede e storage gerenciados pela nuvem."
+    doc_url: "https://learn.microsoft.com/azure/aks/tutorial-kubernetes-deploy-application"
+    doc_section: "AKS → Deploy an application"
+
+  # ── 071 — Economizar: parar o cluster e voltar ao local ──────────
+  - id: cka-lab-071
+    cert: CKA
+    topic: Cloud (AKS)
+    difficulty: easy
+    type: lab
+    question: "💸 **Fim da sessão de estudo na nuvem.** Um cluster ligado gera custo mesmo ocioso. Encerre com segurança:\n\n1. Volte o contexto do kubectl para o **minikube** local.\n2. **Pare** o cluster AKS com **az aks stop** (leva ~2-3 min — aguarde terminar).\n\nAssim o faturamento de compute é pausado até o próximo `az aks start`."
+    hint: "kubectl config use-context minikube && az aks stop -g k8s-study-lab-rg -n k8s-study-lab"
+    answer_command: "kubectl config use-context minikube; az aks stop -g k8s-study-lab-rg -n k8s-study-lab"
+    goals:
+      - description: "O contexto ativo voltou para **minikube**"
+        hint: "kubectl config use-context minikube"
+        validation:
+          command: "kubectl config current-context 2>/dev/null"
+          expected_contains: "minikube"
+      - description: "💰 O cluster AKS está **Stopped** (faturamento pausado)"
+        hint: "az aks stop -g k8s-study-lab-rg -n k8s-study-lab — aguarde o comando completar."
+        validation:
+          command: "az aks show -g k8s-study-lab-rg -n k8s-study-lab --query powerState.code -o tsv 2>/dev/null"
+          expected_contains: "Stopped"
+    explanation: "az aks stop desaloca as VMs dos nós (e o control plane no tier Free), pausando o custo de compute — sobra só o custo residual de discos/IPs, que é centavos. É o hábito mais importante ao estudar com nuvem paga: ligou, estudou, parou. O auto-stop do lab é a rede de segurança, não o plano."
+    doc_url: "https://learn.microsoft.com/azure/aks/start-stop-cluster"
+    doc_section: "AKS → Start and stop a cluster"

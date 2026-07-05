@@ -1,0 +1,486 @@
+questions:
+  # ── Core Concepts ──────────────────────────────────────────
+  - id: cka-easy-001
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual comando lista todos os pods em todos os namespaces?"
+    options:
+      - "kubectl get pods"
+      - "kubectl get pods -A"
+      - "kubectl get pods --namespace=all"
+      - "kubectl list pods"
+    answer: 1
+    explanation: "A flag -A é o atalho para --all-namespaces e lista pods de todos os namespaces simultaneamente. Sem flag, kubectl get pods lista apenas o namespace atual (normalmente 'default')."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/cheatsheet/#viewing-and-finding-resources"
+    doc_section: "kubectl Cheat Sheet → Viewing Resources"
+
+  - id: cka-easy-002
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual é o comando para descrever um pod chamado 'nginx' no namespace 'default'?"
+    options:
+      - "kubectl info pod nginx"
+      - "kubectl describe pod nginx"
+      - "kubectl get pod nginx --details"
+      - "kubectl explain pod nginx"
+    answer: 1
+    explanation: "'kubectl describe' exibe detalhes completos de um recurso, incluindo eventos recentes, condições e configurações. 'kubectl explain' mostra a documentação do schema do recurso."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/cheatsheet/#viewing-and-finding-resources"
+    doc_section: "kubectl Cheat Sheet → Viewing Resources"
+
+  - id: cka-easy-003
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: multiple_choice
+    question: "Como criar um namespace chamado 'producao'?"
+    options:
+      - "kubectl create ns producao"
+      - "kubectl new namespace producao"
+      - "kubectl add namespace producao"
+      - "kubectl init namespace producao"
+    answer: 0
+    explanation: "'kubectl create ns' ou 'kubectl create namespace' cria um novo namespace. 'ns' é o atalho oficial para 'namespace' no kubectl."
+    doc_url: "https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/"
+    doc_section: "Concepts → Working with Objects → Namespaces"
+
+  - id: cka-easy-004
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: multiple_choice
+    question: "Como filtrar pods usando a label 'app=nginx' em todos os namespaces?"
+    options:
+      - "kubectl get pods -A -l app=nginx"
+      - "kubectl get pods --filter app=nginx"
+      - "kubectl get pods -A --search app=nginx"
+      - "kubectl filter pods app=nginx"
+    answer: 0
+    explanation: "A flag -l (ou --selector) filtra recursos por labels. Combinada com -A, filtra em todos os namespaces. Exemplo: kubectl get pods -A -l app=nginx,tier=frontend"
+    doc_url: "https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/"
+    doc_section: "Concepts → Labels and Selectors"
+
+  - id: cka-easy-005
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: multiple_choice
+    question: "O que é um Pod no Kubernetes?"
+    options:
+      - "Um conjunto de nós do cluster"
+      - "A menor unidade deployável que pode conter um ou mais containers"
+      - "Um serviço de balanceamento de carga"
+      - "Um repositório de imagens de container"
+    answer: 1
+    explanation: "Pod é a menor unidade deployável no Kubernetes. Pode conter um ou mais containers que compartilham a mesma rede (IP) e podem compartilhar volumes de armazenamento."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/pods/"
+    doc_section: "Concepts → Workloads → Pods"
+
+  - id: cka-easy-006
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: multiple_choice
+    question: "Como executar um comando dentro de um pod chamado 'nginx-pod'?"
+    options:
+      - "kubectl run nginx-pod -- /bin/bash"
+      - "kubectl exec nginx-pod /bin/bash"
+      - "kubectl exec -it nginx-pod -- /bin/bash"
+      - "kubectl connect nginx-pod /bin/bash"
+    answer: 2
+    explanation: "'kubectl exec -it' abre uma sessão interativa dentro do container. As flags -i (stdin) e -t (tty) são necessárias para um terminal interativo. O '--' separa os argumentos do kubectl dos argumentos do comando."
+    doc_url: "https://kubernetes.io/docs/tasks/debug/debug-application/get-shell-running-container/"
+    doc_section: "Tasks → Debug → Get Shell Into Container"
+
+  - id: cka-easy-007
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual recurso Kubernetes agrupa logicamente pods por ambiente, time ou aplicação?"
+    options:
+      - "Labels e Selectors"
+      - "Namespaces"
+      - "ResourceQuota"
+      - "Annotations"
+    answer: 1
+    explanation: "Namespaces fornecem isolamento de recursos dentro de um cluster. São usados para separar ambientes (dev/staging/prod), times ou projetos. Labels e Selectors identificam e agrupam pods, mas não isolam recursos."
+    doc_url: "https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/"
+    doc_section: "Concepts → Namespaces"
+
+  - id: cka-easy-008
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: multiple_choice
+    question: "Como visualizar os logs de um pod chamado 'app-pod' com saída em tempo real?"
+    options:
+      - "kubectl logs app-pod --live"
+      - "kubectl logs app-pod -f"
+      - "kubectl watch logs app-pod"
+      - "kubectl stream app-pod"
+    answer: 1
+    explanation: "A flag -f (--follow) faz o kubectl exibir os logs em tempo real (streaming). Sem essa flag, os logs são exibidos até o momento atual e o comando encerra."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/cheatsheet/#interacting-with-running-pods"
+    doc_section: "kubectl Cheat Sheet → Interacting with Pods"
+
+  - id: cka-easy-009
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: multiple_choice
+    question: "Como exportar a definição de um pod existente para um arquivo YAML?"
+    options:
+      - "kubectl get pod nginx -o yaml > nginx.yaml"
+      - "kubectl export pod nginx > nginx.yaml"
+      - "kubectl save pod nginx nginx.yaml"
+      - "kubectl dump pod nginx nginx.yaml"
+    answer: 0
+    explanation: "A flag '-o yaml' exibe o recurso em formato YAML. Redirecionando para um arquivo com '>' você obtém a definição completa do recurso para editar e reaplicar."
+    doc_url: "https://kubernetes.io/docs/reference/kubectl/cheatsheet/"
+    doc_section: "kubectl Cheat Sheet"
+
+  - id: cka-easy-010
+    cert: CKA
+    topic: Core Concepts
+    difficulty: easy
+    type: multiple_choice
+    question: "O que o comando 'kubectl apply -f manifest.yaml' faz diferente de 'kubectl create -f manifest.yaml'?"
+    options:
+      - "apply requer aprovação manual; create é automático"
+      - "apply atualiza recursos existentes; create falha se o recurso já existe"
+      - "apply é apenas para Deployments; create é para todos os recursos"
+      - "Não há diferença"
+    answer: 1
+    explanation: "'kubectl apply' usa reconciliação declarativa: cria o recurso se não existe ou atualiza se já existe. 'kubectl create' falha com erro 'AlreadyExists' se o recurso já estiver presente."
+    doc_url: "https://kubernetes.io/docs/concepts/overview/working-with-objects/object-management/"
+    doc_section: "Concepts → Object Management"
+
+  # ── Workloads ─────────────────────────────────────────────
+  - id: cka-easy-011
+    cert: CKA
+    topic: Workloads
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual objeto do Kubernetes garante que um número específico de réplicas de um pod esteja sempre em execução?"
+    options:
+      - "DaemonSet"
+      - "StatefulSet"
+      - "ReplicaSet"
+      - "Job"
+    answer: 2
+    explanation: "ReplicaSet garante que o número desejado de réplicas de um pod esteja rodando. Se um pod falhar, o ReplicaSet cria um novo automaticamente. Normalmente gerenciado por um Deployment."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/"
+    doc_section: "Concepts → Workloads → ReplicaSet"
+
+  - id: cka-easy-012
+    cert: CKA
+    topic: Workloads
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual recurso garante que um pod rode em TODOS os nós do cluster (ou em nós com certa label)?"
+    options:
+      - "Deployment"
+      - "DaemonSet"
+      - "StatefulSet"
+      - "ReplicaSet"
+    answer: 1
+    explanation: "DaemonSet garante que todos os nós (ou nós com uma label específica) executem uma cópia do pod. Usado para agentes de monitoramento (Prometheus node exporter), log collectors (Fluentd), etc."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/"
+    doc_section: "Concepts → Workloads → DaemonSet"
+
+  - id: cka-easy-013
+    cert: CKA
+    topic: Workloads
+    difficulty: easy
+    type: multiple_choice
+    question: "Como criar um Deployment chamado 'webapp' com a imagem 'nginx:1.25' e 2 réplicas via kubectl?"
+    options:
+      - "kubectl run webapp --image=nginx:1.25 --replicas=2"
+      - "kubectl create deployment webapp --image=nginx:1.25 --replicas=2"
+      - "kubectl deploy webapp --image=nginx:1.25 --count=2"
+      - "kubectl new deployment webapp --image=nginx:1.25 --scale=2"
+    answer: 1
+    explanation: "'kubectl create deployment' é o comando correto para criar Deployments. 'kubectl run' cria um Pod simples (sem Deployment). A flag '--replicas' define o número de réplicas."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"
+    doc_section: "Concepts → Workloads → Deployments"
+
+  - id: cka-easy-014
+    cert: CKA
+    topic: Workloads
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual tipo de workload é ideal para tarefas em lote que devem ser executadas até completar (não continuamente)?"
+    options:
+      - "Deployment"
+      - "DaemonSet"
+      - "Job"
+      - "StatefulSet"
+    answer: 2
+    explanation: "Job cria pods que executam uma tarefa até conclusão. Quando o Job completa, os pods são mantidos para log mas não reiniciados. CronJob agendará Jobs periodicamente."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/job/"
+    doc_section: "Concepts → Workloads → Jobs"
+
+  - id: cka-easy-015
+    cert: CKA
+    topic: Workloads
+    difficulty: easy
+    type: multiple_choice
+    question: "Como verificar o status de rollout de um Deployment chamado 'api'?"
+    options:
+      - "kubectl describe deployment api"
+      - "kubectl rollout status deployment/api"
+      - "kubectl get deployment api --rollout"
+      - "kubectl check rollout api"
+    answer: 1
+    explanation: "'kubectl rollout status' monitora o progresso de um rollout em tempo real. Também pode ser usado com DaemonSets e StatefulSets. Retorna sucesso (exit 0) quando o rollout completa."
+    doc_url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#rollout-status"
+    doc_section: "Concepts → Deployments → Rollout Status"
+
+  # ── Services & Networking ─────────────────────────────────
+  - id: cka-easy-016
+    cert: CKA
+    topic: Services
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual tipo de Service expõe a aplicação externamente usando o IP do nó e uma porta estática (30000-32767)?"
+    options:
+      - "ClusterIP"
+      - "LoadBalancer"
+      - "NodePort"
+      - "ExternalName"
+    answer: 2
+    explanation: "NodePort expõe o serviço em uma porta estática em cada nó do cluster. ClusterIP é apenas interno; LoadBalancer usa um balanceador externo (cloud); ExternalName mapeia para um DNS externo."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport"
+    doc_section: "Concepts → Services → Type NodePort"
+
+  - id: cka-easy-017
+    cert: CKA
+    topic: Services
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual tipo de Service é o padrão e fornece acesso apenas dentro do cluster?"
+    options:
+      - "NodePort"
+      - "LoadBalancer"
+      - "ExternalName"
+      - "ClusterIP"
+    answer: 3
+    explanation: "ClusterIP é o tipo padrão de Service. Cria um IP virtual acessível somente dentro do cluster. Ideal para comunicação interna entre pods/serviços."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/service/#type-clusterip"
+    doc_section: "Concepts → Services → Type ClusterIP"
+
+  - id: cka-easy-018
+    cert: CKA
+    topic: Services
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual campo do Service define para qual porta do Pod o tráfego é encaminhado?"
+    options:
+      - "port"
+      - "nodePort"
+      - "targetPort"
+      - "containerPort"
+    answer: 2
+    explanation: "'targetPort' é a porta no Pod/container para onde o tráfego é enviado. 'port' é a porta exposta pelo Service internamente. 'nodePort' é a porta estática exposta em cada nó (apenas NodePort/LoadBalancer)."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/service/"
+    doc_section: "Concepts → Services"
+
+  - id: cka-easy-019
+    cert: CKA
+    topic: Services
+    difficulty: easy
+    type: multiple_choice
+    question: "Como listar todos os services em todos os namespaces?"
+    options:
+      - "kubectl get services --all"
+      - "kubectl get svc -A"
+      - "kubectl list services --namespaces=all"
+      - "kubectl get svc --global"
+    answer: 1
+    explanation: "'svc' é o atalho para 'services' no kubectl. Combinado com -A (--all-namespaces), lista todos os services de todos os namespaces do cluster."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/service/"
+    doc_section: "Concepts → Services"
+
+  - id: cka-easy-020
+    cert: CKA
+    topic: Services
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual o formato do nome DNS interno de um Service chamado 'api' no namespace 'backend'?"
+    options:
+      - "api.backend"
+      - "api.backend.svc"
+      - "api.backend.svc.cluster.local"
+      - "backend.api.kubernetes.local"
+    answer: 2
+    explanation: "O formato FQDN de um Service no Kubernetes é: <service>.<namespace>.svc.cluster.local. O CoreDNS resolve esse nome para o ClusterIP do Service. Formas abreviadas como 'api' ou 'api.backend' também funcionam de dentro do mesmo cluster."
+    doc_url: "https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/"
+    doc_section: "Concepts → DNS for Services and Pods"
+
+  # ── Storage ───────────────────────────────────────────────
+  - id: cka-easy-021
+    cert: CKA
+    topic: Storage
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual recurso Kubernetes representa armazenamento físico provisionado pelo administrador?"
+    options:
+      - "PersistentVolumeClaim (PVC)"
+      - "PersistentVolume (PV)"
+      - "StorageClass"
+      - "ConfigMap"
+    answer: 1
+    explanation: "PersistentVolume (PV) representa o armazenamento físico provisionado pelo administrador ou dinamicamente por um StorageClass. PVC é a solicitação de armazenamento feita pelo usuário/pod."
+    doc_url: "https://kubernetes.io/docs/concepts/storage/persistent-volumes/"
+    doc_section: "Concepts → Storage → Persistent Volumes"
+
+  - id: cka-easy-022
+    cert: CKA
+    topic: Storage
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual recurso é usado para armazenar dados de configuração não sensíveis como pares chave-valor?"
+    options:
+      - "Secret"
+      - "Volume"
+      - "ConfigMap"
+      - "Annotation"
+    answer: 2
+    explanation: "ConfigMap armazena dados de configuração não confidenciais. Para dados sensíveis como senhas e tokens, usa-se Secret. ConfigMaps podem ser consumidos como variáveis de ambiente ou arquivos montados em volumes."
+    doc_url: "https://kubernetes.io/docs/concepts/configuration/configmap/"
+    doc_section: "Concepts → Configuration → ConfigMap"
+
+  - id: cka-easy-023
+    cert: CKA
+    topic: Storage
+    difficulty: easy
+    type: multiple_choice
+    question: "Um pod quer armazenar dados temporários que existem apenas durante a vida do pod. Qual volume usar?"
+    options:
+      - "hostPath"
+      - "persistentVolumeClaim"
+      - "emptyDir"
+      - "nfs"
+    answer: 2
+    explanation: "emptyDir é criado quando o pod é atribuído a um nó e existe enquanto o pod existir. Quando o pod é removido, o emptyDir é deletado permanentemente. Ideal para cache temporário ou compartilhar dados entre containers do mesmo pod."
+    doc_url: "https://kubernetes.io/docs/concepts/storage/volumes/#emptydir"
+    doc_section: "Concepts → Storage → Volumes → emptyDir"
+
+  - id: cka-easy-024
+    cert: CKA
+    topic: Storage
+    difficulty: easy
+    type: multiple_choice
+    question: "Como criar um ConfigMap chamado 'app-config' com a chave 'DB_HOST=postgres'?"
+    options:
+      - "kubectl create configmap app-config --set DB_HOST=postgres"
+      - "kubectl create configmap app-config --from-literal=DB_HOST=postgres"
+      - "kubectl create configmap app-config --data DB_HOST=postgres"
+      - "kubectl apply configmap app-config DB_HOST=postgres"
+    answer: 1
+    explanation: "A flag '--from-literal' cria um ConfigMap com pares chave-valor diretamente da linha de comando. '--from-file' cria a partir de um arquivo e '--from-env-file' lê um arquivo .env."
+    doc_url: "https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/"
+    doc_section: "Tasks → Configure Pod → ConfigMap"
+
+  - id: cka-easy-025
+    cert: CKA
+    topic: Storage
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual modo de acesso em um PersistentVolume permite que múltiplos nós montem o volume simultaneamente para leitura e escrita?"
+    options:
+      - "ReadWriteOnce (RWO)"
+      - "ReadOnlyMany (ROX)"
+      - "ReadWriteMany (RWX)"
+      - "ReadWriteOncePod (RWOP)"
+    answer: 2
+    explanation: "ReadWriteMany (RWX) permite que múltiplos nós montem o volume com permissão de leitura e escrita. ReadWriteOnce (RWO) permite apenas um nó; ReadOnlyMany (ROX) permite múltiplos nós somente para leitura."
+    doc_url: "https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes"
+    doc_section: "Concepts → Storage → Persistent Volumes → Access Modes"
+
+  # ── Scheduling ────────────────────────────────────────────
+  - id: cka-easy-026
+    cert: CKA
+    topic: Scheduling
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual campo na spec de um pod restringe em quais nós ele pode ser agendado usando labels?"
+    options:
+      - "nodeAffinity"
+      - "nodeName"
+      - "nodeSelector"
+      - "tolerations"
+    answer: 2
+    explanation: "nodeSelector é a forma mais simples de restringir um pod a nós com labels específicas. nodeAffinity é mais poderoso e expressivo. nodeName fixa o pod a um nó específico pelo nome."
+    doc_url: "https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector"
+    doc_section: "Concepts → Scheduling → Assign Pod to Node"
+
+  - id: cka-easy-027
+    cert: CKA
+    topic: Scheduling
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual o componente do Kubernetes responsável por decidir em qual nó um pod será executado?"
+    options:
+      - "kubelet"
+      - "kube-apiserver"
+      - "kube-scheduler"
+      - "kube-controller-manager"
+    answer: 2
+    explanation: "O kube-scheduler monitora pods não agendados (sem nodeName) e seleciona o nó mais adequado com base em recursos disponíveis, affinity rules, taints/tolerations e outros critérios."
+    doc_url: "https://kubernetes.io/docs/concepts/scheduling-eviction/kube-scheduler/"
+    doc_section: "Concepts → Scheduling → kube-scheduler"
+
+  - id: cka-easy-028
+    cert: CKA
+    topic: Scheduling
+    difficulty: easy
+    type: multiple_choice
+    question: "O que acontece com um pod quando um nó recebe o taint 'NoSchedule' e o pod não tem uma toleration correspondente?"
+    options:
+      - "O pod é migrado para outro nó automaticamente"
+      - "O pod não é agendado nesse nó"
+      - "O pod continua rodando no nó mas é reiniciado"
+      - "O pod recebe a toleration automaticamente"
+    answer: 1
+    explanation: "NoSchedule impede que novos pods sem toleration correspondente sejam agendados no nó. Pods existentes no nó continuam rodando. NoExecute, por outro lado, também remove pods já existentes."
+    doc_url: "https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/"
+    doc_section: "Concepts → Scheduling → Taints and Tolerations"
+
+  # ── Cluster Architecture ──────────────────────────────────
+  - id: cka-easy-029
+    cert: CKA
+    topic: Cluster Architecture
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual componente do control plane é o ponto central de comunicação da API do Kubernetes?"
+    options:
+      - "etcd"
+      - "kube-scheduler"
+      - "kube-apiserver"
+      - "kube-controller-manager"
+    answer: 2
+    explanation: "O kube-apiserver é o front-end do control plane. Toda comunicação com o cluster (kubectl, outros componentes) passa por ele. É o único componente que se comunica diretamente com o etcd."
+    doc_url: "https://kubernetes.io/docs/concepts/overview/components/#kube-apiserver"
+    doc_section: "Concepts → Overview → Components → kube-apiserver"
+
+  - id: cka-easy-030
+    cert: CKA
+    topic: Cluster Architecture
+    difficulty: easy
+    type: multiple_choice
+    question: "Onde o Kubernetes armazena todo o estado do cluster (configurações, pods, services, etc.)?"
+    options:
+      - "No banco de dados MySQL interno"
+      - "Em arquivos no disco do kube-apiserver"
+      - "No etcd"
+      - "No kube-controller-manager"
+    answer: 2
+    explanation: "O etcd é um banco de dados key-value distribuído que armazena toda a configuração e estado do cluster Kubernetes. É crítico fazer backups regulares do etcd em produção."
+    doc_url: "https://kubernetes.io/docs/concepts/overview/components/#etcd"
+    doc_section: "Concepts → Overview → Components → etcd"
