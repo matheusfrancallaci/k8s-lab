@@ -1,0 +1,9 @@
+.git
+.claude
+data
+estudo-app-linux
+estudo-app
+*.exe
+k8s-study-lab
+*.log
+scratchpad

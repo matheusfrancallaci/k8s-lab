@@ -1,4 +1,4 @@
-.PHONY: run run-wsl build build-linux setup setup-win clean kill
+.PHONY: run run-wsl build build-linux docker-build docker-run setup setup-win clean kill
 
 ## run: Build and start the study app on :8080
 run:
@@ -15,6 +15,14 @@ build:
 ## build-linux: Cross-compila o binário Linux (autossuficiente, assets embutidos) p/ rodar no WSL
 build-linux:
 	GOOS=linux GOARCH=amd64 go build -o estudo-app-linux .
+
+## docker-build: Imagem autossuficiente (app + cluster k3s embutido)
+docker-build:
+	docker build -t estudo-app:latest .
+
+## docker-run: Roda a imagem — 1 comando, sem WSL/minikube (precisa --privileged p/ o k3s)
+docker-run:
+	docker run --rm --privileged -p 8080:8080 -v lab-data:/app/data estudo-app:latest
 
 ## setup: Install kubectl + minikube and start cluster (Linux/macOS)
 setup:
