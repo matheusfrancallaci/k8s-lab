@@ -349,6 +349,11 @@ func TerminalWS(w http.ResponseWriter, r *http.Request) {
 			cloudShellNS, cloudShellPod)
 	} else {
 		shellCmd = "bash -c \"exec bash --rcfile ~/.k8slab_rc -i\""
+		// Multi-user: o terminal do usuário aponta para o namespace lab-<user>,
+		// isolando os recursos que ele criar dos demais.
+		if kc := userKubeconfig(uid); kc != "" {
+			shellCmd = "KUBECONFIG=" + kc + " " + shellCmd
+		}
 	}
 	// Inicia o PTY pela implementação da plataforma: ConPTY (Windows, via
 	// wsl.exe) ou PTY nativo (Linux, quando o app roda dentro do WSL).

@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"math/rand"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -183,9 +184,13 @@ func (h *LabHandler) AdvanceSession(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func runCmd(cmdStr string) (string, error) {
+func runCmd(cmdStr, userID string) (string, error) {
 	touchActivity()
-	out, err := wslShell(cmdStr).CombinedOutput()
+	cmd := wslShell(cmdStr)
+	if kc := userKubeconfig(userID); kc != "" {
+		cmd.Env = append(os.Environ(), "KUBECONFIG="+kc)
+	}
+	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
 }
 
@@ -226,7 +231,7 @@ func (h *LabHandler) Setup(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "data: %s\n\n", msg)
 		flusher.Flush()
 
-		output, err := runCmd(step.Command)
+		output, err := runCmd(step.Command, userID(r))
 
 		status := "done"
 		if err != nil {
@@ -264,7 +269,7 @@ func (h *LabHandler) Teardown(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, cmdStr := range q.Teardown {
-		runCmd(cmdStr)
+		runCmd(cmdStr, userID(r)) //nolint:errcheck
 	}
 
 	json.NewEncoder(w).Encode(map[string]any{"success": true})
@@ -312,7 +317,7 @@ func (h *LabHandler) Validate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	output, err := runCmd(validation.Command)
+	output, err := runCmd(validation.Command, userID(r))
 	if output == "" && err != nil {
 		output = err.Error()
 	}
