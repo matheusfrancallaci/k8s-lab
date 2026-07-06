@@ -21,7 +21,10 @@ k3s server \
     --write-kubeconfig-mode 644 \
     >/var/log/k3s.log 2>&1 &
 
-export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+# KUBECONFIG mesclado: k3s local + ~/.kube/config (contextos de AKS via az).
+# Se o arquivo do az ainda nao existe, o kubectl ignora — sem problema.
+mkdir -p /root/.kube
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml:/root/.kube/config
 
 echo "[entrypoint] aguardando o cluster ficar pronto..."
 ready=0

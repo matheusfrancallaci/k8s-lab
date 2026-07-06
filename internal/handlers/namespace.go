@@ -52,8 +52,10 @@ func userKubeconfig(userID string) string {
 	}
 	path := filepath.Join(os.TempDir(), "kc-"+id+".yaml")
 	// Copia o kubeconfig base e seta o namespace default = lab-<user>.
+	// Usa a env KUBECONFIG (não o flag --kubeconfig) porque a base pode ser
+	// mesclada (k3s local : AKS) com ':', que só a env aceita.
 	script := fmt.Sprintf(
-		"kubectl --kubeconfig=%s config view --raw > %s && kubectl --kubeconfig=%s config set-context --current --namespace=%s",
+		"KUBECONFIG=%s kubectl config view --raw > %s && KUBECONFIG=%s kubectl config set-context --current --namespace=%s",
 		base, path, path, ns)
 	if err := wslShell(script).Run(); err != nil {
 		return ""
