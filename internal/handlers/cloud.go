@@ -450,6 +450,16 @@ func idleFor() time.Duration {
 	return time.Since(lastActivity)
 }
 
+// IdleHandler expõe a ociosidade para o auto-stop da VM (timer no host lê isto).
+// Público (sem login): só revela segundos ociosos e nº de terminais — nada sensível.
+func IdleHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
+		"idle_seconds":     int(idleFor().Seconds()),
+		"active_terminals": ActiveTerminals(),
+	})
+}
+
 // StartCloudMonitor liga um monitor que para o AKS após inatividade prolongada,
 // evitando faturar um cluster esquecido ligado. Só age quando o contexto ativo é
 // o AKS e o cluster está Running.

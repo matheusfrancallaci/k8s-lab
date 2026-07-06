@@ -166,10 +166,13 @@ resource "azurerm_linux_virtual_machine" "lab" {
   }
 
   custom_data = base64encode(templatefile("${path.module}/cloud-init.yaml", {
-    acr_name     = azurerm_container_registry.lab.name
-    image        = "${azurerm_container_registry.lab.login_server}/estudo-app:latest"
-    app_password = var.app_password
-    fqdn         = azurerm_public_ip.lab.fqdn
+    acr_name               = azurerm_container_registry.lab.name
+    image                  = "${azurerm_container_registry.lab.login_server}/estudo-app:latest"
+    app_password           = var.app_password
+    fqdn                   = azurerm_public_ip.lab.fqdn
+    rg_name                = azurerm_resource_group.lab.name
+    vm_name                = "${var.prefix}-vm"
+    idle_threshold_seconds = var.idle_minutes * 60
   }))
 }
 
@@ -177,5 +180,12 @@ resource "azurerm_linux_virtual_machine" "lab" {
 resource "azurerm_role_assignment" "acr_pull" {
   scope                = azurerm_container_registry.lab.id
   role_definition_name = "AcrPull"
+  principal_id         = azurerm_linux_virtual_machine.lab.identity[0].principal_id
+}
+
+# ── A VM pode se desalocar sozinha (auto-stop por inatividade) ──
+resource "azurerm_role_assignment" "vm_self_manage" {
+  scope                = azurerm_linux_virtual_machine.lab.id
+  role_definition_name = "Virtual Machine Contributor"
   principal_id         = azurerm_linux_virtual_machine.lab.identity[0].principal_id
 }

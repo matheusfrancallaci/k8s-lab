@@ -44,3 +44,9 @@ variable "dns_label" {
   type        = string
   default     = ""
 }
+
+variable "idle_minutes" {
+  description = "Minutos de inatividade (sem terminais ativos) antes da VM se desalocar sozinha. 0 desliga o auto-stop."
+  type        = number
+  default     = 30
+}

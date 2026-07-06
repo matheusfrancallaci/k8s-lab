@@ -55,9 +55,11 @@ ssh azureuser@<ip> 'sudo systemctl restart estudo-app'      # puxa e reinicia
 
 ## Custo (ordem de grandeza)
 
-- VM `Standard_B2s` (2 vCPU/4GB): ~US$30/mês ligada 24/7. Para economizar,
-  `az vm deallocate` quando não estiverem usando, ou troque para `B1ms` (~US$15,
-  mais apertado). ACR Basic: ~US$5/mês. IP público: ~US$3.
+- VM `Standard_B2s` (2 vCPU/4GB): ~US$30/mês **ligada 24/7** — mas o **auto-stop**
+  já vem ligado: a VM se **desaloca sozinha** após `idle_minutes` (default 30) sem
+  ninguém usando (nenhum terminal ativo), e aí você só paga o disco (~US$2/mês).
+  Para religar quando quiser estudar: `az vm start -g <rg> -n <prefix>-vm` (ou pelo
+  portal). Desligue o auto-stop com `idle_minutes = 0`. ACR Basic ~US$5, IP ~US$3.
 
 ## Segurança / próximos passos
 

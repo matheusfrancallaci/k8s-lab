@@ -217,6 +217,9 @@ func main() {
 	// Cluster status API (client-go no WSL, shell no host Windows)
 	mux.HandleFunc("GET /api/cluster-status", handlers.ClusterStatusHandler)
 
+	// Ociosidade — lido pelo auto-stop da VM (público, info não sensível)
+	mux.HandleFunc("GET /api/idle", handlers.IdleHandler)
+
 	// LAB_NO_CLUSTER=1 pula o auto-start do minikube e o monitor de nuvem —
 	// útil para testes, CI ou subir só a UI sem tocar em cluster.
 	if os.Getenv("LAB_NO_CLUSTER") == "" {

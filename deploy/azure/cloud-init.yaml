@@ -24,10 +24,12 @@ write_files:
       done
       docker network create labnet >/dev/null 2>&1 || true
 
-      # App: container completo (k3s dentro -> --privileged), interno na rede labnet.
+      # App: container completo (k3s dentro -> --privileged), na rede labnet.
+      # Porta publicada só no loopback (127.0.0.1) para o auto-stop consultar /api/idle.
       docker rm -f lab >/dev/null 2>&1 || true
       docker run -d --privileged --restart=unless-stopped \
         --network labnet --name lab \
+        -p 127.0.0.1:8080:8080 \
         -e APP_PASSWORD='${app_password}' \
         -v lab-data:/app/data \
         "${image}"
@@ -60,8 +62,48 @@ write_files:
       [Install]
       WantedBy=multi-user.target
 
+  # ── Auto-stop: desaloca a VM quando ociosa (controle de custo) ──
+  - path: /opt/lab/autostop.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      # threshold 0 = auto-stop desligado
+      [ ${idle_threshold_seconds} -le 0 ] && exit 0
+      data=$(curl -s --max-time 5 http://127.0.0.1:8080/api/idle || echo '{}')
+      idle=$(echo "$data" | sed -n 's/.*"idle_seconds":\([0-9]*\).*/\1/p')
+      terms=$(echo "$data" | sed -n 's/.*"active_terminals":\([0-9]*\).*/\1/p')
+      [ -z "$idle" ] && idle=0
+      [ -z "$terms" ] && terms=0
+      if [ "$terms" -eq 0 ] && [ "$idle" -ge ${idle_threshold_seconds} ]; then
+        logger "[autostop] ocioso ($idle s, sem terminais) -> desalocando a VM"
+        az login --identity >/dev/null
+        az vm deallocate --resource-group "${rg_name}" --name "${vm_name}" --no-wait
+      fi
+
+  - path: /etc/systemd/system/lab-autostop.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=K8s Study Lab - checa inatividade e desaloca a VM
+      [Service]
+      Type=oneshot
+      ExecStart=/opt/lab/autostop.sh
+
+  - path: /etc/systemd/system/lab-autostop.timer
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=K8s Study Lab - auto-stop por inatividade
+      [Timer]
+      OnBootSec=15min
+      OnUnitActiveSec=5min
+      [Install]
+      WantedBy=timers.target
+
 runcmd:
   - curl -fsSL https://get.docker.com | sh
   - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
   - systemctl daemon-reload
   - systemctl enable --now estudo-app.service
+  - systemctl enable --now lab-autostop.timer

@@ -175,9 +175,9 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 // RequireAuth protege todas as rotas quando APP_PASSWORD está definido.
 func RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Login, registro e assets estáticos são públicos.
+		// Login, registro, assets e o endpoint de ociosidade são públicos.
 		if appPassword() == "" || r.URL.Path == "/login" || r.URL.Path == "/register" ||
-			strings.HasPrefix(r.URL.Path, "/static/") {
+			r.URL.Path == "/api/idle" || strings.HasPrefix(r.URL.Path, "/static/") {
 			next.ServeHTTP(w, r)
 			return
 		}
