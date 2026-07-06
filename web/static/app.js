@@ -165,25 +165,19 @@
             }
         });
 
-        // ── Perfil de usuário — isola progresso entre pessoas na mesma instância ──
+        // ── Conta logada — mostra "logado como X · sair" (só quando há login) ──
         async function loadProfile() {
             try {
                 const d = await fetch('/api/profile').then(r => r.json());
-                const inp = document.getElementById('profile-name');
-                if (inp && d.profile && d.profile !== 'default') inp.value = d.profile;
+                if (!d.auth) return; // uso local sem login: sem seção de conta
+                const sec = document.getElementById('profile-section');
+                const box = document.getElementById('profile-box');
+                if (sec && box) {
+                    box.innerHTML =
+                        '<span>logado como <strong style="color:var(--text);">' + (d.profile || '?') + '</strong></span>' +
+                        '<a href="/logout" class="theme-opt" style="margin-left:auto;flex:0 0 auto;padding:5px 10px;">sair</a>';
+                    sec.style.display = '';
+                }
             } catch (e) {}
         }
-        async function saveProfile() {
-            const inp = document.getElementById('profile-name');
-            if (!inp || !inp.value.trim()) return;
-            try {
-                await fetch('/api/profile', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: inp.value })
-                });
-            } catch (e) {}
-            // Recarrega para todas as views passarem a usar o novo perfil.
-            location.reload();
-        }
-        window.saveProfile = saveProfile;
         document.addEventListener('DOMContentLoaded', loadProfile);

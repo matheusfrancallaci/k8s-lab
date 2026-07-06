@@ -102,9 +102,12 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// Login (ativo apenas com APP_PASSWORD definido)
+	// Login / contas por usuário (ativo apenas com APP_PASSWORD definido)
 	mux.HandleFunc("GET /login", handlers.LoginHandler)
 	mux.HandleFunc("POST /login", handlers.LoginHandler)
+	mux.HandleFunc("GET /register", handlers.RegisterHandler)
+	mux.HandleFunc("POST /register", handlers.RegisterHandler)
+	mux.HandleFunc("GET /logout", handlers.LogoutHandler)
 
 	// Static files
 	staticSub, _ := fs.Sub(staticFS, "web/static")
@@ -187,9 +190,8 @@ func main() {
 	mux.HandleFunc("POST /api/tutor/chat", tutorH.Chat)
 	mux.HandleFunc("POST /api/tutor/chat/stream", tutorH.ChatStream)
 
-	// Perfil de usuário (identidade leve para isolar progresso entre pessoas)
+	// Perfil = conta logada (progresso do tutor isolado por usuário)
 	mux.HandleFunc("GET /api/profile", handlers.ProfileHandler)
-	mux.HandleFunc("POST /api/profile", handlers.ProfileHandler)
 
 	// Cloud (Azure AKS) routes
 	mux.HandleFunc("GET /cloud", cloudPage(templatesFS))

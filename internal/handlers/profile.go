@@ -8,37 +8,26 @@ import (
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Perfil de usuário — identidade leve para separar ESTADO entre pessoas que
-// usam a mesma instância (ex.: amigos). NÃO é fronteira de segurança: o gate de
-// acesso continua sendo o APP_PASSWORD compartilhado. Aqui só isolamos progresso.
+// Perfil = conta logada. O progresso do tutor é keyed pelo usuário autenticado.
+// Sem APP_PASSWORD (uso local, sem login), tudo cai no perfil "default".
 // ─────────────────────────────────────────────────────────────────────────────
 
-const profileCookie = "k8slab_user"
-
-// userID devolve o id de perfil do requisitante (cookie), ou "default".
+// userID devolve o id de perfil do requisitante (a conta logada), ou "default".
 func userID(r *http.Request) string {
-	c, err := r.Cookie(profileCookie)
-	if err != nil {
+	if appPassword() == "" {
 		return "default"
 	}
-	return tutor.SanitizeID(c.Value)
+	if u, ok := isAuthenticated(r); ok {
+		return tutor.SanitizeID(u)
+	}
+	return "default"
 }
 
-// ProfileHandler: GET devolve o perfil atual; POST {name} define o cookie.
+// ProfileHandler (GET): devolve a conta atual e se o login está ativo.
 func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	if r.Method == http.MethodPost {
-		var body struct {
-			Name string `json:"name"`
-		}
-		json.NewDecoder(r.Body).Decode(&body) //nolint:errcheck
-		id := tutor.SanitizeID(body.Name)
-		http.SetCookie(w, &http.Cookie{
-			Name: profileCookie, Value: id, Path: "/",
-			SameSite: http.SameSiteLaxMode, MaxAge: 365 * 24 * 3600,
-		})
-		json.NewEncoder(w).Encode(map[string]any{"profile": id}) //nolint:errcheck
-		return
-	}
-	json.NewEncoder(w).Encode(map[string]any{"profile": userID(r)}) //nolint:errcheck
+	json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
+		"profile": userID(r),
+		"auth":    appPassword() != "",
+	})
 }
