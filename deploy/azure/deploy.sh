@@ -18,8 +18,10 @@ command -v terraform >/dev/null || die "Terraform não encontrado — https://de
 az account show >/dev/null 2>&1 || die "Não logado no Azure. Rode primeiro:  az login"
 ok "az, terraform e login OK"
 
-export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
-ok "Subscription: $(az account show --query name -o tsv)"
+# tr -d '\r': no Windows/Git Bash o 'az' devolve com \r no fim, e o provider
+# azurerm CRASHA com o subscription id "sujo" (erro GRPCProvider no apply).
+export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv | tr -d '\r\n')"
+ok "Subscription: $(az account show --query name -o tsv | tr -d '\r\n')"
 
 cd "$SCRIPT_DIR"
 if [ ! -f terraform.tfvars ]; then
@@ -36,16 +38,16 @@ say "terraform apply (revise o plano e confirme com 'yes')"
 terraform apply
 
 # ── 3. Constrói e publica a imagem na ACR (build roda na Azure) ────
-ACR="$(terraform output -raw acr_name)"
+ACR="$(terraform output -raw acr_name | tr -d '\r\n')"
 say "Construindo a imagem na ACR '$ACR' (roda na Azure, ~2-3 min)"
 cd "$REPO_ROOT"
 az acr build --registry "$ACR" --image estudo-app:latest .
 ok "imagem publicada"
 
 # ── 4. Pronto ──────────────────────────────────────────────────────
-URL="$(terraform -chdir="$SCRIPT_DIR" output -raw app_url)"
-RG="$(terraform -chdir="$SCRIPT_DIR" output -raw resource_group)"
-VM="$(terraform -chdir="$SCRIPT_DIR" output -raw vm_name)"
+URL="$(terraform -chdir="$SCRIPT_DIR" output -raw app_url | tr -d '\r\n')"
+RG="$(terraform -chdir="$SCRIPT_DIR" output -raw resource_group | tr -d '\r\n')"
+VM="$(terraform -chdir="$SCRIPT_DIR" output -raw vm_name | tr -d '\r\n')"
 
 say "Deploy concluído 🎉"
 cat <<EOF
