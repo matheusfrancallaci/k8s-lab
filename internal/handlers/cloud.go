@@ -94,6 +94,31 @@ func azInstalled() bool {
 	return err == nil
 }
 
+// managedIdentity indica que o app roda numa VM Azure com identidade gerenciada
+// (definido por AZURE_MANAGED_IDENTITY=1 na instância hospedada). Nesse modo o
+// login é `az login --identity` — instantâneo, sem device-code.
+func managedIdentity() bool { return os.Getenv("AZURE_MANAGED_IDENTITY") == "1" }
+
+// EnsureAzureLogin faz login automático via identidade da VM no boot da instância
+// hospedada, para a página Cloud já aparecer conectada (sem ação do usuário).
+// No-op fora do modo hospedado ou se já estiver logado.
+func EnsureAzureLogin() {
+	if !managedIdentity() || !azInstalled() || azSubscription() != "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if err := wslShellCtx(ctx, "az login --identity --only-show-errors 2>&1").Run(); err != nil {
+		return
+	}
+	// Se já existe um AKS, conecta o kubectl a ele de uma vez.
+	if aksExists() {
+		wslShellCtx(ctx, fmt.Sprintf(
+			"az aks get-credentials -g %s -n %s --overwrite-existing --only-show-errors 2>&1",
+			azRG(), aksName())).Run()
+	}
+}
+
 // azSubscription retorna o nome da subscription se logado, ou "" se não logado.
 func azSubscription() string {
 	out, err := wslShell("az account show --query name -o tsv 2>/dev/null").Output()
@@ -269,7 +294,13 @@ func CloudLoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
 	defer cancel()
-	err := streamShell(ctx, s, "az login --use-device-code --only-show-errors 2>&1")
+	// Instância hospedada: usa a identidade gerenciada da VM — sem device-code.
+	loginCmd := "az login --use-device-code --only-show-errors 2>&1"
+	if managedIdentity() {
+		s.send(map[string]any{"type": "line", "line": "Autenticando com a identidade da VM (sem device-code)..."})
+		loginCmd = "az login --identity --only-show-errors 2>&1"
+	}
+	err := streamShell(ctx, s, loginCmd)
 	sub := azSubscription()
 	s.send(map[string]any{
 		"type": "done", "ok": err == nil && sub != "", "subscription": sub,

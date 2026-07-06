@@ -41,6 +41,7 @@ write_files:
         --network labnet --name lab \
         -p 127.0.0.1:8080:8080 \
         -e APP_PASSWORD='${app_password}' \
+        -e AZURE_MANAGED_IDENTITY=1 \
         -e OLLAMA_URL='http://ollama:11434' \
         -e OLLAMA_MODEL='${ollama_model}' \
         -v lab-data:/app/data \

@@ -192,3 +192,12 @@ resource "azurerm_role_assignment" "vm_self_manage" {
   role_definition_name = "Virtual Machine Contributor"
   principal_id         = azurerm_linux_virtual_machine.lab.identity[0].principal_id
 }
+
+# ── A identity da VM gerencia AKS no RG (login por identity, sem device-code) ──
+# Necessário para a página Cloud criar/ligar/conectar o AKS automaticamente na
+# instância hospedada. Escopo = só este resource group (não a subscription toda).
+resource "azurerm_role_assignment" "vm_manage_rg" {
+  scope                = azurerm_resource_group.lab.id
+  role_definition_name = "Contributor"
+  principal_id         = azurerm_linux_virtual_machine.lab.identity[0].principal_id
+}

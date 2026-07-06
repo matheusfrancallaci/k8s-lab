@@ -213,6 +213,7 @@ func main() {
 	// LAB_NO_CLUSTER=1 pula o auto-start do minikube e o monitor de nuvem —
 	// útil para testes, CI ou subir só a UI sem tocar em cluster.
 	if os.Getenv("LAB_NO_CLUSTER") == "" {
+		go handlers.EnsureAzureLogin() // hospedado: login via identity da VM (sem device-code)
 		go handlers.EnsureCluster()
 		go handlers.StartCloudMonitor()
 		handlers.StartCloudShellGC() // coleta pods de shell por-usuário ociosos
