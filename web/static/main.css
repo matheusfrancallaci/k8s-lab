@@ -480,6 +480,8 @@ body {
 .home-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  max-width: 1120px;      /* sem isto, as 2 colunas espalham na tela larga */
+  margin: 0 auto;
   min-height: calc(100vh - var(--nav-h));
 }
 @media (max-width: 840px) {

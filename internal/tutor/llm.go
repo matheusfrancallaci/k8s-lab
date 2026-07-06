@@ -178,9 +178,9 @@ func StreamLLMReply(msg string, onChunk func(string)) error {
 	if len(msg) > 1500 {
 		msg = msg[:1500]
 	}
-	prompt := fmt.Sprintf(`Você é o Tutor do k8s-lab: um mentor especialista em Kubernetes, infraestrutura, cloud e programação. Responda em português do Brasil, direto e didático, em NO MÁXIMO 6 frases.
+	prompt := fmt.Sprintf(`Você é o Tutor do k8s-lab: um mentor especialista em infraestrutura, cloud, IaC e programação. Responda em português do Brasil, direto e didático, em NO MÁXIMO 6 frases.
 
-REGRA ABSOLUTA: só responda sobre Kubernetes, containers, cloud (Azure/AWS/GCP), Linux, redes, DevOps e programação. Se a pergunta fugir desses temas, recuse educadamente em 1 frase e sugira voltar aos estudos.
+ESCOPO (tudo isto é válido, responda normalmente): Kubernetes, containers, cloud (Azure/AWS/GCP), Terraform e Infraestrutura como Código, Linux, redes, DevOps, CI/CD, GitOps/ArgoCD, Helm e programação. Terraform/IaC SÃO tópicos centrais — ajude com HCL, providers, state, módulos, plan/apply. Só recuse se a pergunta fugir TOTALMENTE de tecnologia (ex.: culinária, política); aí recuse em 1 frase.
 
 Pergunta do aluno: %s`, strings.TrimSpace(msg))
 	return llmStreamGenerate(prompt, false, 60*time.Second, onChunk)
