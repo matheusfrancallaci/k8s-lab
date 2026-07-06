@@ -231,7 +231,7 @@ func Chat(msg, cert string, createSession func(ids []string) (string, string, in
 
 	// 4.7 Gerar lab de Terraform AUTÔNOMO: o tutor gera com o LLM e AUTO-VERIFICA
 	// rodando a solução de verdade (só entrega labs que corrigem certo).
-	if regexp.MustCompile(`(?i)\b(ger[ae]|cria|criar|monta|montar|quero|fa[çc]a|faz)\b`).MatchString(l) &&
+	if regexp.MustCompile(`(?i)\b(ger|cri|mont|fa[çc]|faz|quero|monta)`).MatchString(l) &&
 		regexp.MustCompile(`(?i)lab|laborat|exerc[ií]cio|pr[aá]tic`).MatchString(l) &&
 		(strings.EqualFold(cert, "Terraform") || strings.Contains(l, "terraform")) {
 		topic := ""
