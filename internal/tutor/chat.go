@@ -229,6 +229,27 @@ func Chat(msg, cert string, createSession func(ids []string) (string, string, in
 		return res
 	}
 
+	// 4.7 Gerar lab de Terraform AUTÔNOMO: o tutor gera com o LLM e AUTO-VERIFICA
+	// rodando a solução de verdade (só entrega labs que corrigem certo).
+	if regexp.MustCompile(`(?i)\b(ger[ae]|cria|criar|monta|montar|quero|fa[çc]a|faz)\b`).MatchString(l) &&
+		regexp.MustCompile(`(?i)lab|laborat|exerc[ií]cio|pr[aá]tic`).MatchString(l) &&
+		(strings.EqualFold(cert, "Terraform") || strings.Contains(l, "terraform")) {
+		topic := ""
+		if m := regexp.MustCompile(`(?i)sobre\s+(.+?)\s*$`).FindStringSubmatch(msg); m != nil {
+			topic = strings.TrimSpace(m[1])
+		}
+		q, err := GenerateVerifiedTFLab(topic, detectLevel(msg), 2)
+		if err != nil {
+			return ChatResult{Reply: "Tentei gerar um lab de Terraform e auto-verificar rodando a solução, mas não consegui agora: " + err.Error() + "\n\nTenta pedir um tema específico, ex.: **\"gerar lab de terraform sobre variáveis\"**."}
+		}
+		sid, first, total := createSession([]string{q.ID})
+		return ChatResult{
+			Reply:     "🤖 Gerei um lab de **Terraform do zero** e **auto-verifiquei** rodando a solução de verdade — a correção funciona. Bora praticar?",
+			Action:    &ChatAction{Type: "session", ID: sid, First: first, Total: total},
+			Questions: []models.Question{q},
+		}
+	}
+
 	// 5. Criar lab por tópico
 	if topic := detectTopic(msg); topic != "" && regexp.MustCompile(`lab|exerc[ií]cio|praticar|treinar|criar?|gera`).MatchString(l) {
 		level := detectLevel(msg)
