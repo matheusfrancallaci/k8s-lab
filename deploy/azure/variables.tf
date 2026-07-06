@@ -50,3 +50,9 @@ variable "idle_minutes" {
   type        = number
   default     = 30
 }
+
+variable "ollama_model" {
+  description = "Modelo local do tutor (roda em CPU na VM). llama3.2:1b cabe em 8GB; use qwen2.5:0.5b se faltar RAM. Vazio desliga a IA."
+  type        = string
+  default     = "llama3.2:1b"
+}

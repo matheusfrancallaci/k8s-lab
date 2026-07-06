@@ -175,6 +175,7 @@ resource "azurerm_linux_virtual_machine" "lab" {
     rg_name                = azurerm_resource_group.lab.name
     vm_name                = "${var.prefix}-vm"
     idle_threshold_seconds = var.idle_minutes * 60
+    ollama_model           = var.ollama_model
   }))
 }
 

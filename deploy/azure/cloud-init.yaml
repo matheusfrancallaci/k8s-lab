@@ -24,6 +24,16 @@ write_files:
       done
       docker network create labnet >/dev/null 2>&1 || true
 
+      # Tutor com IA local: Ollama como container (modelo roda em CPU na VM).
+      # O app já fala com ele via OLLAMA_URL/OLLAMA_MODEL — sem mudar código.
+      if [ -n "${ollama_model}" ]; then
+        docker rm -f ollama >/dev/null 2>&1 || true
+        docker run -d --restart=unless-stopped \
+          --network labnet --name ollama \
+          -v ollama-data:/root/.ollama \
+          ollama/ollama
+      fi
+
       # App: container completo (k3s dentro -> --privileged), na rede labnet.
       # Porta publicada só no loopback (127.0.0.1) para o auto-stop consultar /api/idle.
       docker rm -f lab >/dev/null 2>&1 || true
@@ -31,6 +41,8 @@ write_files:
         --network labnet --name lab \
         -p 127.0.0.1:8080:8080 \
         -e APP_PASSWORD='${app_password}' \
+        -e OLLAMA_URL='http://ollama:11434' \
+        -e OLLAMA_MODEL='${ollama_model}' \
         -v lab-data:/app/data \
         "${image}"
 
@@ -43,6 +55,13 @@ write_files:
         -v caddy-data:/data -v caddy-config:/config \
         caddy:2
       echo "[lab] no ar: https://${fqdn}"
+
+      # Baixa o modelo do tutor (alguns min na 1a vez; a IA fica disponível
+      # assim que terminar — o app detecta sozinho em ~30s).
+      if [ -n "${ollama_model}" ]; then
+        echo "[lab] baixando modelo do tutor: ${ollama_model} (roda em background)"
+        ( docker exec ollama ollama pull "${ollama_model}" >/var/log/ollama-pull.log 2>&1 || true ) &
+      fi
 
   - path: /etc/systemd/system/estudo-app.service
     permissions: '0644'
