@@ -65,7 +65,9 @@ resource "azurerm_public_ip" "lab" {
   location            = azurerm_resource_group.lab.location
   allocation_method   = "Static"
   sku                 = "Standard"
-  domain_name_label   = var.dns_label != "" ? var.dns_label : null
+  # Sempre gera um FQDN (<label>.<região>.cloudapp.azure.com) — o Caddy usa ele
+  # para emitir HTTPS automático via Let's Encrypt.
+  domain_name_label = var.dns_label != "" ? var.dns_label : "${var.prefix}-${random_string.suffix.result}"
 }
 
 resource "azurerm_network_security_group" "lab" {
@@ -86,7 +88,7 @@ resource "azurerm_network_security_group" "lab" {
     destination_address_prefix = "*"
   }
 
-  # HTTP — a app (amigos acessam por aqui)
+  # HTTP — redireciona p/ HTTPS (e valida o cert Let's Encrypt via :80)
   security_rule {
     name                       = "http"
     priority                   = 110
@@ -95,6 +97,19 @@ resource "azurerm_network_security_group" "lab" {
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  # HTTPS — os amigos acessam por aqui
+  security_rule {
+    name                       = "https"
+    priority                   = 120
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
@@ -154,6 +169,7 @@ resource "azurerm_linux_virtual_machine" "lab" {
     acr_name     = azurerm_container_registry.lab.name
     image        = "${azurerm_container_registry.lab.login_server}/estudo-app:latest"
     app_password = var.app_password
+    fqdn         = azurerm_public_ip.lab.fqdn
   }))
 }
 

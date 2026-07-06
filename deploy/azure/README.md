@@ -37,8 +37,14 @@ az acr build --registry "$(terraform -chdir=deploy/azure output -raw acr_name)" 
 terraform -chdir=deploy/azure output app_url   # abra essa URL no browser
 ```
 
-Seus amigos acessam a **URL** e entram com a `app_password`. Cada um escolhe um
-**perfil** (menu ⚙ → "seu perfil") — o progresso do tutor fica isolado por pessoa.
+Seus amigos acessam a **URL (HTTPS)** e entram com a `app_password`. Cada um
+escolhe um **perfil** (menu ⚙ → "seu perfil") — o progresso do tutor fica
+isolado por pessoa.
+
+> **HTTPS é automático.** Um Caddy na frente do app emite o certificado
+> Let's Encrypt para o FQDN da Azure (`<label>.<região>.cloudapp.azure.com`) no
+> primeiro acesso — a primeira abertura pode levar ~30s enquanto o cert é emitido.
+> O `app_url` do output já é o link `https://...` pronto para compartilhar.
 
 ## Atualizar (nova versão do app)
 
@@ -55,9 +61,10 @@ ssh azureuser@<ip> 'sudo systemctl restart estudo-app'      # puxa e reinicia
 
 ## Segurança / próximos passos
 
+- **HTTPS**: já vem pronto (Caddy + Let's Encrypt no FQDN da Azure). Se quiser um
+  domínio próprio (`labs.seudominio.com`), aponte um CNAME para o FQDN e troque o
+  endereço no `deploy/azure/cloud-init.yaml` (Caddyfile) — o Caddy emite o cert sozinho.
 - **Restrinja o SSH**: em `terraform.tfvars`, ponha `allowed_ssh_cidr = "SEU_IP/32"`.
-- **HTTPS**: hoje é HTTP puro. Para TLS, aponte um domínio (`dns_label`) e rode um
-  Caddy/nginx com Let's Encrypt na frente — posso adicionar se quiser.
 - **Labs compartilham o cluster**: nesta instância única, o k3s é um só. Ótimo para
   quiz/teoria/tutor (isolados por perfil); para hands-on simultâneo pesado, cada
   pessoa idealmente roda a própria imagem local (`make docker-run`).

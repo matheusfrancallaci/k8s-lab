@@ -9,8 +9,8 @@ output "public_ip" {
 }
 
 output "app_url" {
-  description = "URL para os amigos acessarem."
-  value       = var.dns_label != "" ? "http://${azurerm_public_ip.lab.fqdn}" : "http://${azurerm_public_ip.lab.ip_address}"
+  description = "URL (HTTPS) para os amigos acessarem no browser."
+  value       = "https://${azurerm_public_ip.lab.fqdn}"
 }
 
 output "ssh" {

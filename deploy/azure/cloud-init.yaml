@@ -1,9 +1,16 @@
 #cloud-config
-# Provisiona a VM: Docker + Azure CLI, e um serviço que puxa a imagem da ACR
-# (via managed identity) e roda o container completo (app + k3s) na porta 80.
+# Provisiona a VM: Docker + Azure CLI. Sobe o app (container completo app+k3s,
+# interno) atrás de um Caddy que faz HTTPS automático (Let's Encrypt) para o FQDN.
 package_update: true
 
 write_files:
+  - path: /opt/lab/Caddyfile
+    permissions: '0644'
+    content: |
+      ${fqdn} {
+        reverse_proxy lab:8080
+      }
+
   - path: /opt/lab/run-lab.sh
     permissions: '0755'
     content: |
@@ -15,20 +22,31 @@ write_files:
       until az acr login --name "${acr_name}" >/dev/null 2>&1 && docker pull "${image}" >/dev/null 2>&1; do
         sleep 20
       done
+      docker network create labnet >/dev/null 2>&1 || true
+
+      # App: container completo (k3s dentro -> --privileged), interno na rede labnet.
       docker rm -f lab >/dev/null 2>&1 || true
-      # --privileged: o k3s roda um cluster dentro do container.
       docker run -d --privileged --restart=unless-stopped \
-        -p 80:8080 \
+        --network labnet --name lab \
         -e APP_PASSWORD='${app_password}' \
         -v lab-data:/app/data \
-        --name lab "${image}"
-      echo "[lab] container no ar em :80"
+        "${image}"
+
+      # Caddy: HTTPS automático (Let's Encrypt) para o FQDN, proxy p/ o app.
+      docker rm -f caddy >/dev/null 2>&1 || true
+      docker run -d --restart=unless-stopped \
+        --network labnet --name caddy \
+        -p 80:80 -p 443:443 \
+        -v /opt/lab/Caddyfile:/etc/caddy/Caddyfile:ro \
+        -v caddy-data:/data -v caddy-config:/config \
+        caddy:2
+      echo "[lab] no ar: https://${fqdn}"
 
   - path: /etc/systemd/system/estudo-app.service
     permissions: '0644'
     content: |
       [Unit]
-      Description=K8s Study Lab (container app + k3s)
+      Description=K8s Study Lab (app + k3s + caddy https)
       After=docker.service network-online.target
       Requires=docker.service
       Wants=network-online.target
