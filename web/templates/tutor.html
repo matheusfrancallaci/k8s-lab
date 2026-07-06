@@ -281,6 +281,17 @@ function sendSuggestion(text) {
     sendChat();
 }
 
+// O backend anexa a ação como  \x00@@ACTION@@{json}  no fim do stream de chat.
+// Recorta em [texto, ação|null] — o marcador nunca aparece em texto normal.
+const CHAT_ACTION_MARK = '\x00@@ACTION@@';
+function splitAction(s) {
+    const i = s.indexOf(CHAT_ACTION_MARK);
+    if (i < 0) return [s, null];
+    let action = null;
+    try { action = JSON.parse(s.slice(i + CHAT_ACTION_MARK.length)); } catch (e) {}
+    return [s.slice(0, i), action];
+}
+
 async function sendChat() {
     const ta = document.getElementById('chat-text');
     const text = ta.value.trim();
@@ -304,12 +315,15 @@ async function sendChat() {
                 const { done, value } = await reader.read();
                 if (done) break;
                 out += decoder.decode(value, { stream: true });
-                slot.innerHTML = mdLite(out || '...');
+                slot.innerHTML = mdLite(splitAction(out)[0] || '...');
                 scrollBottom();
             }
             out += decoder.decode();
         }
-        slot.innerHTML = mdLite(out || '...');
+        // Recorta o texto da ação (o backend anexa a ação no fim do stream).
+        const [txt, action] = splitAction(out);
+        slot.innerHTML = mdLite(txt || '...');
+        if (action) renderAction(slot, action);
     } catch (e) {
         slot.innerHTML = 'algo deu errado por aqui — tenta de novo?';
     }

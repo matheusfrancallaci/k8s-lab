@@ -208,8 +208,18 @@ func (h *TutorHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		h.repo.Add(res.Questions)
 		PrewarmLabImages(res.Questions)
 	}
-	json.NewEncoder(w).Encode(map[string]any{"reply": res.Reply, "action": res.Action}) //nolint:errcheck
+	reply := res.Reply
+	if res.NeedsLLM { // conversa livre: resolve o LLM síncrono (fallback = res.Reply)
+		if r, err := tutor.FreeChatReply(body.Message); err == nil && r != "" {
+			reply = r
+		}
+	}
+	json.NewEncoder(w).Encode(map[string]any{"reply": reply, "action": res.Action}) //nolint:errcheck
 }
+
+// chatActionMarker separa o texto da resposta do JSON da ação no stream. Usa um
+// byte nulo (nunca aparece em texto/markdown) para o front recortar com segurança.
+const chatActionMarker = "\x00@@ACTION@@"
 
 // ChatStream retorna a resposta do tutor em streaming simples para a UI.
 func (h *TutorHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
@@ -234,23 +244,44 @@ func (h *TutorHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 		PrewarmLabImages(res.Questions)
 	}
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		fmt.Fprint(w, res.Reply)
-		return
-	}
-	if llmOK, _ := tutor.LLMStatus(); llmOK {
+	flusher, _ := w.(http.Flusher)
+
+	// Conversa livre (nenhuma intenção casou): streama o LLM token a token.
+	// Só aqui o LLM entra — NUNCA sobre uma intenção reconhecida.
+	if res.NeedsLLM && flusher != nil {
+		var got bool
 		err := tutor.StreamLLMReply(body.Message, func(chunk string) {
 			if chunk == "" {
 				return
 			}
+			got = true
 			fmt.Fprint(w, chunk)
 			flusher.Flush()
 		})
-		if err != nil {
-			fmt.Fprint(w, res.Reply)
+		if err == nil && got {
+			return
 		}
+		fmt.Fprint(w, res.Reply) // LLM falhou → fallback de capacidades
 		return
 	}
+	if res.NeedsLLM { // sem flusher (raro): resolve síncrono
+		if r, err := tutor.FreeChatReply(body.Message); err == nil && r != "" {
+			fmt.Fprint(w, r)
+			return
+		}
+		fmt.Fprint(w, res.Reply)
+		return
+	}
+
+	// Intenção reconhecida: entrega a resposta pronta + a ação (para a UI
+	// registrar a cert, iniciar a sessão de labs, abrir o exame, etc.).
 	fmt.Fprint(w, res.Reply)
+	if res.Action != nil {
+		if b, err := json.Marshal(res.Action); err == nil {
+			fmt.Fprint(w, chatActionMarker+string(b))
+		}
+	}
+	if flusher != nil {
+		flusher.Flush()
+	}
 }

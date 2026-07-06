@@ -28,7 +28,28 @@ type ChatResult struct {
 	Reply     string            `json:"reply"`
 	Action    *ChatAction       `json:"action,omitempty"`
 	Questions []models.Question `json:"-"` // para o handler registrar no repo
+	// NeedsLLM sinaliza que NENHUMA intenção casou e o caller deve responder
+	// com o LLM local (conversa livre). O roteamento NÃO chama o LLM aqui —
+	// assim o endpoint de streaming responde token a token sem chamada dupla, e
+	// intenções ("criar certificação X", "montar currículo", "modo incidente")
+	// nunca são sobrescritas por um papo genérico. Reply carrega o fallback de
+	// capacidades para quando o LLM estiver indisponível ou falhar.
+	NeedsLLM bool `json:"-"`
 }
+
+// capabilitiesReply é o fallback mostrado quando não há intenção nem LLM.
+const capabilitiesReply = "Posso te ajudar assim:\n" +
+	"• **\"criar certificação Terraform\"** — coloco a cert no seu board\n" +
+	"• **\"montar currículo de <cert>\"** — pesquiso a prova e gero labs+quiz\n" +
+	"• **\"lab de storage nível 3\"** — crio labs sob medida\n" +
+	"• **\"modo incidente\"** — quebro o cluster e você conserta\n" +
+	"• **\"simulado\"** — exame completo cronometrado\n" +
+	"• **cole uma URL** (kubernetes.io, GitHub) — gero questões dela\n" +
+	"• **\"como está meu desempenho?\"** — seu painel"
+
+// FreeChatReply responde conversa livre (persona restrita ao escopo) de forma
+// síncrona. Usado pelo handler quando ChatResult.NeedsLLM é true.
+func FreeChatReply(msg string) (string, error) { return llmChatReply(msg) }
 
 // sinônimos PT-BR → tópico do gerador
 var topicSynonyms = []struct {
@@ -224,22 +245,13 @@ func Chat(msg, cert string, createSession func(ids []string) (string, string, in
 		}
 	}
 
-	// 6. Conversa livre → LLM local com persona restrita
+	// 6. Nenhuma intenção casou → conversa livre. Sinaliza ao handler para usar
+	// o LLM (streaming ou síncrono). Reply carrega o fallback de capacidades,
+	// usado só se o LLM estiver fora ou falhar.
 	if ok, _ := LLMStatus(); ok {
-		reply, err := llmChatReply(msg)
-		if err == nil && reply != "" {
-			return ChatResult{Reply: reply}
-		}
+		return ChatResult{NeedsLLM: true, Reply: capabilitiesReply}
 	}
-
-	// 7. Fallback: apresenta as capacidades
-	return ChatResult{Reply: "Posso te ajudar assim:\n" +
-		"• **\"lab de storage nível 3\"** — crio labs sob medida\n" +
-		"• **\"modo incidente\"** — quebro o cluster e você conserta\n" +
-		"• **\"simulado\"** — exame completo cronometrado\n" +
-		"• **cole uma URL** (kubernetes.io, GitHub) — gero questões dela\n" +
-		"• **\"como está meu desempenho?\"** — seu painel\n" +
-		"Instale o Ollama para conversarmos livremente sobre Kubernetes."}
+	return ChatResult{Reply: capabilitiesReply + "\n\nInstale o Ollama para conversarmos livremente."}
 }
 
 func questionIDs(qs []models.Question) []string {
