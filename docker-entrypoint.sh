@@ -39,5 +39,10 @@ if [ "$ready" != "1" ]; then
     echo "[entrypoint] seguindo assim mesmo; o app cai no fallback shell se a API falhar."
 fi
 
+# O app trata o contexto "minikube" como LOCAL. O k3s cria "default"; renomeia
+# para o app reconhecer o cluster como local — senão o terminal do lab acha que
+# é nuvem e tenta abrir shell num pod em vez do bash local.
+kubectl config rename-context default minikube 2>/dev/null || true
+
 echo "[entrypoint] subindo o K8s Study Lab em http://localhost:8080"
 exec /app/estudo-app
