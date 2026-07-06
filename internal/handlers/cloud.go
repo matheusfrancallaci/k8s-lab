@@ -15,9 +15,9 @@ import (
 
 // ttlCache armazena dados por um prazo fixo para reduzir chamadas caras.
 type ttlCache[T any] struct {
-	mu       sync.Mutex
-	values   map[string]cachedValue[T]
-	ttl      time.Duration
+	mu     sync.Mutex
+	values map[string]cachedValue[T]
+	ttl    time.Duration
 }
 
 type cachedValue[T any] struct {

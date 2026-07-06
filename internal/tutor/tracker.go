@@ -73,7 +73,7 @@ func SanitizeID(raw string) string {
 	return s
 }
 
-func profilesDir() string       { return filepath.Join("data", "profiles") }
+func profilesDir() string          { return filepath.Join("data", "profiles") }
 func profilePath(id string) string { return filepath.Join(profilesDir(), id+".json") }
 
 func profileFor(userID string) *Profile {
