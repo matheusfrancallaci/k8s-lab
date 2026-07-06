@@ -179,7 +179,7 @@ Responda SOMENTE com JSON válido neste formato (sem texto fora do JSON):
 Exemplo:
 {"question":"Crie um recurso local_file chamado nota que grava 'oi' em nota.txt. Rode terraform init e apply.","solution_hcl":"terraform {\n  required_providers {\n    local = { source = \"hashicorp/local\" }\n  }\n}\nresource \"local_file\" \"nota\" {\n  filename = \"nota.txt\"\n  content  = \"oi\"\n}","validation":"terraform -chdir=\"$TFDIR\" state list 2>/dev/null | grep -q local_file.nota && test -f \"$TFDIR/nota.txt\" && echo OK || echo FAIL","expected":"OK","hint":"resource \"local_file\" \"nota\" { filename content }","explanation":"local_file grava um arquivo local; init baixa o provider e apply cria o recurso."}`, topic, level)
 
-	raw, err := llmGenerate(prompt, true, 120*time.Second, tokensGen)
+	raw, err := llmGenerate(prompt, true, 120*time.Second, tokensGen, genModel())
 	if err != nil {
 		return tfSpec{}, err
 	}

@@ -101,12 +101,26 @@ func numPredict() int {
 	return tokensGen
 }
 
+// genModel devolve o modelo dedicado à GERAÇÃO de código/labs (OLLAMA_GEN_MODEL),
+// separado do modelo de chat: chat quer velocidade (modelo pequeno), geração de
+// HCL/YAML quer qualidade (modelo de código). Sem a env, usa o modelo ativo.
+func genModel() string {
+	if m := envOr("OLLAMA_GEN_MODEL", ""); m != "" {
+		return m
+	}
+	_, m := LLMStatus()
+	return m
+}
+
 // llmGenerate chama o Ollama de forma síncrona (stream=false). maxTokens<=0 usa
-// o default (num_predict/env).
-func llmGenerate(prompt string, wantJSON bool, timeout time.Duration, maxTokens int) (string, error) {
-	ok, model := LLMStatus()
+// o default (num_predict/env). model=="" usa o modelo de chat ativo.
+func llmGenerate(prompt string, wantJSON bool, timeout time.Duration, maxTokens int, model string) (string, error) {
+	ok, active := LLMStatus()
 	if !ok {
 		return "", fmt.Errorf("ollama indisponível")
+	}
+	if model == "" {
+		model = active
 	}
 	if maxTokens <= 0 {
 		maxTokens = numPredict()
@@ -253,7 +267,7 @@ Responda SOMENTE com JSON válido nesse formato.
 MATERIAL:
 %s`, cert, n, text)
 
-	raw, err := llmGenerate(prompt, true, 120*time.Second, tokensGen)
+	raw, err := llmGenerate(prompt, true, 120*time.Second, tokensGen, genModel())
 	if err != nil {
 		log.Printf("[tutor/llm] geração falhou: %v", err)
 		return nil
@@ -328,5 +342,5 @@ Em português do Brasil, explique em NO MÁXIMO 4 frases:
 Seja direto e encorajador. Sem markdown, sem listas.`,
 		strings.TrimSpace(questionText), goalDesc, valCmd, strings.TrimSpace(output))
 
-	return llmGenerate(prompt, false, 45*time.Second, tokensChat)
+	return llmGenerate(prompt, false, 45*time.Second, tokensChat, "")
 }

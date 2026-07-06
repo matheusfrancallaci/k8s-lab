@@ -293,5 +293,5 @@ func llmChatReply(msg string) (string, error) {
 ESCOPO (tudo isto é válido, responda normalmente): Kubernetes, containers, cloud (Azure/AWS/GCP), Terraform e Infraestrutura como Código, Linux, redes, DevOps, CI/CD, GitOps/ArgoCD, Helm e programação. Terraform/IaC SÃO tópicos centrais — ajude com HCL, providers, state, módulos, plan/apply. Só recuse se a pergunta fugir TOTALMENTE de tecnologia (ex.: culinária, política); aí recuse em 1 frase.
 
 Pergunta do aluno: %s`, strings.TrimSpace(msg))
-	return llmGenerate(prompt, false, 60*time.Second, tokensChat)
+	return llmGenerate(prompt, false, 60*time.Second, tokensChat, "")
 }
