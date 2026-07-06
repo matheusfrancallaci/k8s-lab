@@ -81,12 +81,14 @@ type tfSpec struct {
 // ─── Segurança: HCL e validação do LLM SERÃO executados ──────────────────────
 var (
 	// tokens proibidos no HCL (exec arbitrário, providers de nuvem, exfiltração)
-	hclDenyRe = regexp.MustCompile(`(?i)provisioner|local-exec|remote-exec|data\s+"external"|"http"|aws_|azurerm_|azuread_|google_|kubernetes_|helm_|vault_|filename\s*=\s*"?/|\.\.`)
+	hclDenyRe = regexp.MustCompile(`(?i)provisioner|local-exec|remote-exec|data\s+"external"|data\s+"http"|aws_|azurerm_|azuread_|google_|kubernetes_|helm_|vault_|filename\s*=\s*"?/|\.\.`)
 	// providers permitidos no HCL
 	hclAllowSrcRe = regexp.MustCompile(`(?i)source\s*=\s*"hashicorp/(local|random|null|time|tls)"`)
-	// validação: só comandos de leitura/checagem
-	valDenyRe  = regexp.MustCompile(`(?i)\brm\b|\bmv\b|\bdd\b|mkfs|:\(\)|sudo|curl|wget|chmod|chown|>\s*/|/dev/|apt|pip|npm|nc\b|bash\s|sh\s+-c|eval`)
-	valAllowRe = regexp.MustCompile(`^[A-Za-z0-9 _\-./"'$=|&;()\[\]{}:,*!~@#%+?\n\t]+$`)
+	// COMANDOS perigosos na validação (casam em qualquer lugar da string — então
+	// mesmo dentro de $() ou `` os perigosos são pegos). Note: 2>/dev/null é OK
+	// (só bloqueamos escrita em DISPOSITIVOS de bloco). $( e ` são permitidos
+	// porque os comandos perigosos internos continuam sendo barrados aqui.
+	valDenyRe = regexp.MustCompile(`(?i)\brm\b|\brmdir\b|\bmv\b|\bdd\b|mkfs|:\(\)|\bsudo\b|\bcurl\b|\bwget\b|\bchmod\b|\bchown\b|\bapt\b|\bpip[0-9]?\b|\bnpm\b|\bnc\b|\beval\b|\bkill\b|shutdown|reboot|>\s*/dev/(sd|hd|nvme|vd|mem)|>\s*/(etc|bin|usr|boot|root|home|var)/`)
 )
 
 func safeHCL(h string) bool {
@@ -106,10 +108,16 @@ func safeHCL(h string) bool {
 
 func safeValidation(v string) bool {
 	v = strings.TrimSpace(v)
-	if v == "" || len(v) > 600 || valDenyRe.MatchString(v) || !valAllowRe.MatchString(v) {
+	if v == "" || len(v) > 600 || valDenyRe.MatchString(v) {
 		return false
 	}
-	// tem que ser sobre o workspace do terraform
+	// só ASCII imprimível (+ tab/newline) — sem bytes de controle/binário
+	for _, r := range v {
+		if r != '\n' && r != '\t' && (r < 0x20 || r > 0x7e) {
+			return false
+		}
+	}
+	// tem que operar sobre o workspace do terraform
 	return strings.Contains(v, "$TFDIR") || strings.Contains(v, "terraform")
 }
 

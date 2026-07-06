@@ -238,7 +238,7 @@ func Chat(msg, cert string, createSession func(ids []string) (string, string, in
 		if m := regexp.MustCompile(`(?i)sobre\s+(.+?)\s*$`).FindStringSubmatch(msg); m != nil {
 			topic = strings.TrimSpace(m[1])
 		}
-		q, err := GenerateVerifiedTFLab(topic, detectLevel(msg), 2)
+		q, err := GenerateVerifiedTFLab(topic, detectLevel(msg), 3)
 		if err != nil {
 			return ChatResult{Reply: "Tentei gerar um lab de Terraform e auto-verificar rodando a solução, mas não consegui agora: " + err.Error() + "\n\nTenta pedir um tema específico, ex.: **\"gerar lab de terraform sobre variáveis\"**."}
 		}
