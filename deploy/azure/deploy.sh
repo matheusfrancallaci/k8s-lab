@@ -35,7 +35,9 @@ terraform init -input=false >/dev/null
 ok "init OK"
 
 say "terraform apply (revise o plano e confirme com 'yes')"
-terraform apply
+# -parallelism=1: cria em serie. Evita throttling (429) da Azure na leitura
+# pos-criacao, que gera "Provider produced inconsistent result / present but now absent".
+terraform apply -parallelism=1
 
 # ── 3. Constrói e publica a imagem na ACR (build roda na Azure) ────
 ACR="$(terraform output -raw acr_name | tr -d '\r\n')"
