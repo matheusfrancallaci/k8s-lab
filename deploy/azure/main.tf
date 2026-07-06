@@ -173,6 +173,7 @@ resource "azurerm_linux_virtual_machine" "lab" {
     app_password           = var.app_password
     fqdn                   = azurerm_public_ip.lab.fqdn
     rg_name                = azurerm_resource_group.lab.name
+    location               = azurerm_resource_group.lab.location
     vm_name                = "${var.prefix}-vm"
     idle_threshold_seconds = var.idle_minutes * 60
     ollama_model           = var.ollama_model
