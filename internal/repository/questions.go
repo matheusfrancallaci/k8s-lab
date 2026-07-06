@@ -31,11 +31,32 @@ func (r *QuestionRepository) snapshot() []models.Question {
 	return r.questions
 }
 
-// Add insere questões em runtime (labs gerados pelo tutor).
+// qKey identifica uma questão pelo CONTEÚDO (não só o ID) — gerações repetidas
+// produzem o mesmo texto com IDs diferentes, e é isso que aparecia duplicado.
+func qKey(q models.Question) string {
+	return string(q.Cert) + "|" + string(q.Type) + "|" +
+		strings.ToLower(strings.Join(strings.Fields(q.Question), " "))
+}
+
+// Add insere questões em runtime (labs/quizzes gerados pelo tutor), pulando
+// duplicatas por ID E por conteúdo. Cobre também o carregamento do disco
+// (LoadDir chama Add), então arquivos gen-*.yaml repetidos não duplicam.
 func (r *QuestionRepository) Add(qs []models.Question) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.questions = append(r.questions, qs...)
+	seen := make(map[string]bool, len(r.questions)*2)
+	for _, q := range r.questions {
+		seen["id:"+q.ID] = true
+		seen[qKey(q)] = true
+	}
+	for _, q := range qs {
+		if seen["id:"+q.ID] || seen[qKey(q)] {
+			continue
+		}
+		seen["id:"+q.ID] = true
+		seen[qKey(q)] = true
+		r.questions = append(r.questions, q)
+	}
 }
 
 // LoadDir carrega YAMLs de um diretório do disco (questions-custom/),
