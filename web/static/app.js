@@ -170,6 +170,10 @@
             try {
                 const d = await fetch('/api/profile').then(r => r.json());
                 if (!d.auth) return; // uso local sem login: sem seção de conta
+                // Indicador visível na sidebar (quem está logado)
+                const su = document.getElementById('sb-user');
+                const sn = document.getElementById('sb-user-name');
+                if (su && sn) { sn.textContent = d.profile || '?'; su.style.display = 'flex'; }
                 const sec = document.getElementById('profile-section');
                 const box = document.getElementById('profile-box');
                 if (sec && box) {

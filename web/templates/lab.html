@@ -50,7 +50,7 @@
             </div>
 
             <div class="mono" style="font-size:12px;font-weight:700;color:var(--violet);" id="timer">00:00</div>
-            <button onclick="showEndLabOverlay()" class="btn btn-danger btn-sm">Encerrar</button>
+            <button onclick="endLab()" class="btn btn-danger btn-sm">Encerrar</button>
         </div>
     </div>
 
@@ -687,8 +687,9 @@ function hideEndLabOverlay() {
     document.getElementById('endlab-loading').style.display = 'none';
 }
 async function endLab() {
-    document.getElementById('endlab-btns').style.display = 'none';
-    document.getElementById('endlab-loading').style.display = 'block';
+    // Encerra de vez: limpa a sessão (senão a home segue sugerindo "continuar
+    // de onde parou") e derruba os resources do lab.
+    try { localStorage.removeItem('k8slab-resume'); } catch (e) {}
     try { await fetch('/lab/{{.Question.ID}}/teardown', { method: 'POST' }); } catch(e) {}
     window.location.href = '/lab';
 }
