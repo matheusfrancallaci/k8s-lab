@@ -1,5 +1,7 @@
 .git
 .claude
+.gitattributes
+deploy
 data
 estudo-app-linux
 estudo-app

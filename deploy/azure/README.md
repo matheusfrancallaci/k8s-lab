@@ -19,7 +19,19 @@ export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 # no Windows PowerShell: $env:ARM_SUBSCRIPTION_ID = (az account show --query id -o tsv)
 ```
 
-## Passo a passo
+## Jeito rápido (um comando)
+
+```bash
+cd deploy/azure
+cp terraform.tfvars.example terraform.tfvars   # preencha ssh_public_key e app_password
+bash deploy.sh                                 # checa tudo, aplica, builda e imprime a URL
+```
+
+O `deploy.sh` valida pré-requisitos (`az`/`terraform`/login), roda o `apply` (você
+confirma o plano), constrói a imagem na ACR e imprime a **URL HTTPS** pronta para
+compartilhar, com os comandos de religar/parar/atualizar.
+
+## Passo a passo (manual, se preferir)
 
 ```bash
 cd deploy/azure

@@ -1,0 +1,5 @@
+# Scripts shell e cloud-init SEMPRE com LF (senão quebram no Linux/VM)
+*.sh text eol=lf
+*.yaml text eol=lf
+docker-entrypoint.sh text eol=lf
+Dockerfile text eol=lf
