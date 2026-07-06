@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -38,7 +40,31 @@ func ActiveTerminals() int { return int(atomic.LoadInt32(&activeTerminals)) }
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 4096,
-	CheckOrigin:     func(r *http.Request) bool { return true },
+	CheckOrigin:     sameOriginWS,
+}
+
+// sameOriginWS bloqueia upgrade de WebSocket vindo de outra origem (defesa
+// contra cross-site WebSocket hijacking do terminal). Requisições sem header
+// Origin (clientes não-browser: wscat, testes) são permitidas. Um allowlist
+// extra pode ser dado por ALLOWED_WS_ORIGINS (hosts separados por vírgula).
+func sameOriginWS(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true // não-browser
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	if strings.EqualFold(u.Host, r.Host) {
+		return true
+	}
+	for _, allowed := range strings.Split(os.Getenv("ALLOWED_WS_ORIGINS"), ",") {
+		if allowed = strings.TrimSpace(allowed); allowed != "" && strings.EqualFold(allowed, u.Host) {
+			return true
+		}
+	}
+	return false
 }
 
 type wsMsg struct {
@@ -139,21 +165,36 @@ func ClusterInfoCmd() *exec.Cmd {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const (
-	cloudShellNS  = "lab-system"
-	cloudShellPod = "lab-shell"
+	cloudShellSystemNS  = "lab-system"
+	cloudShellSystemPod = "lab-shell"
 )
 
 // alpine/k8s: bash, kubectl, helm, vim, jq — ideal p/ treino de certificação.
 // Sobrescreva com CLOUD_SHELL_IMAGE se a tag não existir mais.
 func cloudShellImage() string { return envOr("CLOUD_SHELL_IMAGE", "alpine/k8s:1.33.4") }
 
-// cloudShellRC é o rcfile do bash dentro do pod.
-// Três responsabilidades críticas:
-//  1. kubeconfig próprio com namespace=default — o in-cluster config usaria o
-//     ns do ServiceAccount (lab-system), fazendo terminal e validação divergirem;
+// cloudShellTarget resolve o alvo do shell dentro do cluster para um usuário.
+// Multi-user (APP_PASSWORD): cada conta ganha o PRÓPRIO pod num namespace
+// isolado (lab-<user>) com permissão de admin RESTRITA a esse namespace — sem
+// cluster-admin compartilhado. Isso casa com a validação de labs, que também
+// roda contra lab-<user> (ver namespace.go). Uso local/sem-login cai no pod
+// único de sistema com cluster-admin (single-tenant, sem risco cruzado).
+func cloudShellTarget(uid string) (ns, pod, sa string, scoped bool) {
+	id := tutor.SanitizeID(uid)
+	if appPassword() == "" || id == "" || id == "default" {
+		return cloudShellSystemNS, cloudShellSystemPod, "lab-admin", false
+	}
+	return "lab-" + id, "lab-shell-" + id, "lab-user", true
+}
+
+// cloudShellRC gera o rcfile do bash dentro do pod, com o namespace default
+// alinhado ao alvo do usuário. Responsabilidades críticas:
+//  1. kubeconfig próprio com o namespace certo — o in-cluster config usaria o ns
+//     do ServiceAccount, fazendo terminal e validação divergirem;
 //  2. tokenFile (não token estático) — tokens de SA expiram, o arquivo é rotacionado;
 //  3. completion de verdade: exige o pacote bash-completion (instalado no provisionamento).
-const cloudShellRC = `# kubeconfig alinhado com as validações do lab (namespace default)
+func cloudShellRC(ns string) string {
+	return `# kubeconfig alinhado com as validações do lab (namespace ` + ns + `)
 if [ ! -f /tmp/.labkube ]; then
 cat > /tmp/.labkube <<'KCFG'
 apiVersion: v1
@@ -172,7 +213,7 @@ contexts:
   context:
     cluster: incluster
     user: sa
-    namespace: default
+    namespace: ` + ns + `
 current-context: incluster
 KCFG
 fi
@@ -183,38 +224,62 @@ source <(kubectl completion bash) 2>/dev/null
 alias k=kubectl
 complete -o default -F __start_kubectl k 2>/dev/null
 export KUBE_EDITOR=vim
-PS1='\[\e[38;2;56;189;248m\]\[\e[1m\]☁ aks\[\e[0m\]\[\e[38;2;107;114;128m\]·default\[\e[0m\] \[\e[38;2;52;211;153m\]\w\[\e[0m\] \[\e[38;2;56;189;248m\]❯\[\e[0m\] '
+PS1='\[\e[38;2;56;189;248m\]\[\e[1m\]☁ aks\[\e[0m\]\[\e[38;2;107;114;128m\]·` + ns + `\[\e[0m\] \[\e[38;2;52;211;153m\]\w\[\e[0m\] \[\e[38;2;56;189;248m\]❯\[\e[0m\] '
 cd 2>/dev/null
 `
+}
 
-// ensureCloudShellPod garante ns + service account + pod prontos no cluster
-// ativo (AKS). Idempotente; o report envia progresso ao terminal do usuário.
-func ensureCloudShellPod(report func(string)) error {
+// ensureCloudShellPod garante ns + service account + RBAC + pod prontos no
+// cluster ativo (AKS), para o usuário informado. Idempotente; o report envia
+// progresso ao terminal do usuário. Devolve (ns, pod) do shell provisionado.
+func ensureCloudShellPod(uid string, report func(string)) (string, string, error) {
+	ns, pod, sa, scoped := cloudShellTarget(uid)
+
 	// Prova de vida real: exec de verdade, não o phase do etcd. Após um
 	// stop/start do AKS o pod pode ficar órfão (preso a um nó que foi
 	// desalocado) com phase=Running stale — e aí todo exec falha com
 	// "unable to upgrade connection".
 	alive := wslShell(fmt.Sprintf(
 		"kubectl -n %s exec %s --request-timeout=10s -- true 2>/dev/null",
-		cloudShellNS, cloudShellPod)).Run() == nil
+		ns, pod)).Run() == nil
 
 	if !alive {
 		// Remove um eventual pod órfão antes de recriar (o nó dele já era).
 		wslShell(fmt.Sprintf(
 			"kubectl -n %s delete pod %s --force --grace-period=0 --ignore-not-found --wait=false 2>/dev/null",
-			cloudShellNS, cloudShellPod)).Run()
+			ns, pod)).Run()
 
 		report("provisionando shell dentro do cluster (primeira vez leva ~1-2 min)...")
+
+		// Multi-user: cria o namespace + quotas ANTES do pod. O LimitRange precisa
+		// existir primeiro, senão o ResourceQuota rejeita o próprio pod do shell
+		// (que sobe sem requests explícitos). Best-effort via client-go.
+		if scoped {
+			_ = ensureNamespace(ns)
+		}
+
+		// RBAC: escopo namespaced (admin no próprio ns) em multi-user; cluster-admin
+		// só no pod de sistema single-tenant. O clusterrole "admin" é embutido no k8s.
+		var bind string
+		if scoped {
+			bind = fmt.Sprintf(
+				"kubectl -n %[1]s create rolebinding lab-shell-admin --clusterrole=admin --serviceaccount=%[1]s:%[2]s 2>/dev/null; ",
+				ns, sa)
+		} else {
+			bind = fmt.Sprintf(
+				"kubectl create clusterrolebinding lab-shell-admin --clusterrole=cluster-admin --serviceaccount=%s:%s 2>/dev/null; ",
+				ns, sa)
+		}
 		script := fmt.Sprintf(
 			`kubectl create namespace %[1]s 2>/dev/null; `+
-				`kubectl -n %[1]s create serviceaccount lab-admin 2>/dev/null; `+
-				`kubectl create clusterrolebinding lab-shell-admin --clusterrole=cluster-admin --serviceaccount=%[1]s:lab-admin 2>/dev/null; `+
+				`kubectl -n %[1]s create serviceaccount %[4]s 2>/dev/null; `+
+				bind+
 				`kubectl -n %[1]s get pod %[2]s >/dev/null 2>&1 || `+
-				`kubectl -n %[1]s run %[2]s --image=%[3]s --overrides='{"spec":{"serviceAccountName":"lab-admin"}}' --command -- sleep infinity; `+
+				`kubectl -n %[1]s run %[2]s --image=%[3]s --overrides='{"spec":{"serviceAccountName":"%[4]s"}}' --command -- sleep infinity; `+
 				`kubectl -n %[1]s wait --for=condition=Ready pod/%[2]s --timeout=180s`,
-			cloudShellNS, cloudShellPod, cloudShellImage())
+			ns, pod, cloudShellImage(), sa)
 		if out, err := wslShell(script).CombinedOutput(); err != nil {
-			return fmt.Errorf("pod do shell não ficou pronto: %s", strings.TrimSpace(string(out)))
+			return ns, pod, fmt.Errorf("pod do shell não ficou pronto: %s", strings.TrimSpace(string(out)))
 		}
 	}
 
@@ -224,14 +289,89 @@ func ensureCloudShellPod(report func(string)) error {
 	// autocomplete do kubectl simplesmente não funciona.
 	wslShell(fmt.Sprintf(
 		"kubectl -n %s exec %s -- sh -c 'which vim >/dev/null 2>&1 && [ -f /usr/share/bash-completion/bash_completion ] || apk add --no-cache vim bash-completion >/dev/null 2>&1' &",
-		cloudShellNS, cloudShellPod)).Run()
+		ns, pod)).Run()
 
 	// Grava o rcfile dentro do pod via base64 (evita inferno de escaping).
-	b64 := base64.StdEncoding.EncodeToString([]byte(cloudShellRC))
+	b64 := base64.StdEncoding.EncodeToString([]byte(cloudShellRC(ns)))
 	wslShell(fmt.Sprintf(
 		"echo %s | base64 -d | kubectl -n %s exec -i %s -- sh -c 'cat > /tmp/.labrc'",
-		b64, cloudShellNS, cloudShellPod)).Run()
-	return nil
+		b64, ns, pod)).Run()
+	return ns, pod, nil
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GC de pods de shell por-usuário — sem isto, cada conta multi-user deixa um pod
+// lab-shell-<user> vivo (sleep infinity) para sempre no cluster compartilhado.
+// Removemos o pod após CLOUD_SHELL_IDLE_MINUTES sem nenhum terminal aberto; a
+// próxima conexão o recria (o namespace/SA/quota permanecem, então é rápido).
+// ─────────────────────────────────────────────────────────────────────────────
+
+var (
+	shellMu       sync.Mutex
+	shellOpen     = map[string]int{}       // uid -> terminais cloud abertos agora
+	shellLastSeen = map[string]time.Time{} // uid -> última atividade no shell cloud
+)
+
+func cloudShellIdleMinutes() int {
+	n := 0
+	if _, err := fmt.Sscanf(envOr("CLOUD_SHELL_IDLE_MINUTES", "30"), "%d", &n); err != nil || n <= 0 {
+		return 30
+	}
+	return n
+}
+
+func markShellOpen(uid string) {
+	shellMu.Lock()
+	shellOpen[uid]++
+	shellLastSeen[uid] = time.Now()
+	shellMu.Unlock()
+}
+
+func markShellClosed(uid string) {
+	shellMu.Lock()
+	if shellOpen[uid] > 0 {
+		shellOpen[uid]--
+	}
+	shellLastSeen[uid] = time.Now()
+	shellMu.Unlock()
+}
+
+// StartCloudShellGC remove pods de shell ociosos periodicamente. Só age quando o
+// alvo ativo é a nuvem e apenas em pods scoped (por-usuário) — o pod de sistema
+// (uso local/sem-login) é compartilhado e nunca coletado.
+func StartCloudShellGC() {
+	idle := time.Duration(cloudShellIdleMinutes()) * time.Minute
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			if ctx := currentContext(); ctx == "" || ctx == localContext {
+				continue
+			}
+			now := time.Now()
+			shellMu.Lock()
+			var stale []string
+			for uid, seen := range shellLastSeen {
+				if shellOpen[uid] == 0 && now.Sub(seen) > idle {
+					stale = append(stale, uid)
+				}
+			}
+			shellMu.Unlock()
+			for _, uid := range stale {
+				ns, pod, _, scoped := cloudShellTarget(uid)
+				if !scoped {
+					continue
+				}
+				wslShell(fmt.Sprintf(
+					"kubectl -n %s delete pod %s --ignore-not-found --wait=false 2>/dev/null", ns, pod)).Run()
+				shellMu.Lock()
+				delete(shellOpen, uid)
+				delete(shellLastSeen, uid)
+				shellMu.Unlock()
+				log.Printf("[cloud-shell] pod ocioso removido: %s/%s", ns, pod)
+			}
+		}
+	}()
 }
 
 var clusterMu sync.Mutex
@@ -326,17 +466,24 @@ func TerminalWS(w http.ResponseWriter, r *http.Request) {
 	// Alvo cloud (AKS)? Então o terminal deve rodar DENTRO do cluster,
 	// não no WSL local — igual aos ambientes de prova.
 	isCloud := false
+	var cloudNS, cloudPod string
 	if ctx := currentContext(); ctx != "" && ctx != localContext {
 		isCloud = true
 		conn.WriteMessage(websocket.TextMessage, []byte(
 			"\x1b[38;2;56;189;248m☁ conectando ao cluster AKS ("+ctx+")...\x1b[0m\r\n"))
-		if err := ensureCloudShellPod(func(msg string) {
+		ns, pod, err := ensureCloudShellPod(uid, func(msg string) {
 			conn.WriteMessage(websocket.TextMessage, []byte("\x1b[38;2;107;114;128m"+msg+"\x1b[0m\r\n")) //nolint:errcheck
-		}); err != nil {
+		})
+		if err != nil {
 			conn.WriteMessage(websocket.TextMessage, []byte( //nolint:errcheck
 				"\x1b[1;31mNão foi possível abrir o shell no cluster: "+err.Error()+"\x1b[0m\r\n"+
 					"\x1b[38;2;107;114;128mO cluster está ligado? Caindo para o terminal local (kubectl ainda aponta para o AKS).\x1b[0m\r\n"))
 			isCloud = false
+		} else {
+			cloudNS, cloudPod = ns, pod
+			// Marca o shell como em uso para o GC não coletar sob o usuário.
+			markShellOpen(uid)
+			defer markShellClosed(uid)
 		}
 	}
 
@@ -346,7 +493,7 @@ func TerminalWS(w http.ResponseWriter, r *http.Request) {
 	var shellCmd string
 	if isCloud {
 		shellCmd = fmt.Sprintf("kubectl exec -it -n %s %s -- bash --rcfile /tmp/.labrc -i",
-			cloudShellNS, cloudShellPod)
+			cloudNS, cloudPod)
 	} else {
 		shellCmd = "bash -c \"exec bash --rcfile ~/.k8slab_rc -i\""
 		// Multi-user: o terminal do usuário aponta para o namespace lab-<user>,

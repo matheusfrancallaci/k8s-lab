@@ -4,7 +4,6 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
-	"html/template"
 	"net/http"
 	"os/exec"
 	"runtime"
@@ -54,9 +53,9 @@ var toolCatalog = []toolDef{
 	},
 	{
 		ID: "metrics-server", Name: "Metrics Server", Icon: "📈", Scope: "cluster",
-		Desc:  "habilita kubectl top nodes/pods e HPA — essencial para labs de autoscaling",
-		After: "teste: kubectl top nodes (leva ~1 min para coletar as primeiras métricas)",
-		check: "kubectl get deploy metrics-server -n kube-system -o name 2>/dev/null",
+		Desc:    "habilita kubectl top nodes/pods e HPA — essencial para labs de autoscaling",
+		After:   "teste: kubectl top nodes (leva ~1 min para coletar as primeiras métricas)",
+		check:   "kubectl get deploy metrics-server -n kube-system -o name 2>/dev/null",
 		checkNS: "kube-system", checkDeploy: "metrics-server",
 		steps: []toolStep{
 			{Desc: "Aplicando manifests do Metrics Server...",
@@ -69,9 +68,9 @@ var toolCatalog = []toolDef{
 	},
 	{
 		ID: "ingress-nginx", Name: "NGINX Ingress", Icon: "🌐", Scope: "cluster",
-		Desc:  "Ingress Controller — necessário para os labs de Ingress responderem de verdade",
-		After: "seus Ingress passam a ser atendidos pela classe nginx",
-		check: "kubectl get deploy ingress-nginx-controller -n ingress-nginx -o name 2>/dev/null",
+		Desc:    "Ingress Controller — necessário para os labs de Ingress responderem de verdade",
+		After:   "seus Ingress passam a ser atendidos pela classe nginx",
+		check:   "kubectl get deploy ingress-nginx-controller -n ingress-nginx -o name 2>/dev/null",
 		checkNS: "ingress-nginx", checkDeploy: "ingress-nginx-controller",
 		steps: []toolStep{
 			{Desc: "Aplicando manifests do ingress-nginx...",
@@ -82,9 +81,9 @@ var toolCatalog = []toolDef{
 	},
 	{
 		ID: "grafana", Name: "Grafana", Icon: "📊", Scope: "cluster",
-		Desc:  "dashboards de observabilidade — par perfeito com o Metrics Server",
-		After: "acesse: kubectl port-forward -n tools svc/grafana 3000:3000 → http://localhost:3000 (admin/admin)",
-		check: "kubectl get deploy grafana -n tools -o name 2>/dev/null",
+		Desc:    "dashboards de observabilidade — par perfeito com o Metrics Server",
+		After:   "acesse: kubectl port-forward -n tools svc/grafana 3000:3000 → http://localhost:3000 (admin/admin)",
+		check:   "kubectl get deploy grafana -n tools -o name 2>/dev/null",
 		checkNS: "tools", checkDeploy: "grafana",
 		steps: []toolStep{
 			{Desc: "Criando namespace tools...", Cmd: "kubectl create namespace tools 2>/dev/null || true"},
@@ -98,9 +97,9 @@ var toolCatalog = []toolDef{
 	},
 	{
 		ID: "prometheus", Name: "Prometheus", Icon: "🔥", Scope: "cluster",
-		Desc:  "coleta de métricas — alimenta o Grafana e os labs de Observability",
-		After: "no Grafana, adicione o datasource: http://prometheus.tools.svc:9090",
-		check: "kubectl get deploy prometheus -n tools -o name 2>/dev/null",
+		Desc:    "coleta de métricas — alimenta o Grafana e os labs de Observability",
+		After:   "no Grafana, adicione o datasource: http://prometheus.tools.svc:9090",
+		check:   "kubectl get deploy prometheus -n tools -o name 2>/dev/null",
 		checkNS: "tools", checkDeploy: "prometheus",
 		steps: []toolStep{
 			{Desc: "Criando namespace tools...", Cmd: "kubectl create namespace tools 2>/dev/null || true"},
@@ -213,15 +212,6 @@ func ToolInstallHandler(w http.ResponseWriter, r *http.Request) {
 // ToolsPage renderiza a página de Instalações.
 func ToolsPage(fs embed.FS) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		tmpl, err := template.New("base.html").ParseFS(fs,
-			"web/templates/base.html",
-			"web/templates/nav.html",
-			"web/templates/tools.html",
-		)
-		if err != nil {
-			http.Error(w, "template error: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		tmpl.ExecuteTemplate(w, "base.html", map[string]any{"NavActive": "tools"}) //nolint:errcheck
+		RenderPage(w, fs, "tools.html", map[string]any{"NavActive": "tools"})
 	}
 }

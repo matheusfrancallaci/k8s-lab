@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
-	"html/template"
 	"io/fs"
 	"log"
 	"net/http"
@@ -41,16 +40,7 @@ func argoCDPage(fs embed.FS) http.HandlerFunc {
 		{"Rollback", "argocd app rollback myapp <id>"},
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		tmpl, err := template.New("base.html").ParseFS(fs,
-			"web/templates/base.html",
-			"web/templates/nav.html",
-			"web/templates/argocd.html",
-		)
-		if err != nil {
-			http.Error(w, "template error: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		tmpl.ExecuteTemplate(w, "base.html", map[string]any{
+		handlers.RenderPage(w, fs, "argocd.html", map[string]any{
 			"NavActive":   "argocd",
 			"Port":        8090,
 			"CLIExamples": examples,
@@ -70,16 +60,7 @@ func cloudPage(fs embed.FS) http.HandlerFunc {
 		{"Excluir o cluster", "az aks delete -g k8s-study-lab-rg -n k8s-study-lab --yes"},
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		tmpl, err := template.New("base.html").ParseFS(fs,
-			"web/templates/base.html",
-			"web/templates/nav.html",
-			"web/templates/cloud.html",
-		)
-		if err != nil {
-			http.Error(w, "template error: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		tmpl.ExecuteTemplate(w, "base.html", map[string]any{
+		handlers.RenderPage(w, fs, "cloud.html", map[string]any{
 			"NavActive":   "cloud",
 			"CLIExamples": examples,
 		})
@@ -94,6 +75,14 @@ func main() {
 
 	// Labs/quiz gerados pelo tutor (persistidos em disco entre execuções)
 	repo.LoadDir("questions-custom")
+
+	// Pré-compila todas as páginas HTML no boot: um template quebrado falha
+	// aqui (no start), não em produção no primeiro acesso.
+	if err := handlers.PrecompileTemplates(templatesFS); err != nil {
+		log.Fatalf("erro ao compilar templates: %v", err)
+	}
+
+	handlers.StartAuthGC() // limpa sessões expiradas periodicamente
 
 	store := repository.NewSessionStore()
 	labSessions := repository.NewLabSessionStore()
@@ -168,16 +157,7 @@ func main() {
 
 	// Docs page
 	mux.HandleFunc("GET /docs", func(w http.ResponseWriter, r *http.Request) {
-		tmpl, err := template.New("base.html").ParseFS(templatesFS,
-			"web/templates/base.html",
-			"web/templates/nav.html",
-			"web/templates/docs.html",
-		)
-		if err != nil {
-			http.Error(w, "template error: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		tmpl.ExecuteTemplate(w, "base.html", map[string]any{"NavActive": "docs"})
+		handlers.RenderPage(w, templatesFS, "docs.html", map[string]any{"NavActive": "docs"})
 	})
 
 	// Instalações (catálogo de ferramentas)
@@ -187,16 +167,7 @@ func main() {
 
 	// On-premise page
 	mux.HandleFunc("GET /onpremise", func(w http.ResponseWriter, r *http.Request) {
-		tmpl, err := template.New("base.html").ParseFS(templatesFS,
-			"web/templates/base.html",
-			"web/templates/nav.html",
-			"web/templates/onpremise.html",
-		)
-		if err != nil {
-			http.Error(w, "template error: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		tmpl.ExecuteTemplate(w, "base.html", map[string]any{"NavActive": "onprem"})
+		handlers.RenderPage(w, templatesFS, "onpremise.html", map[string]any{"NavActive": "onprem"})
 	})
 
 	// Tutor (IA local adaptativa) routes
@@ -244,6 +215,7 @@ func main() {
 	if os.Getenv("LAB_NO_CLUSTER") == "" {
 		go handlers.EnsureCluster()
 		go handlers.StartCloudMonitor()
+		handlers.StartCloudShellGC() // coleta pods de shell por-usuário ociosos
 	} else {
 		log.Println("LAB_NO_CLUSTER definido — auto-gerenciamento de cluster desativado")
 	}

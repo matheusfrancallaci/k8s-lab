@@ -92,8 +92,8 @@ func PrewarmLabImages(qs []models.Question) {
 
 		var sb strings.Builder
 		// ns compartilhado com o cloud shell; limpa prewarms antigos já completados
-		sb.WriteString("kubectl create namespace " + cloudShellNS + " 2>/dev/null; ")
-		sb.WriteString("kubectl -n " + cloudShellNS + " delete pod -l prewarm=1 --ignore-not-found --wait=false 2>/dev/null; ")
+		sb.WriteString("kubectl create namespace " + cloudShellSystemNS + " 2>/dev/null; ")
+		sb.WriteString("kubectl -n " + cloudShellSystemNS + " delete pod -l prewarm=1 --ignore-not-found --wait=false 2>/dev/null; ")
 		for _, img := range images {
 			name := "prewarm-" + strings.Trim(nonAlnumRe.ReplaceAllString(strings.ToLower(img), "-"), "-")
 			if len(name) > 60 {
@@ -101,7 +101,7 @@ func PrewarmLabImages(qs []models.Question) {
 			}
 			sb.WriteString(fmt.Sprintf(
 				"kubectl -n %s run %s --image=%s --restart=Never --labels=prewarm=1 --command -- true 2>/dev/null; ",
-				cloudShellNS, name, img))
+				cloudShellSystemNS, name, img))
 		}
 		if _, err := wslShellCtx(ctx, sb.String()).CombinedOutput(); err != nil {
 			log.Printf("[prewarm] falhou (contexto %s): %v", ctxName, err)

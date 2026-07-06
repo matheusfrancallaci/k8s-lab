@@ -5,11 +5,15 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"estudo-app/internal/tutor"
 	"golang.org/x/crypto/bcrypt"
@@ -22,12 +26,95 @@ import (
 // usuário+senha. A conta logada É o perfil (progresso do tutor isolado por conta).
 // ─────────────────────────────────────────────────────────────────────────────
 
+// session é uma sessão autenticada com expiração absoluta. Guardar o prazo no
+// servidor (não só no cookie) permite revogação por idade e limpeza de memória
+// — sem isso o mapa cresceria indefinidamente numa instância multi-user.
+type session struct {
+	user      string
+	expiresAt time.Time
+}
+
+const sessionTTL = 30 * 24 * time.Hour
+
 var (
 	authMu       sync.Mutex
-	authSessions = map[string]string{} // token -> username
-	users        = map[string]string{} // username -> bcrypt hash
+	authSessions = map[string]session{} // token -> sessão
+	users        = map[string]string{}  // username -> bcrypt hash
 	usersOnce    sync.Once
 )
+
+// ─── Proteção contra brute-force de senha ───────────────────────────────────
+// Trava tentativas por IP de origem (não por usuário — evita que um atacante
+// tranque a conta de terceiros só errando a senha deles de propósito).
+type loginThrottle struct {
+	fails     int
+	lockUntil time.Time
+}
+
+const (
+	maxLoginFails = 8               // falhas antes de travar
+	loginLockFor  = 5 * time.Minute // duração da trava
+	failWindow    = 15 * time.Minute
+)
+
+var (
+	throttleMu sync.Mutex
+	throttles  = map[string]*loginThrottle{}
+)
+
+func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if i := strings.IndexByte(xff, ','); i >= 0 {
+			return strings.TrimSpace(xff[:i])
+		}
+		return strings.TrimSpace(xff)
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// loginLocked informa se o IP está travado e, se sim, quanto falta.
+func loginLocked(ip string) (bool, time.Duration) {
+	throttleMu.Lock()
+	defer throttleMu.Unlock()
+	t := throttles[ip]
+	if t == nil {
+		return false, 0
+	}
+	if now := time.Now(); now.Before(t.lockUntil) {
+		return true, time.Until(t.lockUntil)
+	}
+	return false, 0
+}
+
+func recordLoginFail(ip string) {
+	throttleMu.Lock()
+	defer throttleMu.Unlock()
+	t := throttles[ip]
+	now := time.Now()
+	// Janela expirada sem falhas recentes: recomeça a contagem.
+	if t == nil || now.Sub(t.lockUntil) > failWindow {
+		t = &loginThrottle{}
+		throttles[ip] = t
+	}
+	t.fails++
+	if t.fails >= maxLoginFails {
+		t.lockUntil = now.Add(loginLockFor)
+		t.fails = 0
+	} else {
+		// lockUntil serve também de "visto por último" para a janela.
+		t.lockUntil = now
+	}
+}
+
+func clearLoginFails(ip string) {
+	throttleMu.Lock()
+	delete(throttles, ip)
+	throttleMu.Unlock()
+}
 
 func appPassword() string { return os.Getenv("APP_PASSWORD") }
 
@@ -59,13 +146,19 @@ func saveUsers() {
 	_ = os.WriteFile(usersFile(), b, 0o600)
 }
 
+// newSessionToken gera um token de 192 bits. Erro do CSPRNG é fatal para a
+// requisição (retorna "") — nunca emitir um token previsível.
 func newSessionToken() string {
 	b := make([]byte, 24)
-	rand.Read(b) //nolint:errcheck
+	if _, err := rand.Read(b); err != nil {
+		log.Printf("[auth] falha no CSPRNG ao gerar token: %v", err)
+		return ""
+	}
 	return hex.EncodeToString(b)
 }
 
-// isAuthenticated devolve o usuário da sessão e se está autenticado.
+// isAuthenticated devolve o usuário da sessão e se está autenticado. Sessões
+// expiradas são tratadas como não autenticadas e removidas na hora.
 func isAuthenticated(r *http.Request) (string, bool) {
 	c, err := r.Cookie("k8slab_auth")
 	if err != nil {
@@ -73,19 +166,57 @@ func isAuthenticated(r *http.Request) (string, bool) {
 	}
 	authMu.Lock()
 	defer authMu.Unlock()
-	u, ok := authSessions[c.Value]
-	return u, ok
+	s, ok := authSessions[c.Value]
+	if !ok {
+		return "", false
+	}
+	if time.Now().After(s.expiresAt) {
+		delete(authSessions, c.Value)
+		return "", false
+	}
+	return s.user, true
 }
 
-func setSessionCookie(w http.ResponseWriter, username string) {
+// setSessionCookie cria a sessão e grava o cookie. Devolve false se não foi
+// possível gerar um token seguro (o caller deve responder com erro 500).
+func setSessionCookie(w http.ResponseWriter, username string) bool {
 	token := newSessionToken()
+	if token == "" {
+		http.Error(w, "erro ao criar a sessão", http.StatusInternalServerError)
+		return false
+	}
 	authMu.Lock()
-	authSessions[token] = username
+	authSessions[token] = session{user: username, expiresAt: time.Now().Add(sessionTTL)}
 	authMu.Unlock()
 	http.SetCookie(w, &http.Cookie{
 		Name: "k8slab_auth", Value: token, Path: "/",
-		HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 30 * 24 * 3600,
+		HttpOnly: true, Secure: cookieSecure(), SameSite: http.SameSiteLaxMode,
+		MaxAge: int(sessionTTL.Seconds()),
 	})
+	return true
+}
+
+// cookieSecure marca o cookie como Secure quando o app é servido por HTTPS
+// (produção atrás de um proxy TLS). Controlado por COOKIE_SECURE=1.
+func cookieSecure() bool { return os.Getenv("COOKIE_SECURE") == "1" }
+
+// StartAuthGC remove sessões expiradas periodicamente para o mapa não crescer
+// sem limite numa instância de longa duração. Chamado uma vez no boot.
+func StartAuthGC() {
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			now := time.Now()
+			authMu.Lock()
+			for tok, s := range authSessions {
+				if now.After(s.expiresAt) {
+					delete(authSessions, tok)
+				}
+			}
+			authMu.Unlock()
+		}
+	}()
 }
 
 // LoginHandler exibe o formulário e processa o login (usuário + senha).
@@ -99,18 +230,29 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(renderLogin("", "login"))) //nolint:errcheck
 		return
 	}
+	ip := clientIP(r)
+	if locked, remaining := loginLocked(ip); locked {
+		w.WriteHeader(http.StatusTooManyRequests)
+		mins := int(remaining.Minutes()) + 1
+		w.Write([]byte(renderLogin( //nolint:errcheck
+			"muitas tentativas — tente novamente em "+strconv.Itoa(mins)+" min", "login")))
+		return
+	}
 	user := tutor.SanitizeID(r.FormValue("username"))
 	pw := r.FormValue("password")
 	authMu.Lock()
 	hash, ok := users[user]
 	authMu.Unlock()
 	if !ok || bcrypt.CompareHashAndPassword([]byte(hash), []byte(pw)) != nil {
+		recordLoginFail(ip)
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write([]byte(renderLogin("usuário ou senha inválidos", "login"))) //nolint:errcheck
 		return
 	}
-	setSessionCookie(w, user)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	clearLoginFails(ip)
+	if setSessionCookie(w, user) {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	}
 }
 
 // RegisterHandler cria uma conta nova. Exige o código de convite (= APP_PASSWORD).
@@ -138,8 +280,8 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		fail("escolha um nome de usuário válido")
 		return
 	}
-	if len(pw) < 4 {
-		fail("a senha precisa de ao menos 4 caracteres")
+	if len(pw) < 8 {
+		fail("a senha precisa de ao menos 8 caracteres")
 		return
 	}
 	authMu.Lock()
@@ -157,8 +299,9 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	users[user] = string(hash)
 	saveUsers()
 	authMu.Unlock()
-	setSessionCookie(w, user)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	if setSessionCookie(w, user) {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	}
 }
 
 // LogoutHandler encerra a sessão.

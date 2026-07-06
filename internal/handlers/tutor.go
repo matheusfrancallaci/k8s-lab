@@ -26,17 +26,8 @@ func NewTutorHandler(repo *repository.QuestionRepository, labSessions *repositor
 
 // Page renderiza a página do tutor (dashboard + geração + ingestão).
 func (h *TutorHandler) Page(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.New("base.html").Funcs(funcMap).ParseFS(h.templates,
-		"web/templates/base.html",
-		"web/templates/nav.html",
-		"web/templates/tutor.html",
-	)
-	if err != nil {
-		http.Error(w, "template error: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
 	topicsJSON, _ := json.Marshal(tutor.Topics())
-	tmpl.ExecuteTemplate(w, "base.html", map[string]any{ //nolint:errcheck
+	RenderPage(w, h.templates, "tutor.html", map[string]any{
 		"GenTopicsJSON": template.JS(topicsJSON),
 		"NavActive":     "tutor",
 	})

@@ -28,17 +28,7 @@ func NewLabHandler(repo *repository.QuestionRepository, store *repository.Sessio
 }
 
 func (h *LabHandler) render(w http.ResponseWriter, page string, data any) {
-	tmpl, err := template.New("base.html").Funcs(funcMap).ParseFS(
-		h.fs,
-		"web/templates/base.html",
-		"web/templates/nav.html",
-		"web/templates/"+page,
-	)
-	if err != nil {
-		http.Error(w, "erro template: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	tmpl.ExecuteTemplate(w, "base.html", data)
+	RenderPage(w, h.fs, page, data)
 }
 
 func (h *LabHandler) List(w http.ResponseWriter, r *http.Request) {

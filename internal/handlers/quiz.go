@@ -38,19 +38,7 @@ func NewQuizHandler(repo *repository.QuestionRepository, store *repository.Sessi
 }
 
 func (h *QuizHandler) render(w http.ResponseWriter, page string, data any) {
-	tmpl, err := template.New("base.html").Funcs(funcMap).ParseFS(
-		h.fs,
-		"web/templates/base.html",
-		"web/templates/nav.html",
-		"web/templates/"+page,
-	)
-	if err != nil {
-		http.Error(w, "erro ao carregar template: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if err := tmpl.ExecuteTemplate(w, "base.html", data); err != nil {
-		http.Error(w, "erro ao renderizar: "+err.Error(), http.StatusInternalServerError)
-	}
+	RenderPage(w, h.fs, page, data)
 }
 
 func (h *QuizHandler) Home(w http.ResponseWriter, r *http.Request) {
