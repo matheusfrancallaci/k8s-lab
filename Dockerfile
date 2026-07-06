@@ -30,6 +30,10 @@ ARG TERRAFORM_VERSION=1.9.8
 RUN curl -sfL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" -o /tmp/tf.zip \
     && unzip -o /tmp/tf.zip -d /usr/local/bin && rm /tmp/tf.zip && terraform version
 
+# Ansible — labs hands-on de automação (playbooks locais, sem custo/credencial).
+RUN apt-get update && apt-get install -y --no-install-recommends ansible \
+    && rm -rf /var/lib/apt/lists/* && ansible --version | head -1
+
 # k3s (traz containerd + kubectl); tag tem '+', que precisa virar %2B na URL
 ARG K3S_VERSION=v1.31.5+k3s1
 RUN ENC=$(echo "$K3S_VERSION" | sed 's/+/%2B/') && \

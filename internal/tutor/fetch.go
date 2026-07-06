@@ -568,6 +568,13 @@ var certCurricula = map[string][]CurriculumDomain{
 		{"Fundamentos GitOps", 40, []string{"https://argo-cd.readthedocs.io/en/stable/getting_started/"}},
 		{"Sync e Rollback", 30, []string{"https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/"}},
 	},
+	// Ansible — fundamentos + módulos (doc oficial).
+	"Ansible": {
+		{"Fundamentos & Inventário", 25, []string{"https://docs.ansible.com/ansible/latest/getting_started/index.html", "https://docs.ansible.com/ansible/latest/inventory_guide/intro_inventory.html"}},
+		{"Playbooks & Tarefas", 35, []string{"https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_intro.html"}},
+		{"Módulos comuns", 25, []string{"https://docs.ansible.com/ansible/latest/collections/ansible/builtin/index.html"}},
+		{"Variáveis & Templates", 15, []string{"https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_variables.html"}},
+	},
 	// Terraform Associate (003) — domínios oficiais + páginas da doc HashiCorp.
 	"Terraform": {
 		{"IaC & Fluxo Terraform", 20, []string{"https://developer.hashicorp.com/terraform/intro", "https://developer.hashicorp.com/terraform/cli/commands"}},

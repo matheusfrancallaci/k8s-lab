@@ -15,25 +15,84 @@ import (
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Gerador AUTÔNOMO de labs (MVP: Terraform). O tutor:
+// Gerador AUTÔNOMO de labs — framework de FAMÍLIAS (Terraform, Ansible, ...).
+// Para cada família o tutor:
 //  1. garante a ferramenta (auto-instala da allowlist se faltar);
-//  2. pede ao LLM local {tarefa, solução, validação};
-//  3. AUTO-VERIFICA: roda a solução de verdade num workspace descartável e só
-//     aceita o lab se a validação PASSA na solução e FALHA no vazio.
-// Assim um lab gerado por IA fica realmente corrigível — sem isso, um modelo
-// pequeno inventa validações que não batem. Tudo local, custo zero.
+//  2. pede ao LLM (modelo de CÓDIGO) {tarefa, solução, validação};
+//  3. AUTO-VERIFICA: escreve a solução num workspace descartável, APLICA de
+//     verdade e confirma que a validação PASSA na solução e FALHA no vazio.
+// Só entrega labs que corrigem certo. Tudo local, custo zero.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// labFamily descreve como gerar+verificar labs de uma ferramenta file-based
+// (a solução é um arquivo no workspace $TFDIR, aplicado por applyTmpl).
+type labFamily struct {
+	name       string            // "terraform", "ansible"
+	cert       string            // cert associada no board
+	tool       string            // binário p/ EnsureTool
+	solFile    string            // arquivo da solução (main.tf, playbook.yml)
+	applyTmpl  string            // comandos p/ aplicar a solução (usa $TFDIR)
+	idPrefix   string            // prefixo do id gerado
+	docURL     string            // doc de referência
+	promptTail string            // regras+few-shot específicos da família
+	safeCode   func(string) bool // segurança do código gerado (é executado!)
+	runHint    string            // como o usuário aplica no terminal (vai no enunciado)
+}
+
+func labFamilies() map[string]*labFamily {
+	return map[string]*labFamily{
+		"terraform": {
+			name: "terraform", cert: "Terraform", tool: "terraform", solFile: "main.tf",
+			applyTmpl: `export TF_PLUGIN_CACHE_DIR="$HOME/.tf-plugin-cache"; mkdir -p "$TF_PLUGIN_CACHE_DIR"; terraform -chdir="$TFDIR" init -no-color -input=false && terraform -chdir="$TFDIR" apply -auto-approve -no-color -input=false`,
+			idPrefix:  "tfgen", docURL: "https://developer.hashicorp.com/terraform/language",
+			runHint:  "edite **main.tf** e rode **terraform init && terraform apply**",
+			safeCode: safeHCL,
+			promptTail: `- Use SOMENTE providers hashicorp/local, hashicorp/random ou hashicorp/null. NUNCA aws/azurerm/google (sem credenciais de nuvem).
+- PROIBIDO: provisioner, local-exec, remote-exec, data "external", caminhos absolutos, "..".
+- "solution" é o main.tf COMPLETO (com required_providers).
+Exemplo:
+{"question":"Crie um local_file 'nota' com conteudo 'oi' em nota.txt.","solution":"terraform {\n  required_providers {\n    local = { source = \"hashicorp/local\" }\n  }\n}\nresource \"local_file\" \"nota\" {\n  filename = \"nota.txt\"\n  content  = \"oi\"\n}","validation":"terraform -chdir=\"$TFDIR\" state list 2>/dev/null | grep -q local_file.nota && test -f \"$TFDIR/nota.txt\" && echo OK || echo FAIL","expected":"OK","hint":"resource local_file { filename content }","explanation":"local_file grava um arquivo; init baixa o provider, apply cria."}`,
+		},
+		"ansible": {
+			name: "ansible", cert: "Ansible", tool: "ansible-playbook", solFile: "playbook.yml",
+			applyTmpl: `cd "$TFDIR" && ansible-playbook -i localhost, -c local playbook.yml 2>&1`,
+			idPrefix:  "ansgen", docURL: "https://docs.ansible.com/ansible/latest/collections/ansible/builtin/",
+			runHint:  "edite **playbook.yml** e rode **ansible-playbook -i localhost, -c local playbook.yml**",
+			safeCode: safeAnsible,
+			promptTail: `- O playbook roda com connection local em localhost. Use SOMENTE módulos SEGUROS: copy, file, template, lineinfile, blockinfile, set_fact, debug, assert, stat. Escreva SEMPRE em arquivos DENTRO de "{{ lookup('env','TFDIR') }}" ou caminhos relativos ao workspace.
+- PROIBIDO: shell, command, raw, script, become, package/apt/yum, service, user, systemd, get_url, uri, caminhos absolutos.
+- "solution" é o playbook.yml COMPLETO (uma play com hosts: localhost).
+Exemplo:
+{"question":"Escreva um playbook que cria o arquivo out.txt (no workspace) com o conteudo 'ola ansible' usando o modulo copy.","solution":"- hosts: localhost\n  connection: local\n  gather_facts: false\n  tasks:\n    - name: cria out.txt\n      copy:\n        dest: \"{{ lookup('env','TFDIR') }}/out.txt\"\n        content: \"ola ansible\\n\"","validation":"grep -q 'ola ansible' \"$TFDIR/out.txt\" 2>/dev/null && echo OK || echo FAIL","expected":"OK","hint":"module copy: dest + content","explanation":"o modulo copy grava conteudo literal num arquivo; connection local roda na propria maquina."}`,
+		},
+	}
+}
+
+// familyForMessage escolhe a família a partir do texto/cert (ex.: "ansible" na
+// mensagem ou cert "Ansible" → família ansible; default terraform).
+func familyForMessage(msg, cert string) *labFamily {
+	fams := labFamilies()
+	l := strings.ToLower(msg + " " + cert)
+	for _, f := range fams {
+		if strings.Contains(l, f.name) || strings.EqualFold(cert, f.cert) {
+			return f
+		}
+	}
+	if strings.Contains(l, "playbook") {
+		return fams["ansible"]
+	}
+	return fams["terraform"]
+}
 
 // ─── Auto-provisionamento de ferramentas (allowlist — nada de comando do LLM) ─
 type toolInstall struct {
-	bin     string   // binário a detectar
-	install []string // passos shell (rodados só se faltar); vazio = já vem na imagem
+	bin     string
+	install []string
 }
 
 var toolRegistry = map[string]toolInstall{
-	"terraform": {bin: "terraform"}, // já baked no Dockerfile
-	// futuros (allowlist fixa, nunca vindo do LLM):
-	// "ansible": {bin: "ansible", install: []string{"pip3 install --quiet ansible-core"}},
+	"terraform":        {bin: "terraform"},        // baked no Dockerfile
+	"ansible-playbook": {bin: "ansible-playbook"}, // baked no Dockerfile
 }
 
 // EnsureTool garante que a ferramenta existe, instalando da allowlist se faltar.
@@ -68,34 +127,28 @@ func sh(cmd string, timeoutSec int) (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
-// ─── Especificação de um lab gerado pelo LLM ─────────────────────────────────
-type tfSpec struct {
+// labSpec é a especificação de um lab gerada pelo LLM (genérica p/ qualquer família).
+type labSpec struct {
 	Question    string `json:"question"`
-	SolutionHCL string `json:"solution_hcl"`
-	Validation  string `json:"validation"` // usa $TFDIR; imprime Expected no sucesso
+	Solution    string `json:"solution"` // conteúdo do solFile da família
+	Validation  string `json:"validation"`
 	Expected    string `json:"expected"`
 	Hint        string `json:"hint"`
 	Explanation string `json:"explanation"`
 }
 
-// ─── Segurança: HCL e validação do LLM SERÃO executados ──────────────────────
+// ─── Segurança do código/validação gerados (SERÃO executados) ────────────────
 var (
-	// tokens proibidos no HCL (exec arbitrário, providers de nuvem, exfiltração)
-	hclDenyRe = regexp.MustCompile(`(?i)provisioner|local-exec|remote-exec|data\s+"external"|data\s+"http"|aws_|azurerm_|azuread_|google_|kubernetes_|helm_|vault_|filename\s*=\s*"?/|\.\.`)
-	// providers permitidos no HCL
+	hclDenyRe     = regexp.MustCompile(`(?i)provisioner|local-exec|remote-exec|data\s+"external"|data\s+"http"|aws_|azurerm_|azuread_|google_|kubernetes_|helm_|vault_|filename\s*=\s*"?/|\.\.`)
 	hclAllowSrcRe = regexp.MustCompile(`(?i)source\s*=\s*"hashicorp/(local|random|null|time|tls)"`)
-	// COMANDOS perigosos na validação (casam em qualquer lugar da string — então
-	// mesmo dentro de $() ou `` os perigosos são pegos). Note: 2>/dev/null é OK
-	// (só bloqueamos escrita em DISPOSITIVOS de bloco). $( e ` são permitidos
-	// porque os comandos perigosos internos continuam sendo barrados aqui.
-	valDenyRe = regexp.MustCompile(`(?i)\brm\b|\brmdir\b|\bmv\b|\bdd\b|mkfs|:\(\)|\bsudo\b|\bcurl\b|\bwget\b|\bchmod\b|\bchown\b|\bapt\b|\bpip[0-9]?\b|\bnpm\b|\bnc\b|\beval\b|\bkill\b|shutdown|reboot|>\s*/dev/(sd|hd|nvme|vd|mem)|>\s*/(etc|bin|usr|boot|root|home|var)/`)
+	ansibleDenyRe = regexp.MustCompile(`(?i)\b(shell|command|raw|script|become|apt|yum|dnf|package|service|systemd|user|get_url|uri|expect|copy_url):|dest\s*:\s*["']?/|path\s*:\s*["']?/|hosts\s*:\s*all`)
+	valDenyRe     = regexp.MustCompile(`(?i)\brm\b|\brmdir\b|\bmv\b|\bdd\b|mkfs|:\(\)|\bsudo\b|\bcurl\b|\bwget\b|\bchmod\b|\bchown\b|\bapt\b|\bpip[0-9]?\b|\bnpm\b|\bnc\b|\beval\b|\bkill\b|shutdown|reboot|>\s*/dev/(sd|hd|nvme|vd|mem)|>\s*/(etc|bin|usr|boot|root|home|var)/`)
 )
 
 func safeHCL(h string) bool {
 	if strings.TrimSpace(h) == "" || hclDenyRe.MatchString(h) {
 		return false
 	}
-	// se declara required_providers, todos os sources precisam ser da allowlist
 	if strings.Contains(strings.ToLower(h), "source") {
 		for _, m := range regexp.MustCompile(`(?i)source\s*=\s*"[^"]+"`).FindAllString(h, -1) {
 			if !hclAllowSrcRe.MatchString(m) {
@@ -106,29 +159,34 @@ func safeHCL(h string) bool {
 	return true
 }
 
+func safeAnsible(p string) bool {
+	if strings.TrimSpace(p) == "" || ansibleDenyRe.MatchString(p) {
+		return false
+	}
+	// tem que ser uma play local (não sair pra máquinas reais)
+	low := strings.ToLower(p)
+	return strings.Contains(low, "localhost") || strings.Contains(low, "connection: local")
+}
+
 func safeValidation(v string) bool {
 	v = strings.TrimSpace(v)
 	if v == "" || len(v) > 600 || valDenyRe.MatchString(v) {
 		return false
 	}
-	// só ASCII imprimível (+ tab/newline) — sem bytes de controle/binário
 	for _, r := range v {
 		if r != '\n' && r != '\t' && (r < 0x20 || r > 0x7e) {
 			return false
 		}
 	}
-	// tem que operar sobre o workspace do terraform
-	return strings.Contains(v, "$TFDIR") || strings.Contains(v, "terraform")
+	return strings.Contains(v, "$TFDIR") || strings.Contains(v, "terraform") || strings.Contains(v, "TFDIR")
 }
 
-// GenerateVerifiedTFLab gera um lab de Terraform e SÓ o devolve se a solução de
-// referência realmente passa na validação (auto-verificação). tries controla o
-// nº de tentativas do LLM.
-func GenerateVerifiedTFLab(topic string, level, tries int) (models.Question, error) {
+// GenerateVerifiedLab gera+verifica um lab da família dada.
+func GenerateVerifiedLab(fam *labFamily, topic string, level, tries int) (models.Question, error) {
 	if ok, _ := LLMStatus(); !ok {
 		return models.Question{}, fmt.Errorf("IA local (Ollama) indisponível")
 	}
-	if err := EnsureTool("terraform"); err != nil {
+	if err := EnsureTool(fam.tool); err != nil {
 		return models.Question{}, err
 	}
 	if tries < 1 {
@@ -136,59 +194,57 @@ func GenerateVerifiedTFLab(topic string, level, tries int) (models.Question, err
 	}
 	var lastErr error
 	for i := 0; i < tries; i++ {
-		spec, err := llmTFSpec(topic, level)
+		spec, err := llmLabSpec(fam, topic, level)
 		if err != nil {
 			lastErr = err
 			continue
 		}
-		if !safeHCL(spec.SolutionHCL) {
-			lastErr = fmt.Errorf("HCL gerado reprovado na segurança")
+		if !fam.safeCode(spec.Solution) {
+			lastErr = fmt.Errorf("código gerado reprovado na segurança")
 			continue
 		}
 		if !safeValidation(spec.Validation) || spec.Expected == "" {
 			lastErr = fmt.Errorf("validação gerada reprovada na segurança")
 			continue
 		}
-		if err := verifyTFLab(spec); err != nil {
+		if err := verifyLab(fam, spec); err != nil {
 			lastErr = err
 			continue
 		}
-		return tfSpecToQuestion(spec, topic, level), nil
+		return specToQuestion(fam, spec, topic, level), nil
 	}
 	return models.Question{}, fmt.Errorf("não consegui gerar um lab verificável: %v", lastErr)
 }
 
-// llmTFSpec pede ao modelo local um lab de Terraform em JSON estrito.
-func llmTFSpec(topic string, level int) (tfSpec, error) {
+// GenerateVerifiedTFLab mantém a assinatura antiga (Terraform) usada pelo chat.
+func GenerateVerifiedTFLab(topic string, level, tries int) (models.Question, error) {
+	return GenerateVerifiedLab(labFamilies()["terraform"], topic, level, tries)
+}
+
+func llmLabSpec(fam *labFamily, topic string, level int) (labSpec, error) {
 	if topic == "" {
-		topic = "fundamentos (recursos, variáveis, outputs)"
+		topic = "fundamentos"
 	}
-	prompt := fmt.Sprintf(`Você gera UM laboratório prático de Terraform em português do Brasil.
+	prompt := fmt.Sprintf(`Você gera UM laboratório prático de %s em português do Brasil. Tópico: %s. Nível de ajuda: %d (1=desafio, 3=passo a passo).
 
 REGRAS ESTRITAS:
-- Use SOMENTE providers hashicorp/local, hashicorp/random ou hashicorp/null. NUNCA aws/azurerm/google (o ambiente NÃO tem credenciais de nuvem).
-- PROIBIDO: provisioner, local-exec, remote-exec, data "external", caminhos absolutos ("/..."), "..".
-- "solution_hcl": HCL COMPLETO e correto que resolve a tarefa (o gabarito), com o bloco required_providers.
-- "validation": UM comando shell de LEITURA que confirma o sucesso usando terraform -chdir="$TFDIR" e/ou testando arquivos em "$TFDIR". Imprime exatamente "OK" no sucesso e "FAIL" senão.
+%s
+- "validation": UM comando shell de LEITURA que confirma o sucesso usando "$TFDIR" (o diretório do workspace). Imprime "OK" no sucesso e "FAIL" senão.
 - "expected": "OK".
-- Tópico do lab: %s. Nível de ajuda: %d (1=desafio sem dicas, 3=passo a passo).
 
-Responda SOMENTE com JSON válido neste formato (sem texto fora do JSON):
-{"question":"enunciado claro do que fazer","solution_hcl":"...","validation":"terraform -chdir=\"$TFDIR\" state list 2>/dev/null | grep -q TIPO.NOME && echo OK || echo FAIL","expected":"OK","hint":"dica curta","explanation":"explicação + gabarito comentado"}
-
-Exemplo:
-{"question":"Crie um recurso local_file chamado nota que grava 'oi' em nota.txt. Rode terraform init e apply.","solution_hcl":"terraform {\n  required_providers {\n    local = { source = \"hashicorp/local\" }\n  }\n}\nresource \"local_file\" \"nota\" {\n  filename = \"nota.txt\"\n  content  = \"oi\"\n}","validation":"terraform -chdir=\"$TFDIR\" state list 2>/dev/null | grep -q local_file.nota && test -f \"$TFDIR/nota.txt\" && echo OK || echo FAIL","expected":"OK","hint":"resource \"local_file\" \"nota\" { filename content }","explanation":"local_file grava um arquivo local; init baixa o provider e apply cria o recurso."}`, topic, level)
+Responda SOMENTE JSON válido: {"question":"...","solution":"...","validation":"...","expected":"OK","hint":"...","explanation":"..."}
+`, fam.name, topic, level, fam.promptTail)
 
 	raw, err := llmGenerate(prompt, true, 120*time.Second, tokensGen, genModel())
 	if err != nil {
-		return tfSpec{}, err
+		return labSpec{}, err
 	}
-	var s tfSpec
+	var s labSpec
 	if err := json.Unmarshal([]byte(raw), &s); err != nil {
-		return tfSpec{}, fmt.Errorf("JSON inválido do modelo: %w", err)
+		return labSpec{}, fmt.Errorf("JSON inválido do modelo: %w", err)
 	}
-	if strings.TrimSpace(s.Question) == "" || strings.TrimSpace(s.SolutionHCL) == "" {
-		return tfSpec{}, fmt.Errorf("resposta do modelo incompleta")
+	if strings.TrimSpace(s.Question) == "" || strings.TrimSpace(s.Solution) == "" {
+		return labSpec{}, fmt.Errorf("resposta do modelo incompleta")
 	}
 	if s.Expected == "" {
 		s.Expected = "OK"
@@ -196,44 +252,34 @@ Exemplo:
 	return s, nil
 }
 
-// verifyTFLab roda a solução de referência num workspace descartável e confirma
-// que a validação PASSA na solução e FALHA no vazio (senão é fraca demais).
-func verifyTFLab(s tfSpec) error {
-	dir, err := os.MkdirTemp("", "tfverify-")
+// verifyLab escreve a solução, APLICA e confere que a validação passa na solução
+// e falha no vazio.
+func verifyLab(fam *labFamily, s labSpec) error {
+	dir, err := os.MkdirTemp("", "labverify-")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(dir)
-	if err := os.WriteFile(filepath.Join(dir, "main.tf"), []byte(s.SolutionHCL), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, fam.solFile), []byte(s.Solution), 0o644); err != nil {
 		return err
 	}
-	// cache de providers compartilhado → init repetido fica rápido
-	cache := filepath.Join(os.TempDir(), "tf-plugin-cache")
-	os.MkdirAll(cache, 0o755) //nolint:errcheck
-
-	base := fmt.Sprintf(`export TF_PLUGIN_CACHE_DIR=%q TFDIR=%q; `, cache, dir)
-	if out, err := sh(base+fmt.Sprintf(`terraform -chdir=%q init -no-color -input=false && terraform -chdir=%q apply -auto-approve -no-color -input=false`, dir, dir), 240); err != nil {
+	base := fmt.Sprintf(`export TFDIR=%q; `, dir)
+	if out, err := sh(base+fam.applyTmpl, 240); err != nil {
 		return fmt.Errorf("a solução gerada não aplicou: %s", trunc(out, 200))
 	}
-	// 1) validação passa na solução?
-	out, _ := sh(base+s.Validation, 60)
-	if !strings.Contains(out, s.Expected) {
+	if out, _ := sh(base+s.Validation, 60); !strings.Contains(out, s.Expected) {
 		return fmt.Errorf("a validação não passou na própria solução")
 	}
-	// 2) validação falha no vazio? (senão é fraca/sempre-verde)
-	empty, _ := os.MkdirTemp("", "tfempty-")
+	empty, _ := os.MkdirTemp("", "labempty-")
 	defer os.RemoveAll(empty)
-	oute, _ := sh(fmt.Sprintf(`export TFDIR=%q; `, empty)+s.Validation, 30)
-	if strings.Contains(oute, s.Expected) {
+	if oute, _ := sh(fmt.Sprintf(`export TFDIR=%q; `, empty)+s.Validation, 30); strings.Contains(oute, s.Expected) {
 		return fmt.Errorf("a validação passa mesmo sem solução (fraca)")
 	}
 	return nil
 }
 
-// tfSpecToQuestion converte a spec verificada num lab do repositório. O workspace
-// do usuário é $HOME/tflab/$LAB_USER/<id>, criado no setup e usado na validação.
-func tfSpecToQuestion(s tfSpec, topic string, level int) models.Question {
-	id := "tfgen-" + newID()
+func specToQuestion(fam *labFamily, s labSpec, topic string, level int) models.Question {
+	id := fam.idPrefix + "-" + newID()
 	work := `$HOME/tflab/$LAB_USER/` + id
 	setDir := `export TFDIR="` + work + `"; `
 	diff := models.Mid
@@ -247,12 +293,13 @@ func tfSpecToQuestion(s tfSpec, topic string, level int) models.Question {
 	}
 	return models.Question{
 		ID:         id,
-		Cert:       models.Cert("Terraform"),
+		Cert:       models.Cert(fam.cert),
 		Topic:      topic,
 		Difficulty: diff,
 		Type:       models.Lab,
-		Question:   strings.TrimSpace(s.Question) + "\n\nNo terminal do lab: **cd $TFLAB/" + id + "**\n\n_(lab gerado e auto-verificado pela IA local)_",
-		Hint:       strings.TrimSpace(s.Hint),
+		Question: strings.TrimSpace(s.Question) + "\n\nNo terminal do lab: **cd $TFLAB/" + id + "**, " + fam.runHint +
+			"\n\n_(lab gerado e auto-verificado pela IA local)_",
+		Hint: strings.TrimSpace(s.Hint),
 		Setup: []models.SetupStep{{
 			Description: "Preparando o workspace isolado...",
 			Command:     "mkdir -p " + work,
@@ -265,9 +312,9 @@ func tfSpecToQuestion(s tfSpec, topic string, level int) models.Question {
 				ExpectedContains: s.Expected,
 			},
 		}},
-		Explanation: strings.TrimSpace(s.Explanation) + "\n\n--- Gabarito (main.tf) ---\n" + strings.TrimSpace(s.SolutionHCL),
-		Teardown:    []string{`terraform -chdir="` + work + `" destroy -auto-approve 2>/dev/null; rm -rf "` + work + `"`},
-		DocURL:      "https://developer.hashicorp.com/terraform/language",
+		Explanation: strings.TrimSpace(s.Explanation) + "\n\n--- Gabarito (" + fam.solFile + ") ---\n" + strings.TrimSpace(s.Solution),
+		Teardown:    []string{`rm -rf "` + work + `"`},
+		DocURL:      fam.docURL,
 	}
 }
 

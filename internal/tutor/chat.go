@@ -229,22 +229,24 @@ func Chat(msg, cert string, createSession func(ids []string) (string, string, in
 		return res
 	}
 
-	// 4.7 Gerar lab de Terraform AUTÔNOMO: o tutor gera com o LLM e AUTO-VERIFICA
-	// rodando a solução de verdade (só entrega labs que corrigem certo).
+	// 4.7 Gerar lab hands-on AUTÔNOMO (Terraform, Ansible, ...): o tutor gera com
+	// o LLM e AUTO-VERIFICA rodando a solução de verdade (só entrega labs que
+	// corrigem certo). Só dispara para famílias suportadas.
 	if regexp.MustCompile(`(?i)\b(ger|cri|mont|fa[çc]|faz|quero|monta)`).MatchString(l) &&
 		regexp.MustCompile(`(?i)lab|laborat|exerc[ií]cio|pr[aá]tic`).MatchString(l) &&
-		(strings.EqualFold(cert, "Terraform") || strings.Contains(l, "terraform")) {
+		regexp.MustCompile(`(?i)terraform|ansible|playbook`).MatchString(l+" "+strings.ToLower(cert)) {
+		fam := familyForMessage(msg, cert)
 		topic := ""
 		if m := regexp.MustCompile(`(?i)sobre\s+(.+?)\s*$`).FindStringSubmatch(msg); m != nil {
 			topic = strings.TrimSpace(m[1])
 		}
-		q, err := GenerateVerifiedTFLab(topic, detectLevel(msg), 3)
+		q, err := GenerateVerifiedLab(fam, topic, detectLevel(msg), 3)
 		if err != nil {
-			return ChatResult{Reply: "Tentei gerar um lab de Terraform e auto-verificar rodando a solução, mas não consegui agora: " + err.Error() + "\n\nTenta pedir um tema específico, ex.: **\"gerar lab de terraform sobre variáveis\"**."}
+			return ChatResult{Reply: "Tentei gerar um lab de " + fam.name + " e auto-verificar rodando a solução, mas não consegui agora: " + err.Error() + "\n\nTenta um tema específico, ex.: **\"gerar lab de " + fam.name + " sobre <tema>\"**."}
 		}
 		sid, first, total := createSession([]string{q.ID})
 		return ChatResult{
-			Reply:     "🤖 Gerei um lab de **Terraform do zero** e **auto-verifiquei** rodando a solução de verdade — a correção funciona. Bora praticar?",
+			Reply:     "🤖 Gerei um lab de **" + fam.name + " do zero** e **auto-verifiquei** rodando a solução de verdade — a correção funciona. Bora praticar?",
 			Action:    &ChatAction{Type: "session", ID: sid, First: first, Total: total},
 			Questions: []models.Question{q},
 		}

@@ -14,7 +14,7 @@ import (
 // ao tutor cadastra o botão de verdade (persistido em data/certs.json).
 // ─────────────────────────────────────────────────────────────────────────────
 
-var builtinCerts = []string{"CKA", "CKAD", "CKS", "ArgoCD", "Terraform"}
+var builtinCerts = []string{"CKA", "CKAD", "CKS", "ArgoCD", "Terraform", "Ansible"}
 
 var (
 	certsMu    sync.Mutex

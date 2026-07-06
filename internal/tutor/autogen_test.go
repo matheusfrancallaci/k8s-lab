@@ -27,6 +27,24 @@ func TestSafeValidation(t *testing.T) {
 	}
 }
 
+func TestSafeAnsible(t *testing.T) {
+	if !safeAnsible("- hosts: localhost\n  connection: local\n  tasks:\n    - copy: { dest: \"{{ lookup('env','TFDIR') }}/x\", content: oi }") {
+		t.Error("playbook seguro (copy local) rejeitado")
+	}
+	bad := []string{
+		"- hosts: localhost\n  tasks:\n    - shell: rm -rf /",
+		"- hosts: all\n  tasks:\n    - debug: msg=oi",
+		"- hosts: localhost\n  connection: local\n  tasks:\n    - apt: name=nginx",
+		"- hosts: localhost\n  connection: local\n  tasks:\n    - copy: { dest: /etc/passwd, content: x }",
+		"- hosts: localhost\n  become: true\n  tasks: []",
+	}
+	for _, p := range bad {
+		if safeAnsible(p) {
+			t.Errorf("playbook perigoso aceito: %q", p)
+		}
+	}
+}
+
 func TestSafeHCL(t *testing.T) {
 	if !safeHCL(`terraform { required_providers { local = { source = "hashicorp/local" } } }
 resource "local_file" "h" { filename = "h.txt" content = "oi" }`) {
