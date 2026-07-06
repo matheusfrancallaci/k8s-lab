@@ -177,9 +177,13 @@ func (h *LabHandler) AdvanceSession(w http.ResponseWriter, r *http.Request) {
 func runCmd(cmdStr, userID string) (string, error) {
 	touchActivity()
 	cmd := wslShell(cmdStr)
+	// LAB_USER isola o workspace de labs de IaC (Terraform): cada conta usa
+	// ~/tflab/$LAB_USER/<lab>, evitando colisão no cluster/host compartilhado.
+	env := append(os.Environ(), "LAB_USER="+tutor.SanitizeID(userID))
 	if kc := userKubeconfig(userID); kc != "" {
-		cmd.Env = append(os.Environ(), "KUBECONFIG="+kc)
+		env = append(env, "KUBECONFIG="+kc)
 	}
+	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
 }

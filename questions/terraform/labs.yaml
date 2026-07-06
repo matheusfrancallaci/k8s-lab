@@ -1,0 +1,129 @@
+questions:
+  # ══════════════════════════════════════════════════════════════════
+  # TERRAFORM — labs hands-on de IaC. Providers local/random: rodam SEM
+  # credencial de nuvem (custo zero). Cada usuário tem um workspace
+  # isolado em $TFLAB/<lab> ($TFLAB = ~/tflab/<seu-usuário>).
+  # No terminal do lab: cd $TFLAB/tfNN  (a variável já está pronta).
+  # ══════════════════════════════════════════════════════════════════
+
+  # ── tf01 — Primeiro recurso ──────────────────────────────────────
+  - id: tf-lab-01
+    cert: Terraform
+    topic: Fundamentos
+    difficulty: easy
+    type: lab
+    question: "Crie seu **primeiro recurso** Terraform — sem nuvem, tudo local.\n\nNo terminal, entre no workspace do lab: **cd $TFLAB/tf01**\n\nCrie um arquivo **main.tf** que use o provider **hashicorp/local** e declare um recurso **local_file** chamado **hello** que escreve o conteúdo **Olá, Terraform!** no arquivo **hello.txt**.\n\nDepois rode **terraform init** e **terraform apply**. Ao final, o arquivo hello.txt deve existir e o recurso deve estar no state."
+    hint: "cd $TFLAB/tf01 — crie main.tf com um bloco resource \"local_file\" \"hello\" { filename = \"hello.txt\" content = \"Olá, Terraform!\" }, depois: terraform init && terraform apply -auto-approve"
+    answer_command: "cd $TFLAB/tf01 && terraform init && terraform apply -auto-approve"
+    setup:
+      - description: "Preparando o workspace isolado do lab..."
+        command: "mkdir -p $HOME/tflab/$LAB_USER/tf01"
+    goals:
+      - description: "O recurso **local_file.hello** está no state e o arquivo **hello.txt** foi criado"
+        hint: "terraform init baixa o provider; terraform apply -auto-approve cria o recurso. O local_file grava o arquivo no diretório do workspace."
+        validation:
+          command: "terraform -chdir=$HOME/tflab/$LAB_USER/tf01 state list 2>/dev/null | grep -q local_file.hello && test -f $HOME/tflab/$LAB_USER/tf01/hello.txt && echo OK || echo FAIL"
+          expected_contains: "OK"
+    explanation: "Todo recurso segue a forma resource \"<tipo>\" \"<nome>\" { ... }. O provider local é ideal para aprender o fluxo init→plan→apply sem nuvem.\n\nSolução (main.tf):\n\nterraform {\n  required_providers {\n    local = { source = \"hashicorp/local\" }\n  }\n}\n\nresource \"local_file\" \"hello\" {\n  filename = \"hello.txt\"\n  content  = \"Olá, Terraform!\"\n}\n\nterraform init baixa o provider; terraform apply cria o arquivo e grava o estado em terraform.tfstate."
+    doc_url: "https://developer.hashicorp.com/terraform/language/resources/syntax"
+    doc_section: "Language → Resources"
+
+  # ── tf02 — Variáveis e outputs ───────────────────────────────────
+  - id: tf-lab-02
+    cert: Terraform
+    topic: Linguagem
+    difficulty: mid
+    type: lab
+    question: "Parametrize sua config com **variável** e exponha um **output**.\n\nNo terminal: **cd $TFLAB/tf02**\n\nEm **main.tf**:\n1. Declare uma **variable** chamada **nome** com default **mundo**.\n2. Um **local_file** (saudacao.txt) cujo content seja **Olá, ${var.nome}!**\n3. Um **output** chamado **saudacao** com o conteúdo gerado.\n\nRode **terraform init && terraform apply**. O comando **terraform output saudacao** deve imprimir a saudação."
+    hint: "variable \"nome\" { default = \"mundo\" } ; content = \"Olá, ${var.nome}!\" ; output \"saudacao\" { value = local_file.<nome>.content }"
+    answer_command: "cd $TFLAB/tf02 && terraform init && terraform apply -auto-approve"
+    setup:
+      - description: "Preparando o workspace isolado do lab..."
+        command: "mkdir -p $HOME/tflab/$LAB_USER/tf02"
+    goals:
+      - description: "O **output saudacao** existe e contém o valor da variável (**mundo**)"
+        hint: "terraform output -raw saudacao deve imprimir 'Olá, mundo!'. O output referencia o content do local_file."
+        validation:
+          command: "terraform -chdir=$HOME/tflab/$LAB_USER/tf02 output -raw saudacao 2>/dev/null | grep -qi mundo && echo OK || echo FAIL"
+          expected_contains: "OK"
+    explanation: "Variáveis parametrizam a config; outputs expõem valores para o usuário ou outros módulos.\n\nSolução (main.tf):\n\nvariable \"nome\" {\n  type    = string\n  default = \"mundo\"\n}\n\nresource \"local_file\" \"saud\" {\n  filename = \"saudacao.txt\"\n  content  = \"Olá, ${var.nome}!\"\n}\n\noutput \"saudacao\" {\n  value = local_file.saud.content\n}\n\nSobrescreva a variável com: terraform apply -var nome=Matheus."
+    doc_url: "https://developer.hashicorp.com/terraform/language/values/variables"
+    doc_section: "Language → Variables & Outputs"
+
+  # ── tf03 — Dependência entre recursos (random_pet) ───────────────
+  - id: tf-lab-03
+    cert: Terraform
+    topic: Linguagem
+    difficulty: mid
+    type: lab
+    question: "Crie uma **dependência implícita** entre dois recursos.\n\nNo terminal: **cd $TFLAB/tf03**\n\n1. Use o provider **hashicorp/random** com um recurso **random_pet** chamado **nome** (length = 2).\n2. Um **local_file** (pet.txt) cujo **content referencie random_pet.nome.id** — isso cria a dependência: o Terraform gera o nome aleatório ANTES de escrever o arquivo.\n\nRode **terraform init && terraform apply**. Os **dois** recursos devem aparecer no state."
+    hint: "resource \"random_pet\" \"nome\" { length = 2 } ; resource \"local_file\" \"pet\" { filename = \"pet.txt\" content = random_pet.nome.id }"
+    answer_command: "cd $TFLAB/tf03 && terraform init && terraform apply -auto-approve"
+    setup:
+      - description: "Preparando o workspace isolado do lab..."
+        command: "mkdir -p $HOME/tflab/$LAB_USER/tf03"
+    goals:
+      - description: "**random_pet.nome** e **local_file.pet** estão ambos no state"
+        hint: "A referência random_pet.nome.id dentro do local_file cria a ordem de criação automaticamente — você não declara depends_on à mão."
+        validation:
+          command: "L=$(terraform -chdir=$HOME/tflab/$LAB_USER/tf03 state list 2>/dev/null); echo \"$L\" | grep -q random_pet.nome && echo \"$L\" | grep -q local_file.pet && echo OK || echo FAIL"
+          expected_contains: "OK"
+    explanation: "Quando um recurso referencia outro (random_pet.nome.id), o Terraform infere a ordem de criação — é a dependência IMPLÍCITA, preferível ao depends_on explícito.\n\nSolução (main.tf):\n\nresource \"random_pet\" \"nome\" {\n  length = 2\n}\n\nresource \"local_file\" \"pet\" {\n  filename = \"pet.txt\"\n  content  = random_pet.nome.id\n}\n\nVeja o grafo de dependências com: terraform graph."
+    doc_url: "https://developer.hashicorp.com/terraform/language/resources/behavior"
+    doc_section: "Language → Resource dependencies"
+
+  # ── tf04 — count (meta-argumento) ────────────────────────────────
+  - id: tf-lab-04
+    cert: Terraform
+    topic: Linguagem
+    difficulty: mid
+    type: lab
+    question: "Crie **múltiplos recursos** com um só bloco usando o meta-argumento **count**.\n\nNo terminal: **cd $TFLAB/tf04**\n\nDeclare um **local_file** chamado **item** com **count = 3**, onde cada arquivo se chama **item-${count.index}.txt** (item-0.txt, item-1.txt, item-2.txt) e o content seja **arquivo número ${count.index}**.\n\nRode **terraform init && terraform apply**. Os **3** arquivos devem ser criados."
+    hint: "resource \"local_file\" \"item\" { count = 3 filename = \"item-${count.index}.txt\" content = \"arquivo número ${count.index}\" }"
+    answer_command: "cd $TFLAB/tf04 && terraform init && terraform apply -auto-approve"
+    setup:
+      - description: "Preparando o workspace isolado do lab..."
+        command: "mkdir -p $HOME/tflab/$LAB_USER/tf04"
+    goals:
+      - description: "Os **3 arquivos** item-0/1/2.txt foram criados pelo count"
+        hint: "count = 3 cria 3 instâncias indexadas (local_file.item[0..2]); use count.index no nome de cada arquivo."
+        validation:
+          command: "N=$(ls $HOME/tflab/$LAB_USER/tf04/item-*.txt 2>/dev/null | wc -l); [ \"$N\" -eq 3 ] && echo OK || echo FAIL"
+          expected_contains: "OK"
+    explanation: "count cria N instâncias de um recurso; count.index (0-based) as diferencia. Referencie uma instância com local_file.item[0].\n\nSolução (main.tf):\n\nresource \"local_file\" \"item\" {\n  count    = 3\n  filename = \"item-${count.index}.txt\"\n  content  = \"arquivo número ${count.index}\"\n}\n\nPara pares chave→valor em vez de índices numéricos, use for_each no lugar de count."
+    doc_url: "https://developer.hashicorp.com/terraform/language/meta-arguments/count"
+    doc_section: "Language → Meta-arguments → count"
+
+  # ── tf-quiz-01 — múltipla escolha (fixa o fluxo) ─────────────────
+  - id: tf-quiz-01
+    cert: Terraform
+    topic: Fundamentos
+    difficulty: easy
+    type: multiple_choice
+    question: "Qual comando o Terraform usa para BAIXAR os providers e preparar o diretório de trabalho antes do primeiro apply?"
+    options:
+      - "terraform init"
+      - "terraform plan"
+      - "terraform apply"
+      - "terraform validate"
+    answer: 0
+    explanation: "terraform init inicializa o diretório: baixa os providers declarados, configura o backend e prepara os módulos. É o primeiro comando em qualquer workspace novo. plan mostra as mudanças, apply as aplica, validate só checa a sintaxe/consistência."
+    doc_url: "https://developer.hashicorp.com/terraform/cli/commands/init"
+    doc_section: "CLI → init"
+
+  # ── tf-quiz-02 — múltipla escolha (state) ────────────────────────
+  - id: tf-quiz-02
+    cert: Terraform
+    topic: Estado
+    difficulty: mid
+    type: multiple_choice
+    question: "O que o Terraform usa para saber quais recursos ele já gerencia e mapear a config para os objetos reais?"
+    options:
+      - "O arquivo de state (terraform.tfstate)"
+      - "Os arquivos .tf da configuração"
+      - "As variáveis de ambiente"
+      - "O diretório .terraform"
+    answer: 0
+    explanation: "O state (terraform.tfstate) é a fonte de verdade do que o Terraform gerencia: ele mapeia cada recurso da config para o objeto real e guarda metadados. Sem o state, o Terraform não sabe o que já criou. Por isso o state é sensível e, em equipe, fica em um backend remoto compartilhado."
+    doc_url: "https://developer.hashicorp.com/terraform/language/state"
+    doc_section: "Language → State"

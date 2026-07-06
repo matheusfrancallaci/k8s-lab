@@ -17,12 +17,18 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /out/estudo-app .
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl bash vim-tiny iproute2 iptables procps mount \
+        ca-certificates curl bash vim-tiny iproute2 iptables procps mount unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Azure CLI — para a instancia hospedada tambem conectar/gerenciar AKS
 # (login, get-credentials, start/stop) direto pela pagina Cloud.
 RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash && rm -rf /var/lib/apt/lists/*
+
+# Terraform CLI — labs hands-on de IaC (providers local/random/null: rodam sem
+# credencial de nuvem, custo zero). Cada usuario tem seu workspace isolado.
+ARG TERRAFORM_VERSION=1.9.8
+RUN curl -sfL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" -o /tmp/tf.zip \
+    && unzip -o /tmp/tf.zip -d /usr/local/bin && rm /tmp/tf.zip && terraform version
 
 # k3s (traz containerd + kubectl); tag tem '+', que precisa virar %2B na URL
 ARG K3S_VERSION=v1.31.5+k3s1

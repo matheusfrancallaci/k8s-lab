@@ -568,6 +568,14 @@ var certCurricula = map[string][]CurriculumDomain{
 		{"Fundamentos GitOps", 40, []string{"https://argo-cd.readthedocs.io/en/stable/getting_started/"}},
 		{"Sync e Rollback", 30, []string{"https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/"}},
 	},
+	// Terraform Associate (003) — domínios oficiais + páginas da doc HashiCorp.
+	"Terraform": {
+		{"IaC & Fluxo Terraform", 20, []string{"https://developer.hashicorp.com/terraform/intro", "https://developer.hashicorp.com/terraform/cli/commands"}},
+		{"Linguagem: recursos, variáveis, outputs", 25, []string{"https://developer.hashicorp.com/terraform/language/resources", "https://developer.hashicorp.com/terraform/language/values/variables", "https://developer.hashicorp.com/terraform/language/values/outputs"}},
+		{"Estado (state)", 20, []string{"https://developer.hashicorp.com/terraform/language/state", "https://developer.hashicorp.com/terraform/language/backend"}},
+		{"Módulos", 15, []string{"https://developer.hashicorp.com/terraform/language/modules"}},
+		{"Providers", 20, []string{"https://developer.hashicorp.com/terraform/language/providers/requirements"}},
+	},
 }
 
 // CurriculumFor devolve o currículo oficial embutido da cert (se houver).

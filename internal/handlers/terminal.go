@@ -139,6 +139,9 @@ const labRCScript = `# k8s-lab terminal init (auto-generated)
 [ -f /etc/profile ] && . /etc/profile
 [ -f ~/.bashrc ] && source ~/.bashrc
 unset PROMPT_COMMAND
+# Workspace dos labs de IaC (Terraform), isolado por usuário. Use: cd $TFLAB/<lab>
+export TFLAB="$HOME/tflab/${LAB_USER:-default}"
+mkdir -p "$TFLAB" 2>/dev/null
 PS1='\[\e[38;2;129;140;248m\]\[\e[1m\]⎈ k8s\[\e[0m\] \[\e[38;2;52;211;153m\]\w\[\e[0m\] \[\e[38;2;129;140;248m\]❯\[\e[0m\] '
 cd ~ 2>/dev/null
 clear
@@ -496,6 +499,8 @@ func TerminalWS(w http.ResponseWriter, r *http.Request) {
 			cloudNS, cloudPod)
 	} else {
 		shellCmd = "bash -c \"exec bash --rcfile ~/.k8slab_rc -i\""
+		// LAB_USER isola o workspace dos labs de IaC ($TFLAB no rcfile).
+		shellCmd = "LAB_USER=" + tutor.SanitizeID(uid) + " " + shellCmd
 		// Multi-user: o terminal do usuário aponta para o namespace lab-<user>,
 		// isolando os recursos que ele criar dos demais.
 		if kc := userKubeconfig(uid); kc != "" {
