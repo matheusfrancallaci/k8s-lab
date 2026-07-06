@@ -1,0 +1,49 @@
+#cloud-config
+# Provisiona a VM: Docker + Azure CLI, e um serviço que puxa a imagem da ACR
+# (via managed identity) e roda o container completo (app + k3s) na porta 80.
+package_update: true
+
+write_files:
+  - path: /opt/lab/run-lab.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      # A VM se autentica com a própria identidade (sem segredos).
+      az login --identity >/dev/null
+      echo "[lab] aguardando a imagem na ACR (rode 'az acr build' no seu PC se ainda nao rodou)..."
+      until az acr login --name "${acr_name}" >/dev/null 2>&1 && docker pull "${image}" >/dev/null 2>&1; do
+        sleep 20
+      done
+      docker rm -f lab >/dev/null 2>&1 || true
+      # --privileged: o k3s roda um cluster dentro do container.
+      docker run -d --privileged --restart=unless-stopped \
+        -p 80:8080 \
+        -e APP_PASSWORD='${app_password}' \
+        -v lab-data:/app/data \
+        --name lab "${image}"
+      echo "[lab] container no ar em :80"
+
+  - path: /etc/systemd/system/estudo-app.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=K8s Study Lab (container app + k3s)
+      After=docker.service network-online.target
+      Requires=docker.service
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      TimeoutStartSec=0
+      ExecStart=/opt/lab/run-lab.sh
+
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  - curl -fsSL https://get.docker.com | sh
+  - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+  - systemctl daemon-reload
+  - systemctl enable --now estudo-app.service

@@ -24,3 +24,12 @@ Thumbs.db
 
 # Estado de runtime (progresso do tutor, certs cadastrados, perfis)
 /data/
+
+# Terraform — state e segredos (nunca versionar)
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+crash.log
