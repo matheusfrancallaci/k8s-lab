@@ -10,7 +10,9 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 4.0"
+      # 3.x maduro: a linha 4.x recente estava dando "inconsistent result after
+      # apply" em recursos de rede (vnet/nsg/ip) — bug de leitura pos-criacao.
+      version = ">= 3.110, < 4.0"
     }
     random = {
       source  = "hashicorp/random"
