@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"html/template"
 	"io/fs"
 	"log"
@@ -109,15 +111,32 @@ func main() {
 	mux.HandleFunc("POST /register", handlers.RegisterHandler)
 	mux.HandleFunc("GET /logout", handlers.LogoutHandler)
 
-	// Static files
+	// Static files — ETag por conteúdo + revalidação (no-cache). Com "immutable"
+	// o browser servia o CSS/JS ANTIGO após um rebuild (larguras esticadas etc.);
+	// com ETag ele revalida e só rebaixa quando o arquivo muda de verdade.
 	staticSub, _ := fs.Sub(staticFS, "web/static")
-	staticHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, ".css") || strings.HasSuffix(r.URL.Path, ".js") || strings.HasSuffix(r.URL.Path, ".svg") || strings.HasSuffix(r.URL.Path, ".png") || strings.HasSuffix(r.URL.Path, ".jpg") || strings.HasSuffix(r.URL.Path, ".webp") {
-			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-		} else {
-			w.Header().Set("Cache-Control", "no-cache")
+	staticETags := map[string]string{}
+	fs.WalkDir(staticSub, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
 		}
-		http.FileServer(http.FS(staticSub)).ServeHTTP(w, r)
+		if b, e := fs.ReadFile(staticSub, p); e == nil {
+			sum := sha256.Sum256(b)
+			staticETags[p] = `"` + hex.EncodeToString(sum[:8]) + `"`
+		}
+		return nil
+	})
+	fileSrv := http.FileServer(http.FS(staticSub))
+	staticHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		if etag, ok := staticETags[strings.TrimPrefix(r.URL.Path, "/")]; ok {
+			w.Header().Set("ETag", etag)
+			if r.Header.Get("If-None-Match") == etag {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+		}
+		fileSrv.ServeHTTP(w, r)
 	})
 	mux.Handle("GET /static/", http.StripPrefix("/static/", staticHandler))
 
