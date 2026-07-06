@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -168,10 +170,20 @@ func EnrichSource(text string) (string, []string, []string) {
 	if len(urls) > 3 {
 		urls = urls[:3]
 	}
-	for _, u := range urls {
+	for i, u := range urls {
 		if !isTrustedURL(u) {
 			blocked = append(blocked, u)
 			continue
+		}
+		// A 1ª URL é percorrida em profundidade: o tutor segue links da MESMA
+		// seção da doc e lê várias páginas (não só a que foi colada). As demais
+		// URLs coladas entram como página única para não explodir a latência.
+		if i == 0 {
+			if txt, srcs := crawlDoc(u, crawlPages()); len(srcs) > 0 {
+				fetched = append(fetched, txt)
+				sources = append(sources, srcs...)
+				continue
+			}
 		}
 		if content, err := fetchURL(u); err == nil && len(content) > 100 {
 			fetched = append(fetched, markSource(u, content))
@@ -250,6 +262,106 @@ func isTrustedURL(u string) bool {
 }
 
 // fetchURL baixa uma URL pública e devolve texto limpo (código preservado).
+var hrefRe = regexp.MustCompile(`(?i)<a\s[^>]*href=["']([^"'#\s]+)`)
+
+// crawlPages define quantas páginas o crawler lê por URL semente (env TUTOR_CRAWL_PAGES).
+func crawlPages() int {
+	n := 0
+	if _, err := fmt.Sscanf(envOr("TUTOR_CRAWL_PAGES", "5"), "%d", &n); err == nil && n >= 1 && n <= 20 {
+		return n
+	}
+	return 5
+}
+
+// crawlDoc lê a página semente e SEGUE até maxPages-1 links da mesma seção da
+// documentação (mesmo host, sob o mesmo diretório de caminho), concatenando o
+// texto de cada página com marcador de fonte. É isto que faz o tutor "percorrer
+// a documentação" em vez de olhar uma página só. GitHub cai no fetch único
+// (fetchURL já trata repo/blob de forma especial).
+func crawlDoc(seed string, maxPages int) (string, []string) {
+	if maxPages < 1 {
+		maxPages = 1
+	}
+	if !isTrustedURL(seed) || ghRepoRe.MatchString(seed) || ghBlobRe.MatchString(seed) {
+		if c, err := fetchURL(seed); err == nil && len(c) > 100 {
+			return markSource(seed, c), []string{seed}
+		}
+		return "", nil
+	}
+	base, err := url.Parse(seed)
+	if err != nil {
+		return "", nil
+	}
+	raw, err := fetchRawHTML(seed)
+	if err != nil {
+		if c, e := fetchURL(seed); e == nil && len(c) > 100 {
+			return markSource(seed, c), []string{seed}
+		}
+		return "", nil
+	}
+
+	var out strings.Builder
+	var sources []string
+	seen := map[string]bool{seed: true}
+	out.WriteString(markSource(seed, htmlToText(raw)))
+	sources = append(sources, seed)
+
+	// Só segue links irmãos: mesmo host e sob o mesmo diretório-pai da semente
+	// (a "seção" da doc). TrimSuffix tira a barra final, senão path.Dir devolve a
+	// própria página e nenhum irmão casa.
+	dir := path.Dir(strings.TrimSuffix(base.Path, "/"))
+	if dir == "/" || dir == "." {
+		dir = strings.TrimSuffix(base.Path, "/")
+	}
+	prefix := strings.TrimSuffix(dir, "/") + "/"
+	for _, m := range hrefRe.FindAllStringSubmatch(raw, -1) {
+		if len(sources) >= maxPages {
+			break
+		}
+		ref, err := base.Parse(m[1])
+		if err != nil {
+			continue
+		}
+		ref.Fragment, ref.RawQuery = "", ""
+		link := ref.String()
+		if seen[link] || ref.Host != base.Host || !strings.HasPrefix(ref.Path, prefix) {
+			continue
+		}
+		seen[link] = true
+		if c, e := fetchURL(link); e == nil && len(c) > 100 {
+			out.WriteString("\n\n---\n\n" + markSource(link, c))
+			sources = append(sources, link)
+		}
+	}
+	return out.String(), sources
+}
+
+// fetchRawHTML devolve o HTML cru de uma página confiável (sem virar texto) —
+// usado pelo crawler para extrair os links antes de limpar as tags.
+func fetchRawHTML(u string) (string, error) {
+	if !isTrustedURL(u) {
+		return "", fmt.Errorf("fora do escopo")
+	}
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "k8s-study-lab-tutor/1.0")
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 800*1024))
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
 func fetchURL(u string) (string, error) {
 	if !isTrustedURL(u) {
 		return "", fmt.Errorf("fora do escopo do tutor (apenas fontes de infra, cloud e programação)")

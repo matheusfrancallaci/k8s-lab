@@ -83,11 +83,33 @@ func probeOllama() (bool, string) {
 	return true, body.Models[0].Name
 }
 
-// llmGenerate chama o Ollama de forma síncrona (stream=false).
-func llmGenerate(prompt string, wantJSON bool, timeout time.Duration) (string, error) {
+// Orçamento de tokens por tipo de uso. Em CPU o tempo de resposta é ~linear no
+// num_predict, então conversa curta usa MUITO menos que geração de quiz — antes
+// tudo usava 1200 e o chat demorava à toa (a persona já pede "máx. 6 frases").
+const (
+	tokensChat = 400  // conversa livre / explicação de erro
+	tokensGen  = 1200 // geração de quiz a partir de doc (precisa de fôlego)
+)
+
+func numPredict() int {
+	if v := envOr("OLLAMA_NUM_PREDICT", ""); v != "" {
+		n := 0
+		if _, err := fmt.Sscanf(v, "%d", &n); err == nil && n > 0 {
+			return n
+		}
+	}
+	return tokensGen
+}
+
+// llmGenerate chama o Ollama de forma síncrona (stream=false). maxTokens<=0 usa
+// o default (num_predict/env).
+func llmGenerate(prompt string, wantJSON bool, timeout time.Duration, maxTokens int) (string, error) {
 	ok, model := LLMStatus()
 	if !ok {
 		return "", fmt.Errorf("ollama indisponível")
+	}
+	if maxTokens <= 0 {
+		maxTokens = numPredict()
 	}
 	payload := map[string]any{
 		"model":  model,
@@ -95,7 +117,7 @@ func llmGenerate(prompt string, wantJSON bool, timeout time.Duration) (string, e
 		"stream": false,
 		"options": map[string]any{
 			"temperature": 0.3,
-			"num_predict": 1200,
+			"num_predict": maxTokens,
 		},
 	}
 	if wantJSON {
@@ -119,10 +141,13 @@ func llmGenerate(prompt string, wantJSON bool, timeout time.Duration) (string, e
 }
 
 // llmStreamGenerate executa streaming incremental do Ollama quando disponível.
-func llmStreamGenerate(prompt string, wantJSON bool, timeout time.Duration, onChunk func(string)) error {
+func llmStreamGenerate(prompt string, wantJSON bool, timeout time.Duration, maxTokens int, onChunk func(string)) error {
 	ok, model := LLMStatus()
 	if !ok {
 		return fmt.Errorf("ollama indisponível")
+	}
+	if maxTokens <= 0 {
+		maxTokens = numPredict()
 	}
 	payload := map[string]any{
 		"model":  model,
@@ -130,7 +155,7 @@ func llmStreamGenerate(prompt string, wantJSON bool, timeout time.Duration, onCh
 		"stream": true,
 		"options": map[string]any{
 			"temperature": 0.3,
-			"num_predict": 1200,
+			"num_predict": maxTokens,
 		},
 	}
 	if wantJSON {
@@ -183,7 +208,7 @@ func StreamLLMReply(msg string, onChunk func(string)) error {
 ESCOPO (tudo isto é válido, responda normalmente): Kubernetes, containers, cloud (Azure/AWS/GCP), Terraform e Infraestrutura como Código, Linux, redes, DevOps, CI/CD, GitOps/ArgoCD, Helm e programação. Terraform/IaC SÃO tópicos centrais — ajude com HCL, providers, state, módulos, plan/apply. Só recuse se a pergunta fugir TOTALMENTE de tecnologia (ex.: culinária, política); aí recuse em 1 frase.
 
 Pergunta do aluno: %s`, strings.TrimSpace(msg))
-	return llmStreamGenerate(prompt, false, 60*time.Second, onChunk)
+	return llmStreamGenerate(prompt, false, 60*time.Second, tokensChat, onChunk)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -228,7 +253,7 @@ Responda SOMENTE com JSON válido nesse formato.
 MATERIAL:
 %s`, cert, n, text)
 
-	raw, err := llmGenerate(prompt, true, 120*time.Second)
+	raw, err := llmGenerate(prompt, true, 120*time.Second, tokensGen)
 	if err != nil {
 		log.Printf("[tutor/llm] geração falhou: %v", err)
 		return nil
@@ -303,5 +328,5 @@ Em português do Brasil, explique em NO MÁXIMO 4 frases:
 Seja direto e encorajador. Sem markdown, sem listas.`,
 		strings.TrimSpace(questionText), goalDesc, valCmd, strings.TrimSpace(output))
 
-	return llmGenerate(prompt, false, 45*time.Second)
+	return llmGenerate(prompt, false, 45*time.Second, tokensChat)
 }
