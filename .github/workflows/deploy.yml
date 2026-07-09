@@ -28,6 +28,7 @@ env:
   RG: k8slab-rg
   VM: k8slab-vm
   IMAGE: estudo-app
+  APP_URL: ${{ secrets.APP_URL }}
 
 jobs:
   deploy:
@@ -70,3 +71,15 @@ jobs:
             --query "value[0].message" -o tsv)
           echo "$out"
           echo "$out" | grep -q "$digest" || { echo "::error::digest do container nao bate com o build"; exit 1; }
+
+      - name: Smoke test do app publicado
+        if: ${{ env.APP_URL != '' }}
+        run: |
+          base="${APP_URL%/}"
+          for i in $(seq 1 12); do
+            if curl --fail --silent --show-error "$base/healthz"; then break; fi
+            [ "$i" -eq 12 ] && { echo "::error::healthz nao respondeu apos deploy"; exit 1; }
+            sleep 5
+          done
+          curl --fail --silent --show-error "$base/api/tutor/deploy-gate" > gate.json
+          jq -e '.passed == true' gate.json >/dev/null || { cat gate.json; echo "::error::deploy gate remoto falhou"; exit 1; }

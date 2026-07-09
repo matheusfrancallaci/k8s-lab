@@ -10,6 +10,7 @@ import (
 
 	"estudo-app/internal/tutor"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -90,13 +91,41 @@ func ensureNamespace(name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, err = cs.CoreV1().Namespaces().Create(ctx,
-		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}},
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labNamespaceSecurityLabels()}},
 		metav1.CreateOptions{})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		return err
 	}
 	ensureNamespaceLimits(name)
+	ensureNamespaceSecurity(name)
 	return nil
+}
+
+func labNamespaceSecurityLabels() map[string]string {
+	return map[string]string{
+		"pod-security.kubernetes.io/enforce":         envOr("LAB_PSA_ENFORCE", "baseline"),
+		"pod-security.kubernetes.io/enforce-version": envOr("LAB_PSA_VERSION", "latest"),
+		"app.kubernetes.io/part-of":                  "k8s-study-lab",
+		"k8s-study-lab/user-namespace":               "true",
+	}
+}
+
+// namespaceGuardrailsScript mirrors phase-0 guardrails when the app cannot use
+// client-go and provisions the cloud shell through kubectl instead.
+func namespaceGuardrailsScript(ns string) string {
+	if ns == "" {
+		return ""
+	}
+	return fmt.Sprintf(`kubectl label namespace %s pod-security.kubernetes.io/enforce=%s pod-security.kubernetes.io/enforce-version=%s app.kubernetes.io/part-of=k8s-study-lab k8s-study-lab/user-namespace=true --overwrite 2>/dev/null; kubectl -n %s apply -f - <<'K8SLABPOLICY' 2>/dev/null
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lab-default-deny-ingress
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+K8SLABPOLICY`, ns, envOr("LAB_PSA_ENFORCE", "baseline"), envOr("LAB_PSA_VERSION", "latest"), ns)
 }
 
 // ensureNamespaceLimits aplica um ResourceQuota + LimitRange no namespace do
@@ -146,4 +175,37 @@ func ensureNamespaceLimits(ns string) {
 		},
 	}
 	_, _ = cs.CoreV1().LimitRanges(ns).Create(ctx, lr, metav1.CreateOptions{})
+}
+
+// ensureNamespaceSecurity completes phase 0 for lab-* namespaces. The policy
+// blocks traffic from other user namespaces while preserving normal egress to
+// DNS, the Kubernetes API, and public documentation/images. CNI enforcement is
+// cluster-dependent, so the namespace labels and quotas remain useful on their
+// own even when NetworkPolicy is not implemented by the local cluster.
+func ensureNamespaceSecurity(ns string) {
+	cs, err := k8sClientFor(currentContext())
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if current, err := cs.CoreV1().Namespaces().Get(ctx, ns, metav1.GetOptions{}); err == nil {
+		labels := current.GetLabels()
+		if labels == nil {
+			labels = map[string]string{}
+		}
+		for k, v := range labNamespaceSecurityLabels() {
+			labels[k] = v
+		}
+		current.SetLabels(labels)
+		_, _ = cs.CoreV1().Namespaces().Update(ctx, current, metav1.UpdateOptions{})
+	}
+	policy := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "lab-default-deny-ingress", Namespace: ns},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+		},
+	}
+	_, _ = cs.NetworkingV1().NetworkPolicies(ns).Create(ctx, policy, metav1.CreateOptions{})
 }

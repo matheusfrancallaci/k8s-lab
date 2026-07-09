@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"runtime"
 	"runtime/debug"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -122,6 +124,25 @@ func MetricsHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "# TYPE app_tutor_quiz_accepted_total counter\napp_tutor_quiz_accepted_total %d\n", quizOK)
 	fmt.Fprintf(w, "# HELP app_tutor_quiz_rejected_total Questoes de quiz geradas descartadas na validacao.\n")
 	fmt.Fprintf(w, "# TYPE app_tutor_quiz_rejected_total counter\napp_tutor_quiz_rejected_total %d\n", quizNo)
+	telemetry := tutor.TutorTelemetry()
+	stages := make([]string, 0, len(telemetry.Stages))
+	for stage := range telemetry.Stages {
+		stages = append(stages, stage)
+	}
+	sort.Strings(stages)
+	fmt.Fprintln(w, "# HELP app_tutor_latency_ms Tutor latency sampled in milliseconds.")
+	fmt.Fprintln(w, "# TYPE app_tutor_latency_ms gauge")
+	for _, stage := range stages {
+		metric := telemetry.Stages[stage]
+		label := strings.ReplaceAll(stage, `"`, "")
+		fmt.Fprintf(w, "app_tutor_latency_ms{stage=\"%s\",quantile=\"avg\"} %d\n", label, metric.AvgMS)
+		fmt.Fprintf(w, "app_tutor_latency_ms{stage=\"%s\",quantile=\"p95\"} %d\n", label, metric.P95MS)
+		if metric.FirstTokenMS > 0 {
+			fmt.Fprintf(w, "app_tutor_latency_ms{stage=\"%s\",quantile=\"first_token\"} %d\n", label, metric.FirstTokenMS)
+		}
+		fmt.Fprintf(w, "app_tutor_requests_total{stage=\"%s\",result=\"all\"} %d\n", label, metric.Count)
+		fmt.Fprintf(w, "app_tutor_requests_total{stage=\"%s\",result=\"failure\"} %d\n", label, metric.Failures)
+	}
 }
 
 // statusRecorder captura o status code para métricas/logs (o ResponseWriter não

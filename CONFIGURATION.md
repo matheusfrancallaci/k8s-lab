@@ -45,6 +45,8 @@ single-user; os defaults cobrem esse caso.
 | `OLLAMA_EMBED_MODEL` | *(auto/local fallback)* | Modelo dedicado aos embeddings persistidos do RAG, ex.: `nomic-embed-text`. Sem ele, o RAG usa fallback local determinístico. |
 | `OLLAMA_NUM_PREDICT` | `1200` | Teto de tokens da geração. Conversa de chat já usa `400` fixo (menor = mais rápido). |
 | `TUTOR_DOC_CACHE_TTL` | `30m` | TTL do cache com ETag para documentação oficial; reduz fetch/crawl repetido. |
+| `K8S_LAB_VERIFY_GENERATED` | `0` | Quando `1`, executa templates Kubernetes gerados em namespace efêmero antes de entregá-los. Ative somente no cluster de verificação. |
+| `LAB_PSA_ENFORCE` | `baseline` | Perfil Pod Security Admission aplicado aos namespaces `lab-<usuário>`. |
 
 ## Deploy hospedado (Azure)
 Ver [deploy/azure/README.md](deploy/azure/README.md) e a memória de deploy. Resumo:

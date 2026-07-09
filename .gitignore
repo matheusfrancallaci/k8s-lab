@@ -30,6 +30,7 @@ Thumbs.db
 !/data/
 /data/*
 !/data/eval/
+/data/eval/*
 !/data/eval/regression_fixtures.json
 
 # Terraform — state e segredos (nunca versionar)

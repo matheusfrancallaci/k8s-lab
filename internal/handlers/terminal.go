@@ -412,7 +412,7 @@ func cloudShellClusterRoleName(userNS, name string) string {
 func cloudShellNamespaceAccessScript(userNS, sa string, q *models.Question) string {
 	var parts []string
 	parts = append(parts,
-		fmt.Sprintf("kubectl create namespace %[1]s 2>/dev/null; kubectl -n %[1]s create serviceaccount %[2]s 2>/dev/null", userNS, sa))
+		fmt.Sprintf("kubectl create namespace %[1]s 2>/dev/null; ", userNS)+namespaceGuardrailsScript(userNS)+fmt.Sprintf("; kubectl -n %[1]s create serviceaccount %[2]s 2>/dev/null", userNS, sa))
 	plan := cloudShellAccessPlanFor(userNS, q)
 	for _, r := range plan.Namespaces {
 		if r.EnsureNamespace {

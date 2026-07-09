@@ -207,9 +207,19 @@ func Generate(topic, cert string, level, count int) ([]models.Question, error) {
 
 	WarmRAG(cert, topic)
 	qs := generateQuestions(topic, cert, level, count)
-	for _, q := range qs {
+	for i := range qs {
+		qs[i].Source = models.SourceGenerated
+		q := qs[i]
 		if err := LabQualityGate(q); err != nil {
 			return nil, err
+		}
+	}
+	if err := verifyGeneratedKubernetesLabs(qs); err != nil {
+		return nil, err
+	}
+	for i := range qs {
+		if qs[i].LabSpec != nil && isKubernetesLab(qs[i]) && shouldVerifyGeneratedKubernetesLabs() {
+			qs[i].LabSpec.ValidationMode = "compiled+runtime-verified"
 		}
 	}
 	if err := persist(qs); err != nil {
