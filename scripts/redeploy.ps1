@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Redeploy reproduzível do K8s Study Lab na VM Azure.
 
