@@ -78,8 +78,12 @@ try {
 } finally {
   Remove-Item $tmp -Force -ErrorAction SilentlyContinue
 }
-if ($out -notmatch "MATCH") {
-  Write-Host $out
+# $out pode vir como ARRAY de linhas (az -o tsv): -notmatch em array FILTRA
+# elementos em vez de testar boolean, e array nao-vazio e truthy — falso
+# negativo com o deploy OK. Colapsa para string antes de testar.
+$outStr = ($out | Out-String)
+if ($outStr -notmatch "MATCH") {
+  Write-Host $outStr
   Die "container 'lab' nao esta rodando a imagem recem-buildada"
 }
 Ok "container 'lab' rodando a imagem de $sha"
