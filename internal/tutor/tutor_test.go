@@ -750,6 +750,22 @@ func TestPreflightAllowsCommandWordTopic(t *testing.T) {
 	}
 }
 
+func TestHideLabSpoilersCutsEnglishHeadings(t *testing.T) {
+	// Regressão: o modelo de geração escreve o gabarito sob cabeçalho em inglês
+	// ("SOLUTION:", "Answer:"). O corte só reconhecia PT, então a resposta
+	// inteira vazava para o enunciado do lab.
+	for _, heading := range []string{"SOLUTION:", "Solution:", "Answer:", "Steps:", "Step-by-step:", "Hint:", "Solucao:", "Gabarito:"} {
+		q := HideLabSpoilers(models.Question{
+			Type:     models.Lab,
+			Topic:    "Services",
+			Question: "Exponha o Deployment titan-cache com um Service ClusterIP.\n\n" + heading + "\nkubectl expose deploy titan-cache --port=80",
+		})
+		if strings.Contains(q.Question, "kubectl expose") {
+			t.Fatalf("gabarito vazou apos o cabecalho %q:\n%s", heading, q.Question)
+		}
+	}
+}
+
 func TestPreflightBlocksInlineCommandInStatement(t *testing.T) {
 	// Um comando REAL entre crases no enunciado continua barrado.
 	if !questionHasReadyCommand("Rode `kubectl apply -f pod.yaml` para criar o pod") {
