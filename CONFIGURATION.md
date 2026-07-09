@@ -39,8 +39,12 @@ single-user; os defaults cobrem esse caso.
 |---|---|---|
 | `OLLAMA_URL` | `http://localhost:11434` | Endpoint do Ollama. Sem Ollama, o tutor cai nas heurísticas. |
 | `OLLAMA_MODEL` | *(auto)* | Modelo fixo. Sem isso, escolhe o 1º instalado da lista de preferência (`llama3.2`, `qwen2.5`, ...). Modelo **menor** = respostas mais rápidas em CPU. |
+| `OLLAMA_CHAT_MODEL` | `OLLAMA_MODEL` | Perfil de conversa grounded/streaming. Use um modelo menor para menor tempo ao primeiro token. |
+| `OLLAMA_ROUTER_MODEL` | `OLLAMA_CHAT_MODEL` | Perfil de classificação/planejamento de tópicos; pode ser o modelo mais rápido instalado. |
+| `OLLAMA_GEN_MODEL` | `OLLAMA_MODEL` | Perfil de geração estruturada de labs e quiz; prefira o modelo mais capaz de código. |
 | `OLLAMA_EMBED_MODEL` | *(auto/local fallback)* | Modelo dedicado aos embeddings persistidos do RAG, ex.: `nomic-embed-text`. Sem ele, o RAG usa fallback local determinístico. |
 | `OLLAMA_NUM_PREDICT` | `1200` | Teto de tokens da geração. Conversa de chat já usa `400` fixo (menor = mais rápido). |
+| `TUTOR_DOC_CACHE_TTL` | `30m` | TTL do cache com ETag para documentação oficial; reduz fetch/crawl repetido. |
 
 ## Deploy hospedado (Azure)
 Ver [deploy/azure/README.md](deploy/azure/README.md) e a memória de deploy. Resumo:

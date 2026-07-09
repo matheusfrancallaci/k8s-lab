@@ -249,7 +249,7 @@ Regras:
 Pedido e contexto:
 %s`, cert, count, strings.Join(available, ", "), evidence, context)
 
-	raw, err := llmGenerate(prompt, true, 60*time.Second, 500, "")
+	raw, err := llmGenerateContract(prompt, "topic-selection", 60*time.Second, 500, routerModel())
 	if err != nil {
 		return nil, "", false
 	}

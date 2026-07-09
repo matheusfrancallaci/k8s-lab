@@ -48,6 +48,51 @@ type PromptQualitySummary struct {
 	Weakest         []PromptQualityCase `json:"weakest"`
 	Best            []PromptQualityCase `json:"best"`
 	RegressionCases []PromptQualityCase `json:"regression_cases"`
+	UnpromotedWeak  []PromptQualityCase `json:"unpromoted_weak"`
+}
+
+type regressionFixtureFile struct {
+	Cases []PromptQualityCase `json:"cases"`
+}
+
+func regressionFixturePath() string { return filepath.Join("data", "eval", "regression_fixtures.json") }
+
+func loadRegressionFixtures() []PromptQualityCase {
+	var file regressionFixtureFile
+	if b, err := os.ReadFile(regressionFixturePath()); err == nil {
+		_ = json.Unmarshal(b, &file)
+	}
+	return file.Cases
+}
+
+// PromotePromptRegression makes a reviewed real prompt a durable fixture. It
+// stores only routing/quality metadata, never the user hash.
+func PromotePromptRegression(id string) error {
+	promptQualityMu.Lock()
+	defer promptQualityMu.Unlock()
+	c := ensurePromptQualityLocked().Cases[id]
+	if c == nil {
+		return os.ErrNotExist
+	}
+	file := regressionFixtureFile{Cases: loadRegressionFixtures()}
+	for _, existing := range file.Cases {
+		if existing.ID == c.ID {
+			return nil
+		}
+	}
+	fixture := *c
+	fixture.UserHash = ""
+	fixture.FirstSeen = time.Time{}
+	fixture.LastSeen = time.Time{}
+	file.Cases = append(file.Cases, fixture)
+	if err := os.MkdirAll(filepath.Dir(regressionFixturePath()), 0o755); err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(file, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(regressionFixturePath(), b, 0o644)
 }
 
 type promptQualityDataset struct {
@@ -204,6 +249,11 @@ func PromptQualityReport() PromptQualitySummary {
 	})
 	report.Weakest = limitedCases(all, 8)
 	report.RegressionCases = limitedCases(all, 12)
+	for _, c := range report.Weakest {
+		if c.RegressionScore < minimumLabQuality {
+			report.UnpromotedWeak = append(report.UnpromotedWeak, c)
+		}
+	}
 	sort.SliceStable(all, func(i, j int) bool {
 		if all[i].RegressionScore == all[j].RegressionScore {
 			return all[i].Count > all[j].Count
@@ -216,11 +266,16 @@ func PromptQualityReport() PromptQualitySummary {
 
 func HistoricalRegressionPrompts(limit int) []PromptQualityCase {
 	report := PromptQualityReport()
+	seen := map[string]bool{}
 	var out []PromptQualityCase
-	for _, c := range report.RegressionCases {
+	for _, c := range append(loadRegressionFixtures(), report.RegressionCases...) {
 		if c.Prompt == "" || c.Cert == "" || c.Topic == "" || c.ActionType != "session" {
 			continue
 		}
+		if seen[c.ID] {
+			continue
+		}
+		seen[c.ID] = true
 		out = append(out, c)
 		if limit > 0 && len(out) >= limit {
 			break

@@ -18,18 +18,21 @@ import (
 )
 
 type RAGChunk struct {
-	ID             string    `json:"id"`
-	Cert           string    `json:"cert"`
-	Domain         string    `json:"domain"`
-	Weight         int       `json:"weight"`
-	Title          string    `json:"title"`
-	URL            string    `json:"url"`
-	Text           string    `json:"text"`
-	Hydrated       bool      `json:"hydrated"`
-	BuiltAt        time.Time `json:"built_at"`
-	Embedding      []float64 `json:"embedding,omitempty"`
-	EmbeddingModel string    `json:"embedding_model,omitempty"`
-	tokens         []string
+	ID              string    `json:"id"`
+	Cert            string    `json:"cert"`
+	Domain          string    `json:"domain"`
+	Weight          int       `json:"weight"`
+	Title           string    `json:"title"`
+	URL             string    `json:"url"`
+	Text            string    `json:"text"`
+	Hydrated        bool      `json:"hydrated"`
+	BuiltAt         time.Time `json:"built_at"`
+	Embedding       []float64 `json:"embedding,omitempty"`
+	EmbeddingModel  string    `json:"embedding_model,omitempty"`
+	SourceType      string    `json:"source_type,omitempty"`
+	CollectedAt     time.Time `json:"collected_at,omitempty"`
+	DocumentVersion string    `json:"document_version,omitempty"`
+	tokens          []string
 }
 
 type RAGHit struct {
@@ -122,7 +125,7 @@ func WarmRAG(cert, query string) {
 }
 
 func RAGContext(cert, topic, query string, max int) (string, []models.LabChunk) {
-	hits := RAGSearch(cert, strings.TrimSpace(topic+" "+query), max, true)
+	hits := RAGSearchFiltered(cert, topic, strings.TrimSpace(topic+" "+query), max, true)
 	if len(hits) == 0 {
 		return "", nil
 	}
@@ -137,7 +140,36 @@ func RAGContext(cert, topic, query string, max int) (string, []models.LabChunk) 
 	return strings.Join(lines, "\n"), refs
 }
 
+// RAGSearchFiltered applies certification and topic metadata before ranking.
+// When a topic filter is too narrow it falls back to the cert index, preserving
+// useful answers while making the normal path less prone to cross-topic chunks.
+func RAGSearchFiltered(cert, topic, query string, max int, hydrate bool) []RAGHit {
+	hits := RAGSearch(cert, query, max*3, hydrate)
+	if strings.TrimSpace(topic) == "" {
+		if len(hits) > max {
+			return hits[:max]
+		}
+		return hits
+	}
+	filtered := make([]RAGHit, 0, len(hits))
+	needle := normalizeEvidenceText(topic)
+	for _, hit := range hits {
+		if strings.Contains(normalizeEvidenceText(hit.Chunk.Domain+" "+hit.Chunk.Title), needle) || domainMatchesTopic(normalizeEvidenceText(hit.Chunk.Domain), needle) {
+			filtered = append(filtered, hit)
+		}
+	}
+	if len(filtered) == 0 {
+		filtered = hits
+	}
+	if len(filtered) > max {
+		filtered = filtered[:max]
+	}
+	return filtered
+}
+
 func RAGSearch(cert, query string, max int, hydrate bool) []RAGHit {
+	started := time.Now()
+	defer func() { recordTutorLatency("rag.search", time.Since(started), 0, false) }()
 	if max < 1 {
 		max = 3
 	}
@@ -158,6 +190,12 @@ func RAGSearch(cert, query string, max int, hydrate bool) []RAGHit {
 	queryNorm := normalizeEvidenceText(query)
 	var hits []RAGHit
 	for _, c := range idx.Chunks {
+		if c.SourceType == "" {
+			c.SourceType = "official-curriculum"
+		}
+		if c.CollectedAt.IsZero() {
+			c.CollectedAt = c.BuiltAt
+		}
 		if len(c.tokens) == 0 {
 			c.tokens = ragTokens(c.Text + " " + c.Domain + " " + c.Title)
 		}
@@ -427,14 +465,16 @@ func syntheticRAGChunks(cert string) []RAGChunk {
 			u = d.URLs[0]
 		}
 		chunks = append(chunks, RAGChunk{
-			ID:      ragID(cert, d.Domain, u, 0),
-			Cert:    cert,
-			Domain:  d.Domain,
-			Weight:  d.Weight,
-			Title:   d.Domain,
-			URL:     u,
-			Text:    text,
-			BuiltAt: time.Now(),
+			ID:          ragID(cert, d.Domain, u, 0),
+			Cert:        cert,
+			Domain:      d.Domain,
+			Weight:      d.Weight,
+			Title:       d.Domain,
+			URL:         u,
+			Text:        text,
+			BuiltAt:     time.Now(),
+			CollectedAt: time.Now(),
+			SourceType:  "official-curriculum",
 		})
 	}
 	return chunks
@@ -456,15 +496,17 @@ func chunkDocument(cert string, d CurriculumDomain, u, content string, hydrated 
 		}
 		n := len(chunks)
 		chunks = append(chunks, RAGChunk{
-			ID:       ragID(cert, d.Domain, u, n),
-			Cert:     cert,
-			Domain:   d.Domain,
-			Weight:   d.Weight,
-			Title:    sourceTitle(u),
-			URL:      u,
-			Text:     txt,
-			Hydrated: hydrated,
-			BuiltAt:  time.Now(),
+			ID:          ragID(cert, d.Domain, u, n),
+			Cert:        cert,
+			Domain:      d.Domain,
+			Weight:      d.Weight,
+			Title:       sourceTitle(u),
+			URL:         u,
+			Text:        txt,
+			CollectedAt: time.Now(),
+			SourceType:  "official-document",
+			Hydrated:    hydrated,
+			BuiltAt:     time.Now(),
 		})
 	}
 	for _, p := range paras {

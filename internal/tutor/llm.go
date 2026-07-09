@@ -171,6 +171,23 @@ const (
 	tokensGen  = 1200 // geração de quiz a partir de doc (precisa de fôlego)
 )
 
+// Model roles make the latency/quality tradeoff explicit without forcing a
+// particular model family. Empty variables retain the existing auto-selection.
+func chatModel() string {
+	if m := envOr("OLLAMA_CHAT_MODEL", ""); m != "" {
+		return m
+	}
+	_, m := LLMStatus()
+	return m
+}
+
+func routerModel() string {
+	if m := envOr("OLLAMA_ROUTER_MODEL", ""); m != "" {
+		return m
+	}
+	return chatModel()
+}
+
 func numPredict() int {
 	if v := envOr("OLLAMA_NUM_PREDICT", ""); v != "" {
 		n := 0
@@ -195,6 +212,9 @@ func genModel() string {
 // llmGenerate chama o Ollama de forma síncrona (stream=false). maxTokens<=0 usa
 // o default (num_predict/env). model=="" usa o modelo de chat ativo.
 func llmGenerate(prompt string, wantJSON bool, timeout time.Duration, maxTokens int, model string) (string, error) {
+	started := time.Now()
+	failed := true
+	defer func() { recordTutorLatency("llm.generate", time.Since(started), 0, failed) }()
 	ok, active := LLMStatus()
 	if !ok {
 		return "", fmt.Errorf("ollama indisponível")
@@ -231,14 +251,22 @@ func llmGenerate(prompt string, wantJSON bool, timeout time.Duration, maxTokens 
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", err
 	}
+	failed = false
 	return strings.TrimSpace(out.Response), nil
 }
 
 // llmStreamGenerate executa streaming incremental do Ollama quando disponível.
-func llmStreamGenerate(prompt string, wantJSON bool, timeout time.Duration, maxTokens int, onChunk func(string)) error {
-	ok, model := LLMStatus()
+func llmStreamGenerate(prompt string, wantJSON bool, timeout time.Duration, maxTokens int, model string, onChunk func(string)) error {
+	started := time.Now()
+	var firstToken time.Duration
+	failed := true
+	defer func() { recordTutorLatency("llm.stream", time.Since(started), firstToken, failed) }()
+	ok, active := LLMStatus()
 	if !ok {
 		return fmt.Errorf("ollama indisponível")
+	}
+	if model == "" {
+		model = active
 	}
 	if maxTokens <= 0 {
 		maxTokens = numPredict()
@@ -281,6 +309,9 @@ func llmStreamGenerate(prompt string, wantJSON bool, timeout time.Duration, maxT
 		if evt.Response == "" {
 			continue
 		}
+		if firstToken == 0 {
+			firstToken = time.Since(started)
+		}
 		out.WriteString(evt.Response)
 		if onChunk != nil {
 			onChunk(evt.Response)
@@ -289,6 +320,7 @@ func llmStreamGenerate(prompt string, wantJSON bool, timeout time.Duration, maxT
 	if err := scanner.Err(); err != nil {
 		return err
 	}
+	failed = false
 	return nil
 }
 
@@ -301,7 +333,11 @@ func StreamLLMReply(msg string, onChunk func(string)) error {
 		}
 		return nil
 	}
-	return llmStreamGenerate(prompt, false, 60*time.Second, tokensChat, onChunk)
+	err := llmStreamGenerate(prompt, false, 60*time.Second, tokensChat, chatModel(), onChunk)
+	if err == nil && onChunk != nil {
+		onChunk("\n\n" + strings.TrimPrefix(report.AppendVerifiedSources(""), "\n\n"))
+	}
+	return err
 }
 
 func buildChatPrompt(msg string) string {
@@ -351,7 +387,7 @@ Responda SOMENTE com JSON válido nesse formato.
 MATERIAL:
 %s`, cert, n, text)
 
-	raw, err := llmGenerate(prompt, true, 120*time.Second, tokensGen, genModel())
+	raw, err := llmGenerateContract(prompt, "quiz", 120*time.Second, tokensGen, genModel())
 	if err != nil {
 		log.Printf("[tutor/llm] geração falhou: %v", err)
 		return nil

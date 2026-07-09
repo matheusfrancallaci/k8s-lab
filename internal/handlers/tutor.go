@@ -79,6 +79,23 @@ func (h *TutorHandler) Quality(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(tutor.PromptQualityReport()) //nolint:errcheck
 }
 
+// PromoteQualityFixture promotes a reviewed real prompt into durable regression coverage.
+func (h *TutorHandler) PromoteQualityFixture(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var body struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.ID) == "" {
+		json.NewEncoder(w).Encode(map[string]any{"error": "id obrigatorio"})
+		return
+	}
+	if err := tutor.PromotePromptRegression(body.ID); err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"error": "prompt nao encontrado"})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
 // AdminQuality agrega sinais de qualidade para operacao/admin.
 func (h *TutorHandler) AdminQuality(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

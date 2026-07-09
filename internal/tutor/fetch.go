@@ -8,8 +8,77 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
+
+type cachedDocument struct {
+	content, etag string
+	expires       time.Time
+}
+
+var documentCache = struct {
+	sync.Mutex
+	entries map[string]cachedDocument
+}{entries: map[string]cachedDocument{}}
+
+func documentCacheTTL() time.Duration {
+	if n, err := time.ParseDuration(envOr("TUTOR_DOC_CACHE_TTL", "30m")); err == nil && n > 0 {
+		return n
+	}
+	return 30 * time.Minute
+}
+
+func fetchTrustedDocument(u, accept string) (string, error) {
+	started := time.Now()
+	failed := true
+	defer func() { recordTutorLatency("docs.fetch", time.Since(started), 0, failed) }()
+	documentCache.Lock()
+	cached, found := documentCache.entries[u]
+	documentCache.Unlock()
+	if found && time.Now().Before(cached.expires) {
+		failed = false
+		recordTutorLatency("docs.cache_hit", 0, 0, false)
+		return cached.content, nil
+	}
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "k8s-study-lab-tutor/1.0")
+	if accept != "" {
+		req.Header.Set("Accept", accept)
+	}
+	if found && cached.etag != "" {
+		req.Header.Set("If-None-Match", cached.etag)
+	}
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotModified && found {
+		cached.expires = time.Now().Add(documentCacheTTL())
+		documentCache.Lock()
+		documentCache.entries[u] = cached
+		documentCache.Unlock()
+		failed = false
+		return cached.content, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 800*1024))
+	if err != nil {
+		return "", err
+	}
+	content := string(body)
+	documentCache.Lock()
+	documentCache.entries[u] = cachedDocument{content: content, etag: resp.Header.Get("ETag"), expires: time.Now().Add(documentCacheTTL())}
+	documentCache.Unlock()
+	failed = false
+	return content, nil
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Busca de fontes — o tutor lê sozinho: URLs coladas (kubernetes.io, GitHub)
@@ -406,24 +475,7 @@ func fetchRawHTML(u string) (string, error) {
 	if !isTrustedURL(u) {
 		return "", fmt.Errorf("fora do escopo")
 	}
-	req, err := http.NewRequest("GET", u, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("User-Agent", "k8s-study-lab-tutor/1.0")
-	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 800*1024))
-	if err != nil {
-		return "", err
-	}
-	return string(body), nil
+	return fetchTrustedDocument(u, "")
 }
 
 func fetchURL(u string) (string, error) {
@@ -441,33 +493,11 @@ func fetchURL(u string) (string, error) {
 		u = fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s", m[1], m[2], m[3])
 	}
 
-	req, err := http.NewRequest("GET", u, nil)
+	content, err := fetchTrustedDocument(u, accept)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", "k8s-study-lab-tutor/1.0")
-	if accept != "" {
-		req.Header.Set("Accept", accept)
-	}
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 800*1024))
-	if err != nil {
-		return "", err
-	}
-	content := string(body)
-
-	ct := resp.Header.Get("Content-Type")
-	if strings.Contains(ct, "html") || strings.HasPrefix(strings.TrimSpace(content), "<") {
+	if strings.HasPrefix(strings.TrimSpace(content), "<") {
 		content = htmlToText(content)
 	}
 	return content, nil

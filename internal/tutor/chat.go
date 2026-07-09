@@ -548,5 +548,9 @@ func llmChatReply(msg string) (string, error) {
 	if technicalQuestion(msg) && !report.Answerable {
 		return report.Refusal(), nil
 	}
-	return llmGenerate(prompt, false, 60*time.Second, tokensChat, "")
+	reply, err := llmGenerate(prompt, false, 60*time.Second, tokensChat, chatModel())
+	if err != nil {
+		return "", err
+	}
+	return report.AppendVerifiedSources(reply), nil
 }

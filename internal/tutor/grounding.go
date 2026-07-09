@@ -10,20 +10,26 @@ import (
 )
 
 type AnswerabilityReport struct {
-	Answerable bool
-	Confidence int
-	Reason     string
-	Sources    []string
-	Blocked    []string
-	Evidence   string
-	RAG        string
-	Context    string
-	Cert       string
-	Topic      string
-	CheckedAt  string
+	Answerable      bool
+	Confidence      int
+	Reason          string
+	Sources         []string
+	Blocked         []string
+	Evidence        string
+	RAG             string
+	Context         string
+	Cert            string
+	Topic           string
+	CheckedAt       string
+	OfficialSource  bool
+	EvidenceScore   int
+	RAGScore        int
+	TopicRecognized bool
 }
 
 func CheckAnswerability(msg, activeCert string) AnswerabilityReport {
+	started := time.Now()
+	defer func() { recordTutorLatency("grounding.answerability", time.Since(started), 0, false) }()
 	msg = strings.TrimSpace(msg)
 	cert := inferCertFromMessage(msg, activeCert)
 	if cert == "" {
@@ -63,7 +69,15 @@ func CheckAnswerability(msg, activeCert string) AnswerabilityReport {
 		conf = 100
 	}
 
-	answerable := conf >= 45
+	// Technical answers fail closed: a recognized topic alone is never enough.
+	// Volatile requests (versions, releases and current defaults) require a live
+	// trusted source in addition to internal curriculum/RAG evidence.
+	volatile := regexp.MustCompile(`(?i)\b(vers[aã]o|release|atual|latest|hoje|202[0-9]|default)\b`).MatchString(msg)
+	answerable := conf >= 45 && (len(sources) > 0 || (evidence != "" && rag != ""))
+	if volatile && len(sources) == 0 {
+		answerable = false
+		reasons = append(reasons, "pergunta volatil sem fonte oficial atual")
+	}
 	if !technicalQuestion(msg) {
 		answerable = true
 	}
@@ -72,18 +86,69 @@ func CheckAnswerability(msg, activeCert string) AnswerabilityReport {
 		reason = "sem fonte, evidencia ou template confiavel para esse pedido"
 	}
 	return AnswerabilityReport{
-		Answerable: answerable,
-		Confidence: conf,
-		Reason:     reason,
-		Sources:    sources,
-		Blocked:    blocked,
-		Evidence:   evidence,
-		RAG:        rag,
-		Context:    enriched,
-		Cert:       cert,
-		Topic:      topic,
-		CheckedAt:  time.Now().UTC().Format("2006-01-02"),
+		Answerable:      answerable,
+		Confidence:      conf,
+		Reason:          reason,
+		Sources:         sources,
+		Blocked:         blocked,
+		Evidence:        evidence,
+		RAG:             rag,
+		Context:         enriched,
+		Cert:            cert,
+		Topic:           topic,
+		CheckedAt:       time.Now().UTC().Format("2006-01-02"),
+		OfficialSource:  len(sources) > 0,
+		EvidenceScore:   evidenceConfidence(cert, topic, msg+" "+enriched),
+		RAGScore:        bestRAGRelevance(cert, topic, msg+" "+enriched),
+		TopicRecognized: topic != "",
 	}
+}
+
+func evidenceConfidence(cert, topic, text string) int {
+	best := 0
+	for _, evidence := range evidenceForText(cert, topic, text, "", 4) {
+		if evidence.Confidence > best {
+			best = evidence.Confidence
+		}
+	}
+	return best
+}
+
+func bestRAGRelevance(cert, topic, text string) int {
+	best := 0
+	for _, hit := range RAGSearch(cert, topic+" "+text, 3, false) {
+		if hit.Relevance > best {
+			best = hit.Relevance
+		}
+	}
+	return best
+}
+
+func (r AnswerabilityReport) VerifiedSources() []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(u string) {
+		u = strings.TrimSpace(u)
+		if u != "" && isTrustedURL(u) && !seen[u] {
+			seen[u] = true
+			out = append(out, u)
+		}
+	}
+	for _, u := range r.Sources {
+		add(u)
+	}
+	for _, hit := range RAGSearch(r.Cert, r.Topic+" "+r.RAG, 3, false) {
+		add(hit.Chunk.URL)
+	}
+	return out
+}
+
+func (r AnswerabilityReport) AppendVerifiedSources(reply string) string {
+	sources := r.VerifiedSources()
+	if len(sources) == 0 {
+		return strings.TrimSpace(reply) + "\n\nFontes verificadas: nao encontrei uma URL oficial suficiente."
+	}
+	return strings.TrimSpace(reply) + "\n\nFontes verificadas:\n- " + strings.Join(sources, "\n- ")
 }
 
 func (r AnswerabilityReport) Refusal() string {
@@ -128,7 +193,7 @@ REGRAS ANTI-ALUCINACAO:
 - Use somente fatos sustentados pelo contexto, evidencias, RAG ou conhecimento tecnico basico e estavel.
 - Se faltar evidencia para uma parte da pergunta, diga exatamente o que nao foi encontrado.
 - Quando usar inferencia, marque como "Inferencia:".
-- Termine com "Fontes:" listando URLs usadas; se nao houver URL recuperada, escreva "Fontes: base interna/RAG" ou "Fontes: nao encontrei fonte confiavel suficiente".
+- Nao invente nem escreva URLs. Termine com "Fontes: controladas pelo backend"; o backend acrescenta somente fontes verificadas.
 
 ESCOPO: Kubernetes, AKS/Azure, containers, cloud (Azure/AWS/GCP), Terraform/IaC, Linux, redes, DevOps, CI/CD, GitOps/ArgoCD, Helm e programacao. So recuse se fugir totalmente de tecnologia.%s
 

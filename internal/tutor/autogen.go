@@ -235,7 +235,7 @@ REGRAS ESTRITAS:
 Responda SOMENTE JSON válido: {"question":"...","solution":"...","validation":"...","expected":"OK","hint":"...","explanation":"..."}
 `, fam.name, topic, level, fam.promptTail)
 
-	raw, err := llmGenerate(prompt, true, 120*time.Second, tokensGen, genModel())
+	raw, err := llmGenerateContract(prompt, "lab-spec", 120*time.Second, tokensGen, genModel())
 	if err != nil {
 		return labSpec{}, err
 	}

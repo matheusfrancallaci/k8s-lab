@@ -27,6 +27,10 @@ Thumbs.db
 
 # Estado de runtime (progresso do tutor, certs cadastrados, perfis)
 /data/
+!/data/
+/data/*
+!/data/eval/
+!/data/eval/regression_fixtures.json
 
 # Terraform — state e segredos (nunca versionar)
 **/.terraform/

@@ -7,15 +7,21 @@ import (
 )
 
 type GoldenEvalReport struct {
-	Total            int                    `json:"total"`
-	Passed           int                    `json:"passed"`
-	Score            int                    `json:"score"`
-	RegressionTotal  int                    `json:"regression_total"`
-	RegressionPassed int                    `json:"regression_passed"`
-	RegressionScore  int                    `json:"regression_score"`
-	Cases            []GoldenEvalCaseResult `json:"cases"`
-	RegressionCases  []GoldenEvalCaseResult `json:"regression_cases,omitempty"`
-	Quality          PromptQualitySummary   `json:"quality"`
+	Total              int                    `json:"total"`
+	Passed             int                    `json:"passed"`
+	Score              int                    `json:"score"`
+	RegressionTotal    int                    `json:"regression_total"`
+	RegressionPassed   int                    `json:"regression_passed"`
+	RegressionScore    int                    `json:"regression_score"`
+	Cases              []GoldenEvalCaseResult `json:"cases"`
+	RegressionCases    []GoldenEvalCaseResult `json:"regression_cases,omitempty"`
+	Quality            PromptQualitySummary   `json:"quality"`
+	GroundingTotal     int                    `json:"grounding_total"`
+	GroundingPassed    int                    `json:"grounding_passed"`
+	GroundingScore     int                    `json:"grounding_score"`
+	SourceCoverage     int                    `json:"source_coverage"`
+	RefusalCorrectness int                    `json:"refusal_correctness"`
+	GroundingCases     []GoldenEvalCaseResult `json:"grounding_cases,omitempty"`
 }
 
 type GoldenEvalCaseResult struct {
@@ -110,6 +116,40 @@ func RunGoldenEval() GoldenEvalReport {
 	}
 	if report.RegressionTotal > 0 {
 		report.RegressionScore = int(float64(report.RegressionPassed) / float64(report.RegressionTotal) * 100)
+	}
+	report.GroundingCases = RunGroundingRegressionEval()
+	report.GroundingTotal = len(report.GroundingCases)
+	sourceRequired, sourcePassed, refusalRequired, refusalPassed := 0, 0, 0, 0
+	for i, c := range report.GroundingCases {
+		if c.Passed {
+			report.GroundingPassed++
+		}
+		fixture := groundingRegressionFixtures[i]
+		if fixture.WantSources {
+			sourceRequired++
+			if len(c.Sources) > 0 {
+				sourcePassed++
+			}
+		}
+		if !fixture.WantAnswerable {
+			refusalRequired++
+			if c.Passed {
+				refusalPassed++
+			}
+		}
+	}
+	if report.GroundingTotal > 0 {
+		report.GroundingScore = report.GroundingPassed * 100 / report.GroundingTotal
+	}
+	if sourceRequired > 0 {
+		report.SourceCoverage = sourcePassed * 100 / sourceRequired
+	} else {
+		report.SourceCoverage = 100
+	}
+	if refusalRequired > 0 {
+		report.RefusalCorrectness = refusalPassed * 100 / refusalRequired
+	} else {
+		report.RefusalCorrectness = 100
 	}
 	return report
 }
