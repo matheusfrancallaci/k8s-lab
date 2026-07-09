@@ -42,3 +42,6 @@ internal/tutor/data/
 
 # Cache de build local
 .tmp/
+
+# Config pessoal do Claude Code (permissoes locais mudam a cada sessao)
+.claude/settings.local.json
