@@ -23,6 +23,7 @@ param(
   [string]$VmName        = "k8slab-vm",
   [string]$Acr           = "k8slabacrb9ue3",
   [string]$Image         = "estudo-app",
+  [string]$AppUrl        = "https://k8slab-b9ue3.eastus2.cloudapp.azure.com",
   [switch]$AllowDirty
 )
 $ErrorActionPreference = "Stop"
@@ -109,5 +110,20 @@ if ($outStr -notmatch "MATCH") {
 }
 Ok "container 'lab' rodando a imagem de $sha"
 
+Say "Confirmando health e deploy gate remotos"
+$baseUrl = $AppUrl.TrimEnd("/")
+$healthy = $false
+for ($i = 1; $i -le 12; $i++) {
+  try {
+    $health = (Invoke-WebRequest -UseBasicParsing -Uri "$baseUrl/healthz" -TimeoutSec 10).Content.Trim()
+    if ($health -match "ok\s+$sha") { $healthy = $true; break }
+  } catch { }
+  Start-Sleep -Seconds 5
+}
+if (-not $healthy) { Die "healthz remoto nao confirmou o commit $sha" }
+try {
+  $gate = Invoke-RestMethod -Uri "$baseUrl/api/tutor/deploy-gate" -TimeoutSec 30
+  if (-not $gate.passed) { Die ("deploy gate remoto falhou: " + ($gate.blockers -join "; ")) }
+} catch { Die "nao consegui confirmar o deploy gate remoto: $($_.Exception.Message)" }
+Ok "healthz e deploy gate confirmados"
 Say "Deploy concluido do commit $sha"
-Write-Host "  Confira a versao:  https://k8slab-b9ue3.eastus2.cloudapp.azure.com/healthz  (deve mostrar 'ok $sha')"
