@@ -527,6 +527,24 @@ function coachCards(d) {
         }).join('');
         html += `<div class="chat-card"><div class="cc-title">trilha ${escH(chatCert)} · mastery gate</div><div class="mastery-list">${rows}</div></div>`;
     }
+    const cov = d.coverage;
+    if (cov && (cov.domains || []).length) {
+        const rows = cov.domains.map(x => {
+            const has = x.curated > 0;
+            const detail = has
+                ? `${x.curated} curada(s)${x.labs ? ` · ${x.labs} lab(s)` : ''}${x.generated ? ` · +${x.generated} gerada(s)` : ''}`
+                : (x.generated ? `so ${x.generated} gerada(s) — sem nucleo curado` : 'sem conteudo');
+            return `<div class="domain-row">
+                <div class="domain-name">${escH(x.domain)}<span class="domain-sub">peso ${x.weight}% · ${detail}</span></div>
+                <span class="skill-meta" style="color:${has ? 'var(--green)' : 'var(--red)'};">${has ? 'ok' : 'gap'}</span>
+                <div class="skill-bar"><div style="width:${has ? 100 : (x.generated ? 35 : 0)}%;background:${has ? 'var(--green)' : 'var(--amber,#fbbf24)'};"></div></div>
+            </div>`;
+        }).join('');
+        const gaps = (cov.gap_domains || []).length
+            ? `<div style="margin-top:8px;font-size:11px;color:var(--text-3);">⚠ sem conteudo curado: <strong>${cov.gap_domains.map(escH).join(', ')}</strong> — e onde a confianca depende 100% do gerador</div>`
+            : '';
+        html += `<div class="chat-card"><div class="cc-title">cobertura curada · ${escH(chatCert)} — ${cov.curated_pct}% do peso oficial</div>${rows}${gaps}</div>`;
+    }
     const domains = d.domain_map || [];
     if (domains.length) {
         const rows = domains.map(x => {

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"estudo-app/internal/models"
 	"estudo-app/internal/repository"
 	"estudo-app/internal/tutor"
 )
@@ -47,12 +48,23 @@ func (h *TutorHandler) Status(w http.ResponseWriter, r *http.Request) {
 		"domain_map":      tutor.DomainMap(userID(r), cert),
 		"review":          tutor.ReviewQueue(userID(r)),
 		"mastery":         tutor.MasteryPathForCert(userID(r), cert),
+		"coverage":        coverageOrNil(cert, h.repo.Filter([]string{cert}, "")),
 		"rag":             tutor.RAGStatus(),
 		"observability":   tutor.LabObservability(),
 		"gen_topics":      tutor.Topics(),
 		"certs":           tutor.AllCerts(),
 		"llm":             map[string]any{"available": llmOK, "model": llmModel},
 	})
+}
+
+// coverageOrNil evita mandar um relatório vazio para certs sem currículo
+// embutido (o front esconde o card quando vem null).
+func coverageOrNil(cert string, qs []models.Question) any {
+	rep, ok := tutor.CurriculumCoverage(cert, qs)
+	if !ok {
+		return nil
+	}
+	return rep
 }
 
 // Eval roda golden prompts determinísticos contra o roteador/gerador de labs.

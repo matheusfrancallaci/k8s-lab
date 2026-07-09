@@ -9,12 +9,12 @@ import (
 )
 
 var (
-	commandLikeRe       = regexp.MustCompile(`(?i)\b(kubectl|terraform|ansible-playbook|awslocal|javac|java|bash|chmod|grep|awk|sed|cat|mkdir|printf|echo)\b`)
-	numberedStepRe      = regexp.MustCompile(`^\s*(?:\d+[.)]|[-*])\s+`)
-	inlineCommandRe     = regexp.MustCompile("`([^`]+)`")
+	commandLikeRe   = regexp.MustCompile(`(?i)\b(kubectl|terraform|ansible-playbook|awslocal|javac|java|bash|chmod|grep|awk|sed|cat|mkdir|printf|echo)\b`)
+	numberedStepRe  = regexp.MustCompile(`^\s*(?:\d+[.)]|[-*])\s+`)
+	inlineCommandRe = regexp.MustCompile("`([^`]+)`")
 	// O modelo de geração responde em PT ou EN conforme o prompt/documento, então
 	// os cabeçalhos de gabarito precisam ser reconhecidos nos dois idiomas.
-	spoilerHeadingRe = regexp.MustCompile(`(?i)\b(dica|hint|passo a passo|step[\s-]?by[\s-]?step|steps|comando completo|full command|solu[cç][aã]o|solution|gabarito|resposta|answer)\s*:`)
+	spoilerHeadingRe    = regexp.MustCompile(`(?i)\b(dica|hint|passo a passo|step[\s-]?by[\s-]?step|steps|comando completo|full command|solu[cç][aã]o|solution|gabarito|resposta|answer)\s*:`)
 	workspaceHintRe     = regexp.MustCompile(`(?i)\b(cd\s+\$TFLAB|workspace|diret[oó]rio)\b`)
 	fullCommandPrefixRe = regexp.MustCompile(`(?i)^\s*(comando completo|use|execute|rode)\s*:\s*`)
 )
