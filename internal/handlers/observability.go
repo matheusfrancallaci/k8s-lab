@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"estudo-app/internal/tutor"
 	"estudo-app/internal/version"
 )
 
@@ -111,6 +112,11 @@ func MetricsHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "# TYPE app_goroutines gauge\napp_goroutines %d\n", runtime.NumGoroutine())
 	fmt.Fprintf(w, "# HELP go_memstats_heap_alloc_bytes Heap alocado.\n")
 	fmt.Fprintf(w, "# TYPE go_memstats_heap_alloc_bytes gauge\ngo_memstats_heap_alloc_bytes %d\n", m.HeapAlloc)
+	gatePassed, gateFailed := tutor.GateStats()
+	fmt.Fprintf(w, "# HELP app_tutor_gate_passed_total Labs que passaram no quality gate desde o boot.\n")
+	fmt.Fprintf(w, "# TYPE app_tutor_gate_passed_total counter\napp_tutor_gate_passed_total %d\n", gatePassed)
+	fmt.Fprintf(w, "# HELP app_tutor_gate_failed_total Labs barrados no quality gate desde o boot.\n")
+	fmt.Fprintf(w, "# TYPE app_tutor_gate_failed_total counter\napp_tutor_gate_failed_total %d\n", gateFailed)
 }
 
 // statusRecorder captura o status code para métricas/logs (o ResponseWriter não

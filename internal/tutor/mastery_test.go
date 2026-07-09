@@ -83,6 +83,31 @@ func TestMasteryGateDueReviewBlocksMastery(t *testing.T) {
 	}
 }
 
+func TestRetentionCountsOnRepresentation(t *testing.T) {
+	user := "unit-retention"
+	p := resetProfile(t, user)
+
+	q := generateQuestions("Workloads", "CKA", 2, 1)[0]
+
+	// Primeira tentativa (sem revisão pendente): NÃO conta retenção.
+	RecordGoal(user, q, false)
+	p.mu.Lock()
+	s := p.Skills["CKA|"+q.Topic]
+	if s.RetentionHits != 0 || s.RetentionMisses != 0 {
+		p.mu.Unlock()
+		t.Fatalf("primeira tentativa nao e reapresentacao: hits=%d misses=%d", s.RetentionHits, s.RetentionMisses)
+	}
+	// A falha agendou revisão com Due=now — a próxima resposta é reapresentação.
+	p.mu.Unlock()
+
+	RecordGoal(user, q, true)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if s.RetentionHits != 1 {
+		t.Fatalf("acerto em revisao vencida deveria contar retention hit, veio hits=%d misses=%d", s.RetentionHits, s.RetentionMisses)
+	}
+}
+
 func TestAdviseSurfacesDueReviewsFirst(t *testing.T) {
 	user := "unit-advise-review"
 	p := resetProfile(t, user)

@@ -82,6 +82,18 @@ func FinalizeLab(q models.Question, request string) models.Question {
 }
 
 func LabQualityGate(q models.Question) error {
+	err := labQualityGate(q)
+	if q.Type == models.Lab {
+		if err != nil {
+			gateFailed.Add(1)
+		} else {
+			gatePassed.Add(1)
+		}
+	}
+	return err
+}
+
+func labQualityGate(q models.Question) error {
 	if q.Type != models.Lab {
 		return nil
 	}

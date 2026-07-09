@@ -40,6 +40,12 @@ type TopicSkill struct {
 	TotalSecs   int       `json:"total_secs"`
 	Completed   int       `json:"completed"`
 	LastAttempt time.Time `json:"last_attempt"`
+	// Retenção medida: resultado em questão REAPRESENTADA pelo spaced
+	// repetition (a revisão estava vencida quando o aluno respondeu).
+	// É a métrica "reter de verdade" do docs/game-change.md — sem ela o
+	// loop de reforço é fé, não medida.
+	RetentionHits   int `json:"retention_hits,omitempty"`
+	RetentionMisses int `json:"retention_misses,omitempty"`
 }
 
 type ReviewItem struct {
@@ -216,6 +222,15 @@ func RecordGoal(userID string, q models.Question, success bool) {
 		s.FailStreak++
 	}
 	s.Score = s.Score*(1-ewmaAlpha) + v*ewmaAlpha
+	// Reapresentação: se a revisão desta questão estava vencida, este resultado
+	// mede retenção após o intervalo (antes do recordReview reagendar).
+	if item := p.Review[reviewKey(q)]; item != nil && !item.Due.After(now) {
+		if success {
+			s.RetentionHits++
+		} else {
+			s.RetentionMisses++
+		}
+	}
 	p.recordReview(q, success, now)
 	p.scheduleSave()
 }
