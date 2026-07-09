@@ -1,0 +1,72 @@
+name: Deploy (Azure)
+
+# Deploy manual e reproduzível: builda na ACR taggeando com o SHA do commit
+# escolhido + latest, e reinicia o app na VM conferindo o digest. Disparo só
+# manual (workflow_dispatch) — deploy não deve sair sozinho a cada push.
+#
+# Pré-requisitos (uma vez): federated credential (OIDC) para o repo e estes
+# secrets no repositório:
+#   AZURE_CLIENT_ID        (app registration com AcrPush no ACR + Contributor no RG)
+#   AZURE_TENANT_ID
+#   AZURE_SUBSCRIPTION_ID
+# Sem eles o job falha no login — é o scaffold, não roda por acidente.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit/branch/tag a deployar"
+        required: false
+        default: "main"
+
+permissions:
+  id-token: write # OIDC login na Azure
+  contents: read
+
+env:
+  ACR: k8slabacrb9ue3
+  RG: k8slab-rg
+  VM: k8slab-vm
+  IMAGE: estudo-app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: SHA curto
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Login na Azure (OIDC, sem segredo de longa duração)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build na ACR (tag = SHA + latest)
+        run: |
+          az acr build --registry "$ACR" \
+            --image "$IMAGE:${{ steps.sha.outputs.short }}" \
+            --image "$IMAGE:latest" \
+            --build-arg VERSION=${{ steps.sha.outputs.short }} .
+
+      - name: Liga a VM se desalocada
+        run: |
+          power=$(az vm get-instance-view -g "$RG" -n "$VM" \
+            --query "instanceView.statuses[?starts_with(code,'PowerState')].displayStatus" -o tsv)
+          if [ "$power" != "VM running" ]; then az vm start -g "$RG" -n "$VM"; fi
+
+      - name: Restart na VM + confere o digest
+        run: |
+          digest=$(az acr repository show --name "$ACR" \
+            --image "$IMAGE:${{ steps.sha.outputs.short }}" --query digest -o tsv)
+          out=$(az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript \
+            --scripts "az acr login --name $ACR && docker pull $ACR.azurecr.io/$IMAGE:latest && systemctl restart estudo-app.service && sleep 8 && docker inspect --format '{{.Image}}' lab" \
+            --query "value[0].message" -o tsv)
+          echo "$out"
+          echo "$out" | grep -q "$digest" || { echo "::error::digest do container nao bate com o build"; exit 1; }

@@ -1,0 +1,26 @@
+# Backend remoto do Terraform (state em Azure Storage) — RECOMENDADO.
+#
+# Hoje o state vive em terraform.tfstate no disco/repo, o que é frágil (perda,
+# conflito entre máquinas, e o .tfstate pode conter valores sensíveis). Mover
+# para um storage account resolve os três.
+#
+# Para ativar: renomeie para backend.tf, crie o storage abaixo UMA vez, e rode
+# `terraform init -migrate-state` (ele copia o state local para o remoto).
+#
+# Criar o storage (uma vez):
+#   az group create -n tfstate-rg -l eastus2
+#   az storage account create -g tfstate-rg -n k8slabtfstate<sufixo> --sku Standard_LRS --encryption-services blob
+#   az storage container create -n tfstate --account-name k8slabtfstate<sufixo>
+#
+# Depois, remova terraform.tfstate/terraform.tfstate.backup do versionamento:
+#   git rm --cached deploy/azure/terraform.tfstate deploy/azure/terraform.tfstate.backup
+# (o .gitignore já deveria cobri-los daqui pra frente).
+
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "tfstate-rg"
+    storage_account_name = "k8slabtfstate<sufixo>"
+    container_name       = "tfstate"
+    key                  = "k8slab.tfstate"
+  }
+}

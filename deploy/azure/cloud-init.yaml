@@ -41,6 +41,8 @@ write_files:
         --network labnet --name lab \
         -p 127.0.0.1:8080:8080 \
         -e APP_PASSWORD='${app_password}' \
+        -e LOG_FORMAT=json \
+        -e COOKIE_SECURE=1 \
         -e AZURE_MANAGED_IDENTITY=1 \
         -e AZURE_RG='${rg_name}' \
         -e AZURE_REGION='${location}' \

@@ -1,14 +1,20 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"errors"
 	"io/fs"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"estudo-app/internal/handlers"
 	"estudo-app/internal/repository"
@@ -68,6 +74,8 @@ func cloudPage(fs embed.FS) http.HandlerFunc {
 }
 
 func main() {
+	setupLogging()
+
 	repo, err := repository.NewQuestionRepository(questionsFS)
 	if err != nil {
 		log.Fatalf("erro ao carregar questões: %v", err)
@@ -82,7 +90,8 @@ func main() {
 		log.Fatalf("erro ao compilar templates: %v", err)
 	}
 
-	handlers.StartAuthGC() // limpa sessões expiradas periodicamente
+	handlers.LoadAuthSessions() // restaura sessões de login (sobrevive a deploy/restart)
+	handlers.StartAuthGC()      // limpa sessões expiradas periodicamente
 
 	store := repository.NewSessionStore()
 	labSessions := repository.NewLabSessionStore()
@@ -99,6 +108,11 @@ func main() {
 	mux.HandleFunc("GET /register", handlers.RegisterHandler)
 	mux.HandleFunc("POST /register", handlers.RegisterHandler)
 	mux.HandleFunc("GET /logout", handlers.LogoutHandler)
+
+	// Probes de saúde e métricas (públicos — usados por LB/orquestrador/scrape).
+	mux.HandleFunc("GET /healthz", handlers.HealthHandler) // liveness (processo vivo)
+	mux.HandleFunc("GET /readyz", handlers.ReadyHandler)   // readiness (cluster pronto)
+	mux.HandleFunc("GET /metrics", handlers.MetricsHandler)
 
 	// Static files — ETag por conteúdo + revalidação (no-cache). Com "immutable"
 	// o browser servia o CSS/JS ANTIGO após um rebuild (larguras esticadas etc.);
@@ -229,8 +243,67 @@ func main() {
 	if p := os.Getenv("PORT"); p != "" {
 		addr = ":" + p
 	}
-	log.Printf("K8s Study Lab rodando em http://localhost%s", addr)
-	if err := http.ListenAndServe(addr, handlers.RequireAuth(mux)); err != nil {
+
+	// Cadeia de middleware: Recover (panic->500) -> RequestMetrics (conta+loga)
+	// -> RequireAuth (gating) -> mux. Recover fica por fora para capturar panics
+	// de qualquer camada abaixo.
+	root := handlers.Recover(handlers.RequestMetrics(handlers.RequireAuth(mux)))
+
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: root,
+		// ReadHeaderTimeout mata o slow-loris (headers a conta-gotas) sem afetar
+		// WebSocket/SSE — que só começam DEPOIS dos headers. Read/WriteTimeout
+		// ficam 0 de propósito: o terminal (WS) e os streams (SSE do tutor/reset)
+		// são conexões longevas e um WriteTimeout global as cortaria no meio.
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	// Graceful shutdown: no SIGTERM/SIGINT (deploy, `systemctl restart`, Ctrl-C)
+	// para de aceitar conexões novas e dá até 25s para as em andamento drenarem,
+	// em vez de cortar requests/streams no meio.
+	idleClosed := make(chan struct{})
+	go func() {
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+		<-sig
+		slog.Info("sinal de parada recebido — encerrando com graça")
+		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			slog.Warn("shutdown com conexões pendentes", "err", err)
+		}
+		close(idleClosed)
+	}()
+
+	slog.Info("K8s Study Lab no ar", "addr", addr)
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
+	<-idleClosed
+	slog.Info("encerrado")
+}
+
+// setupLogging configura o slog como logger padrão. LOG_FORMAT=json emite JSON
+// estruturado (bom para produção/coleta); qualquer outro valor usa texto legível
+// (dev). O nível vem de LOG_LEVEL (debug|info|warn|error), default info.
+func setupLogging() {
+	level := slog.LevelInfo
+	switch strings.ToLower(os.Getenv("LOG_LEVEL")) {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	}
+	opts := &slog.HandlerOptions{Level: level}
+	var h slog.Handler
+	if strings.EqualFold(os.Getenv("LOG_FORMAT"), "json") {
+		h = slog.NewJSONHandler(os.Stderr, opts)
+	} else {
+		h = slog.NewTextHandler(os.Stderr, opts)
+	}
+	slog.SetDefault(slog.New(h))
 }

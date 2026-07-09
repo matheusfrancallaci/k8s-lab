@@ -11,7 +11,12 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /out/estudo-app .
+# VERSION (git short SHA) injetado no binário via ldflags — cada imagem carrega
+# a versão do commit que a originou (visível no site, /healthz e /metrics).
+ARG VERSION=dev
+RUN CGO_ENABLED=0 GOOS=linux go build \
+        -ldflags "-s -w -X estudo-app/internal/version.Version=${VERSION}" \
+        -o /out/estudo-app .
 
 # ---- runtime: k3s + app ----
 FROM debian:bookworm-slim

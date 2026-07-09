@@ -60,9 +60,49 @@ isolado por pessoa.
 
 ## Atualizar (nova versão do app)
 
+Use o script de redeploy **reproduzível** — ele tagueia a imagem com o git SHA
+(além de `latest`), liga a VM se estiver desalocada, reinicia o app e **confere
+que o digest em produção bate com o build**:
+
+```powershell
+./scripts/redeploy.ps1              # aborta se a working tree estiver suja
+./scripts/redeploy.ps1 -AllowDirty  # deploy de emergência sem commit
+```
+
+Ou pelo CI: dispare o workflow **Deploy (Azure)** (`.github/workflows/deploy.yml`,
+`workflow_dispatch`) escolhendo o commit/tag — requer os secrets de OIDC configurados.
+
+Modo manual (equivalente, sem o script):
+
 ```bash
-az acr build --registry <acr> --image estudo-app:latest .   # rebuild+push
+az acr build --registry <acr> --image estudo-app:<git-sha> --image estudo-app:latest .
 ssh azureuser@<ip> 'sudo systemctl restart estudo-app'      # puxa e reinicia
+```
+
+> **Rollback:** como cada deploy fica taggeado por SHA na ACR, para voltar basta
+> re-taggear um SHA bom como `latest` (`az acr import`/`az acr repository`) e reiniciar.
+
+### Saúde e observabilidade
+
+O app expõe (públicos, sem cookie — para LB/orquestrador/scrape):
+
+- `GET /healthz` — liveness (processo vivo). Barato, não toca no cluster.
+- `GET /readyz` — readiness (503 até o k3s ficar pronto; ~30-90s no boot / pós auto-stop).
+- `GET /metrics` — contadores em formato Prometheus (requests, 4xx/5xx, panics,
+  terminais ativos, goroutines, heap, uptime).
+
+Logs são estruturados; `LOG_FORMAT=json` (já ligado no cloud-init) emite JSON e
+`LOG_LEVEL` ajusta o nível. O restart é **graceful**: no `systemctl restart` o app
+drena as conexões em andamento (até 25s) antes de sair.
+
+### Backup do progresso
+
+O volume `lab-data` (progresso, `users.json`, `sessions.json`) vive numa VM só —
+faça backup periódico:
+
+```powershell
+./scripts/backup-lab-data.ps1                                   # tar.gz na VM
+./scripts/backup-lab-data.ps1 -StorageAccount <conta>           # + sobe pra blob (DR real)
 ```
 
 ## Custo (ordem de grandeza)
@@ -82,3 +122,22 @@ ssh azureuser@<ip> 'sudo systemctl restart estudo-app'      # puxa e reinicia
 - **Labs compartilham o cluster**: nesta instância única, o k3s é um só. Ótimo para
   quiz/teoria/tutor (isolados por perfil); para hands-on simultâneo pesado, cada
   pessoa idealmente roda a própria imagem local (`make docker-run`).
+- **State do Terraform remoto**: hoje o `terraform.tfstate` é local (frágil e pode
+  conter valores sensíveis). Veja `backend.tf.example` para migrar para um Azure
+  Storage (`terraform init -migrate-state`).
+
+## Limitações arquiteturais conhecidas (dívida técnica)
+
+Assumidas de propósito para manter o custo/complexidade baixos numa instância entre
+amigos. Reavaliar ao virar produto de verdade:
+
+- **Container `--privileged` = raiz do host.** O app, o k3s e o cluster-admin rodam
+  no mesmo container privilegiado; comprometer o processo do app é ter root na VM. O
+  hardening multi-tenant (namespaces `lab-<user>` com admin *namespaced*) limita o que
+  um usuário faz *no cluster*, mas não muda o fato de o processo ser privilegiado.
+  Mitigação real exigiria separar o app (não privilegiado) do runtime de cluster —
+  refactor grande, fora do escopo desta instância.
+- **Ponto único de falha.** Uma VM, um container, um volume. Sem HA. Um `az vm start`
+  frio + pull do modelo Ollama deixa o **primeiro acesso pós auto-stop lento**
+  (cold start); o `/readyz` sinaliza quando o cluster está de fato pronto. Para um
+  produto: múltiplas réplicas atrás de um LB e storage gerenciado para o estado.

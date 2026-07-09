@@ -9,9 +9,11 @@ import (
 
 	"estudo-app/internal/models"
 	"estudo-app/internal/repository"
+	"estudo-app/internal/version"
 )
 
 var funcMap = template.FuncMap{
+	"appVersion": version.Short,
 	"not":        func(b bool) bool { return !b },
 	"join":       func(s []string, sep string) string { return strings.Join(s, sep) },
 	"add":        func(a, b int) int { return a + b },

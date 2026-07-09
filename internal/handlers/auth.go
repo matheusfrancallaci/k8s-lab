@@ -120,6 +120,61 @@ func appPassword() string { return os.Getenv("APP_PASSWORD") }
 
 func usersFile() string { return filepath.Join("data", "users.json") }
 
+// ─── Persistência das sessões de login ───────────────────────────────────────
+// Sem isto, um restart do processo esvazia o mapa em memória e DESLOGA todo
+// mundo — inaceitável num produto que reinicia a cada deploy. Persistimos o
+// mapa token->sessão em disco (0600, junto do users.json) e recarregamos no
+// boot, descartando o que já expirou.
+
+func sessionsFile() string { return filepath.Join("data", "sessions.json") }
+
+type persistedSession struct {
+	User      string    `json:"user"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// LoadAuthSessions recarrega as sessões válidas do disco no boot. Chamado uma
+// vez no start (antes de servir tráfego).
+func LoadAuthSessions() {
+	b, err := os.ReadFile(sessionsFile())
+	if err != nil {
+		return
+	}
+	var doc map[string]persistedSession
+	if json.Unmarshal(b, &doc) != nil {
+		return
+	}
+	now := time.Now()
+	authMu.Lock()
+	for tok, s := range doc {
+		if now.Before(s.ExpiresAt) {
+			authSessions[tok] = session{user: s.User, expiresAt: s.ExpiresAt}
+		}
+	}
+	authMu.Unlock()
+}
+
+// persistSessions grava o mapa atual em disco. Tira um snapshot sob o lock e
+// escreve fora dele (não segura authMu durante o I/O). Logins/logouts são raros,
+// então gravar o arquivo inteiro a cada mutação é barato.
+func persistSessions() {
+	authMu.Lock()
+	snap := make(map[string]persistedSession, len(authSessions))
+	for tok, s := range authSessions {
+		snap[tok] = persistedSession{User: s.user, ExpiresAt: s.expiresAt}
+	}
+	authMu.Unlock()
+
+	if err := os.MkdirAll("data", 0o755); err != nil {
+		return
+	}
+	b, err := json.Marshal(snap)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(sessionsFile(), b, 0o600)
+}
+
 func ensureUsers() { usersOnce.Do(loadUsers) }
 
 func loadUsers() {
@@ -188,6 +243,7 @@ func setSessionCookie(w http.ResponseWriter, username string) bool {
 	authMu.Lock()
 	authSessions[token] = session{user: username, expiresAt: time.Now().Add(sessionTTL)}
 	authMu.Unlock()
+	persistSessions() // sobrevive a restart/deploy
 	http.SetCookie(w, &http.Cookie{
 		Name: "k8slab_auth", Value: token, Path: "/",
 		HttpOnly: true, Secure: cookieSecure(), SameSite: http.SameSiteLaxMode,
@@ -209,12 +265,17 @@ func StartAuthGC() {
 		for range ticker.C {
 			now := time.Now()
 			authMu.Lock()
+			removed := 0
 			for tok, s := range authSessions {
 				if now.After(s.expiresAt) {
 					delete(authSessions, tok)
+					removed++
 				}
 			}
 			authMu.Unlock()
+			if removed > 0 {
+				persistSessions() // remove do disco os que expiraram
+			}
 		}
 	}()
 }
@@ -310,6 +371,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		authMu.Lock()
 		delete(authSessions, c.Value)
 		authMu.Unlock()
+		persistSessions()
 	}
 	http.SetCookie(w, &http.Cookie{Name: "k8slab_auth", Value: "", Path: "/", MaxAge: -1})
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -318,9 +380,14 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 // RequireAuth protege todas as rotas quando APP_PASSWORD está definido.
 func RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Login, registro, assets e o endpoint de ociosidade são públicos.
-		if appPassword() == "" || r.URL.Path == "/login" || r.URL.Path == "/register" ||
-			r.URL.Path == "/api/idle" || strings.HasPrefix(r.URL.Path, "/static/") {
+		// Login, registro, assets, probes (health/ready/metrics) e o endpoint de
+		// ociosidade são públicos (load balancer / auto-stop os consultam sem cookie).
+		switch r.URL.Path {
+		case "/login", "/register", "/api/idle", "/healthz", "/readyz", "/metrics":
+			next.ServeHTTP(w, r)
+			return
+		}
+		if appPassword() == "" || strings.HasPrefix(r.URL.Path, "/static/") {
 			next.ServeHTTP(w, r)
 			return
 		}
