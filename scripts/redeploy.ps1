@@ -75,6 +75,9 @@ sleep 10
 want=`$(docker inspect --format '{{.Id}}' $Acr.azurecr.io/${Image}:latest)
 got=`$(docker inspect --format '{{.Image}}' lab)
 if [ "`$want" = "`$got" ]; then echo "MATCH `$got"; else echo "MISMATCH want=`$want got=`$got"; fi
+# A imagem recem-substituida ficou orfa — limpa JA, nao no proximo deploy.
+# Rollback continua a um pull de distancia (a ACR guarda todas as tags por SHA).
+docker image prune -af >/dev/null 2>&1 || true
 "@
 $tmp = New-TemporaryFile
 Set-Content -Path $tmp -Value $remote -Encoding ascii
