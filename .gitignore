@@ -36,3 +36,9 @@ Thumbs.db
 !*.tfvars.example
 .terraform.lock.hcl
 crash.log
+
+# Estado runtime (perfis do tutor gravados por testes/app)
+internal/tutor/data/
+
+# Cache de build local
+.tmp/
