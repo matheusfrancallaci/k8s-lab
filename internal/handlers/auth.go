@@ -383,7 +383,7 @@ func RequireAuth(next http.Handler) http.Handler {
 		// Login, registro, assets, probes (health/ready/metrics) e o endpoint de
 		// ociosidade são públicos (load balancer / auto-stop os consultam sem cookie).
 		switch r.URL.Path {
-		case "/login", "/register", "/api/idle", "/healthz", "/readyz", "/metrics":
+		case "/login", "/register", "/api/idle", "/healthz", "/readyz", "/metrics", "/api/tutor/deploy-gate":
 			next.ServeHTTP(w, r)
 			return
 		}
