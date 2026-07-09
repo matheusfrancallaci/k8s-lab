@@ -10,12 +10,14 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"estudo-app/internal/models"
 	"estudo-app/internal/tutor"
 
 	"github.com/gorilla/websocket"
@@ -142,6 +144,15 @@ unset PROMPT_COMMAND
 # Workspace dos labs de IaC (Terraform), isolado por usuário. Use: cd $TFLAB/<lab>
 export TFLAB="$HOME/tflab/${LAB_USER:-default}"
 mkdir -p "$TFLAB" 2>/dev/null
+[ -f /usr/share/bash-completion/bash_completion ] && . /usr/share/bash-completion/bash_completion
+source <(kubectl completion bash) 2>/dev/null
+alias k=kubectl
+complete -o default -F __start_kubectl kubectl 2>/dev/null
+complete -o default -F __start_kubectl k 2>/dev/null
+bind 'set show-all-if-ambiguous on' 2>/dev/null
+bind 'set completion-ignore-case on' 2>/dev/null
+alias kdefault='kubectl config set-context --current --namespace=default >/dev/null && echo namespace=default'
+[ -n "$LAB_NAMESPACE" ] && alias klab='kubectl config set-context --current --namespace="$LAB_NAMESPACE" >/dev/null && echo namespace="$LAB_NAMESPACE"'
 PS1='\[\e[38;2;129;140;248m\]\[\e[1m\]⎈ k8s\[\e[0m\] \[\e[38;2;52;211;153m\]\w\[\e[0m\] \[\e[38;2;129;140;248m\]❯\[\e[0m\] '
 cd ~ 2>/dev/null
 clear
@@ -178,26 +189,266 @@ func cloudShellImage() string { return envOr("CLOUD_SHELL_IMAGE", "alpine/k8s:1.
 
 // cloudShellTarget resolve o alvo do shell dentro do cluster para um usuário.
 // Multi-user (APP_PASSWORD): cada conta ganha o PRÓPRIO pod num namespace
-// isolado (lab-<user>) com permissão de admin RESTRITA a esse namespace — sem
-// cluster-admin compartilhado. Isso casa com a validação de labs, que também
-// roda contra lab-<user> (ver namespace.go). Uso local/sem-login cai no pod
-// único de sistema com cluster-admin (single-tenant, sem risco cruzado).
+// isolado (lab-<user>) e RBAC namespaced para os namespaces usados pelos labs.
+// Não damos cluster-admin compartilhado para usuário autenticado. Uso local/sem
+// login cai no pod único de sistema com cluster-admin (single-tenant).
 func cloudShellTarget(uid string) (ns, pod, sa string, scoped bool) {
 	id := tutor.SanitizeID(uid)
 	if appPassword() == "" || id == "" || id == "default" {
 		return cloudShellSystemNS, cloudShellSystemPod, "lab-admin", false
 	}
-	return "lab-" + id, "lab-shell-" + id, "lab-user", true
+	return userLabNamespace(uid), "lab-shell-" + id, "lab-user", true
+}
+
+type cloudShellAccess struct {
+	Namespace       string
+	ClusterRole     string
+	EnsureNamespace bool
+}
+
+type cloudShellClusterAccess struct {
+	Name      string
+	Resources []string
+	Verbs     []string
+}
+
+type cloudShellAccessPlan struct {
+	Namespaces []cloudShellAccess
+	Cluster    []cloudShellClusterAccess
+}
+
+var (
+	labNSFlagRe   = regexp.MustCompile(`(?i)(?:^|\s)(?:-n|--namespace)\s+([a-z0-9]([-a-z0-9]*[a-z0-9])?)\b`)
+	labNSEqRe     = regexp.MustCompile(`(?i)(?:^|\s)--namespace=([a-z0-9]([-a-z0-9]*[a-z0-9])?)\b`)
+	labCreateNSRe = regexp.MustCompile(`(?i)\bkubectl\s+create\s+(?:ns|namespace)\s+([a-z0-9]([-a-z0-9]*[a-z0-9])?)\b`)
+)
+
+func cloudShellAccessRules(userNS string, q *models.Question) []cloudShellAccess {
+	return cloudShellAccessPlanFor(userNS, q).Namespaces
+}
+
+func cloudShellAccessPlanFor(userNS string, q *models.Question) cloudShellAccessPlan {
+	rules := []cloudShellAccess{
+		{Namespace: userNS, ClusterRole: "admin", EnsureNamespace: true},
+		{Namespace: labCommandNamespace, ClusterRole: "admin"},
+	}
+	var cluster []cloudShellClusterAccess
+	text := cloudShellAccessText(q)
+	if containsAny(text, "aws", "s3", "sqs", "iam", "localstack", "awslocal", "terraform", "tofu") {
+		rules = append(rules, cloudShellAccess{Namespace: "tools", ClusterRole: "admin", EnsureNamespace: true})
+	}
+	if containsAny(text, "argocd", "argo cd", "argo-cd", "gitops", "capa", "application", "applications.argoproj.io") {
+		rules = append(rules, cloudShellAccess{Namespace: "argocd", ClusterRole: "admin", EnsureNamespace: true})
+	}
+	if containsAny(text, "hpa", "horizontalpodautoscaler", "metrics-server", "metrics.k8s.io", "kube-system") {
+		rules = append(rules, cloudShellAccess{Namespace: "kube-system", ClusterRole: "view"})
+	}
+	if containsAny(text, "ingress-nginx", "ingress controller") {
+		rules = append(rules, cloudShellAccess{Namespace: "ingress-nginx", ClusterRole: "view"})
+	}
+	for _, ns := range labNamespacesFromText(text) {
+		if ns == labCommandNamespace || ns == userNS || ns == "kube-system" || ns == "ingress-nginx" {
+			continue
+		}
+		rules = append(rules, cloudShellAccess{Namespace: ns, ClusterRole: "admin", EnsureNamespace: true})
+	}
+	if containsAny(text, "namespace", "namespaces", "create ns", "create namespace", "kubectl get ns", "kubectl get namespace") {
+		cluster = append(cluster, cloudShellClusterAccess{
+			Name:      "namespace-editor",
+			Resources: []string{"namespaces"},
+			Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+		})
+	}
+	if containsAny(text, "node", "nodes", "cordon", "drain", "top node", "kubectl get nodes") {
+		cluster = append(cluster, cloudShellClusterAccess{
+			Name:      "node-reader",
+			Resources: []string{"nodes", "nodes/status"},
+			Verbs:     []string{"get", "list", "watch"},
+		})
+	}
+	if containsAny(text, "storageclass", "storage class", "persistentvolume ", " persistent volume", " pv ") {
+		cluster = append(cluster, cloudShellClusterAccess{
+			Name:      "storage-reader",
+			Resources: []string{"storageclasses", "persistentvolumes"},
+			Verbs:     []string{"get", "list", "watch"},
+		})
+	}
+	out := make([]cloudShellAccess, 0, len(rules))
+	seen := map[string]bool{}
+	for _, r := range rules {
+		if r.Namespace == "" || seen[r.Namespace] {
+			continue
+		}
+		seen[r.Namespace] = true
+		out = append(out, r)
+	}
+	return cloudShellAccessPlan{Namespaces: out, Cluster: uniqueClusterAccess(cluster)}
+}
+
+func cloudShellAccessText(q *models.Question) string {
+	if q == nil {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(string(q.Cert))
+	b.WriteByte(' ')
+	b.WriteString(q.Topic)
+	b.WriteByte(' ')
+	b.WriteString(q.Question)
+	b.WriteByte(' ')
+	b.WriteString(q.AnswerCommand)
+	if q.Validation != nil {
+		b.WriteByte(' ')
+		b.WriteString(q.Validation.Command)
+	}
+	for _, s := range q.Setup {
+		b.WriteByte(' ')
+		b.WriteString(s.Description)
+		b.WriteByte(' ')
+		b.WriteString(s.Command)
+	}
+	for _, g := range q.Goals {
+		b.WriteByte(' ')
+		b.WriteString(g.Description)
+		if g.Validation != nil {
+			b.WriteByte(' ')
+			b.WriteString(g.Validation.Command)
+		}
+	}
+	for _, s := range q.Teardown {
+		b.WriteByte(' ')
+		b.WriteString(s)
+	}
+	if q.LabSpec != nil {
+		b.WriteByte(' ')
+		b.WriteString(q.LabSpec.Objective)
+		b.WriteByte(' ')
+		b.WriteString(q.LabSpec.Scenario)
+		for _, d := range q.LabSpec.Dependencies {
+			b.WriteByte(' ')
+			b.WriteString(d.Name)
+			b.WriteByte(' ')
+			b.WriteString(d.Kind)
+			b.WriteByte(' ')
+			b.WriteString(d.InstallAction)
+			b.WriteByte(' ')
+			b.WriteString(d.StatusCommand)
+		}
+		for _, e := range q.LabSpec.Evidence {
+			b.WriteByte(' ')
+			b.WriteString(e.Domain)
+		}
+		for _, c := range q.LabSpec.Chunks {
+			b.WriteByte(' ')
+			b.WriteString(c.Domain)
+			b.WriteByte(' ')
+			b.WriteString(c.Title)
+		}
+	}
+	return strings.ToLower(b.String())
+}
+
+func labNamespacesFromText(text string) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(ns string) {
+		ns = strings.Trim(strings.ToLower(ns), "`'\".,;:()[]{}")
+		if ns == "" || seen[ns] {
+			return
+		}
+		seen[ns] = true
+		out = append(out, ns)
+	}
+	for _, re := range []*regexp.Regexp{labNSFlagRe, labNSEqRe, labCreateNSRe} {
+		for _, m := range re.FindAllStringSubmatch(text, -1) {
+			if len(m) > 1 {
+				add(m[1])
+			}
+		}
+	}
+	return out
+}
+
+func containsAny(text string, terms ...string) bool {
+	for _, term := range terms {
+		if strings.Contains(text, term) {
+			return true
+		}
+	}
+	return false
+}
+
+func uniqueClusterAccess(in []cloudShellClusterAccess) []cloudShellClusterAccess {
+	out := make([]cloudShellClusterAccess, 0, len(in))
+	seen := map[string]bool{}
+	for _, r := range in {
+		if r.Name == "" || seen[r.Name] {
+			continue
+		}
+		seen[r.Name] = true
+		out = append(out, r)
+	}
+	return out
+}
+
+func cloudShellRoleBindingName(userNS, targetNS string) string {
+	id := strings.TrimPrefix(tutor.SanitizeID(userNS), "lab-")
+	name := "lab-shell-" + id + "-" + tutor.SanitizeID(targetNS)
+	if len(name) > 63 {
+		name = name[:63]
+	}
+	return strings.TrimRight(name, "-")
+}
+
+func cloudShellClusterRoleName(userNS, name string) string {
+	id := strings.TrimPrefix(tutor.SanitizeID(userNS), "lab-")
+	out := "lab-shell-" + id + "-" + tutor.SanitizeID(name)
+	if len(out) > 63 {
+		out = out[:63]
+	}
+	return strings.TrimRight(out, "-")
+}
+
+func cloudShellNamespaceAccessScript(userNS, sa string, q *models.Question) string {
+	var parts []string
+	parts = append(parts,
+		fmt.Sprintf("kubectl create namespace %[1]s 2>/dev/null; kubectl -n %[1]s create serviceaccount %[2]s 2>/dev/null", userNS, sa))
+	plan := cloudShellAccessPlanFor(userNS, q)
+	for _, r := range plan.Namespaces {
+		if r.EnsureNamespace {
+			parts = append(parts, fmt.Sprintf("kubectl create namespace %s 2>/dev/null", r.Namespace))
+		}
+		parts = append(parts, fmt.Sprintf(
+			"kubectl -n %s create rolebinding %s --clusterrole=%s --serviceaccount=%s:%s 2>/dev/null",
+			r.Namespace, cloudShellRoleBindingName(userNS, r.Namespace), r.ClusterRole, userNS, sa))
+	}
+	for _, r := range plan.Cluster {
+		name := cloudShellClusterRoleName(userNS, r.Name)
+		parts = append(parts, fmt.Sprintf(
+			"kubectl create clusterrole %s --verb=%s --resource=%s 2>/dev/null",
+			name, strings.Join(r.Verbs, ","), strings.Join(r.Resources, ",")))
+		parts = append(parts, fmt.Sprintf(
+			"kubectl create clusterrolebinding %s --clusterrole=%s --serviceaccount=%s:%s 2>/dev/null",
+			name, name, userNS, sa))
+	}
+	return strings.Join(parts, "; ") + "; "
+}
+
+func ensureCloudShellNamespaceAccess(userNS, sa string, q *models.Question) {
+	if userNS == "" || sa == "" {
+		return
+	}
+	wslShell(cloudShellNamespaceAccessScript(userNS, sa, q)).Run()
 }
 
 // cloudShellRC gera o rcfile do bash dentro do pod, com o namespace default
-// alinhado ao alvo do usuário. Responsabilidades críticas:
-//  1. kubeconfig próprio com o namespace certo — o in-cluster config usaria o ns
-//     do ServiceAccount, fazendo terminal e validação divergirem;
+// alinhado ao comportamento dos labs. Responsabilidades críticas:
+//  1. kubeconfig próprio usando default como namespace atual — o in-cluster config
+//     usaria o namespace do ServiceAccount, fazendo terminal e validação divergirem;
 //  2. tokenFile (não token estático) — tokens de SA expiram, o arquivo é rotacionado;
 //  3. completion de verdade: exige o pacote bash-completion (instalado no provisionamento).
 func cloudShellRC(ns string) string {
-	return `# kubeconfig alinhado com as validações do lab (namespace ` + ns + `)
+	return `# kubeconfig alinhado com as validacoes do lab (namespace ` + labCommandNamespace + `)
 if [ ! -f /tmp/.labkube ]; then
 cat > /tmp/.labkube <<'KCFG'
 apiVersion: v1
@@ -216,18 +467,26 @@ contexts:
   context:
     cluster: incluster
     user: sa
-    namespace: ` + ns + `
+    namespace: ` + labCommandNamespace + `
 current-context: incluster
 KCFG
 fi
 export KUBECONFIG=/tmp/.labkube
+export LAB_NAMESPACE="` + ns + `"
+export LAB_DEFAULT_NAMESPACE="` + labCommandNamespace + `"
 # completion (kubectl + alias k) — precisa do pacote bash-completion
 [ -f /usr/share/bash-completion/bash_completion ] && . /usr/share/bash-completion/bash_completion
 source <(kubectl completion bash) 2>/dev/null
 alias k=kubectl
+complete -o default -F __start_kubectl kubectl 2>/dev/null
 complete -o default -F __start_kubectl k 2>/dev/null
+bind 'set show-all-if-ambiguous on' 2>/dev/null
+bind 'set completion-ignore-case on' 2>/dev/null
+alias kdefault='kubectl config set-context --current --namespace=` + labCommandNamespace + ` >/dev/null && echo namespace=` + labCommandNamespace + `'
+alias klab='kubectl config set-context --current --namespace=` + ns + ` >/dev/null && echo namespace=` + ns + `'
+__lab_ns(){ kubectl config view --minify -o jsonpath='{..namespace}' 2>/dev/null || printf ` + labCommandNamespace + `; }
 export KUBE_EDITOR=vim
-PS1='\[\e[38;2;56;189;248m\]\[\e[1m\]☁ aks\[\e[0m\]\[\e[38;2;107;114;128m\]·` + ns + `\[\e[0m\] \[\e[38;2;52;211;153m\]\w\[\e[0m\] \[\e[38;2;56;189;248m\]❯\[\e[0m\] '
+PS1='\[\e[38;2;56;189;248m\]\[\e[1m\]☁ aks\[\e[0m\]\[\e[38;2;107;114;128m\]·$(__lab_ns)\[\e[0m\] \[\e[38;2;52;211;153m\]\w\[\e[0m\] \[\e[38;2;56;189;248m\]❯\[\e[0m\] '
 cd 2>/dev/null
 `
 }
@@ -237,6 +496,11 @@ cd 2>/dev/null
 // progresso ao terminal do usuário. Devolve (ns, pod) do shell provisionado.
 func ensureCloudShellPod(uid string, report func(string)) (string, string, error) {
 	ns, pod, sa, scoped := cloudShellTarget(uid)
+	active, hasActive := tutor.ActiveQuestion(uid)
+	var activeLab *models.Question
+	if hasActive {
+		activeLab = &active
+	}
 
 	// Prova de vida real: exec de verdade, não o phase do etcd. Após um
 	// stop/start do AKS o pod pode ficar órfão (preso a um nó que foi
@@ -261,13 +525,11 @@ func ensureCloudShellPod(uid string, report func(string)) (string, string, error
 			_ = ensureNamespace(ns)
 		}
 
-		// RBAC: escopo namespaced (admin no próprio ns) em multi-user; cluster-admin
-		// só no pod de sistema single-tenant. O clusterrole "admin" é embutido no k8s.
+		// RBAC: escopo namespaced em multi-user; cluster-admin só no pod de
+		// sistema single-tenant. O clusterrole "admin" é embutido no k8s.
 		var bind string
 		if scoped {
-			bind = fmt.Sprintf(
-				"kubectl -n %[1]s create rolebinding lab-shell-admin --clusterrole=admin --serviceaccount=%[1]s:%[2]s 2>/dev/null; ",
-				ns, sa)
+			bind = cloudShellNamespaceAccessScript(ns, sa, activeLab)
 		} else {
 			bind = fmt.Sprintf(
 				"kubectl create clusterrolebinding lab-shell-admin --clusterrole=cluster-admin --serviceaccount=%s:%s 2>/dev/null; ",
@@ -285,13 +547,16 @@ func ensureCloudShellPod(uid string, report func(string)) (string, string, error
 			return ns, pod, fmt.Errorf("pod do shell não ficou pronto: %s", strings.TrimSpace(string(out)))
 		}
 	}
+	if scoped {
+		ensureCloudShellNamespaceAccess(ns, sa, activeLab)
+	}
 
 	// Sempre garante rcfile + vim + bash-completion — idempotente e barato;
 	// cobre pod recém-criado E pod de sessão anterior (fast path).
 	// Nenhum dos dois vem na imagem alpine/k8s; sem bash-completion o
 	// autocomplete do kubectl simplesmente não funciona.
 	wslShell(fmt.Sprintf(
-		"kubectl -n %s exec %s -- sh -c 'which vim >/dev/null 2>&1 && [ -f /usr/share/bash-completion/bash_completion ] || apk add --no-cache vim bash-completion >/dev/null 2>&1' &",
+		"kubectl -n %s exec %s -- sh -c 'which vim >/dev/null 2>&1 && [ -f /usr/share/bash-completion/bash_completion ] || apk add --no-cache vim bash-completion >/dev/null 2>&1'",
 		ns, pod)).Run()
 
 	// Grava o rcfile dentro do pod via base64 (evita inferno de escaping).
@@ -501,8 +766,11 @@ func TerminalWS(w http.ResponseWriter, r *http.Request) {
 		shellCmd = "bash -c \"exec bash --rcfile ~/.k8slab_rc -i\""
 		// LAB_USER isola o workspace dos labs de IaC ($TFLAB no rcfile).
 		shellCmd = "LAB_USER=" + tutor.SanitizeID(uid) + " " + shellCmd
-		// Multi-user: o terminal do usuário aponta para o namespace lab-<user>,
-		// isolando os recursos que ele criar dos demais.
+		if ns := userLabNamespace(uid); ns != "" {
+			shellCmd = "LAB_NAMESPACE=" + ns + " " + shellCmd
+		}
+		// Multi-user: kubeconfig dedicado, mas namespace atual = default para
+		// casar com os labs de prova; LAB_NAMESPACE guarda o namespace privado.
 		if kc := userKubeconfig(uid); kc != "" {
 			shellCmd = "KUBECONFIG=" + kc + " " + shellCmd
 		}
@@ -538,7 +806,7 @@ func TerminalWS(w http.ResponseWriter, r *http.Request) {
 						strings.Contains(chunk, "error: unknown command") ||
 						strings.Contains(chunk, "error: exactly one") ||
 						strings.Contains(chunk, "Error: unknown flag")) {
-					tutor.RecordTermError(uid)
+					tutor.RecordTermErrorText(uid, chunk)
 					lastErrAt = time.Now()
 				}
 				if wErr := conn.WriteMessage(websocket.BinaryMessage, buf[:n]); wErr != nil {

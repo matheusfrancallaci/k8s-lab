@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="LocalStack">
+  <rect width="64" height="64" rx="12" fill="#101827"/>
+  <path fill="#22d3ee" d="M17 18.5 32 10l15 8.5L32 27 17 18.5Z"/>
+  <path fill="#818cf8" d="M17 29.4 32 21l15 8.4L32 38 17 29.4Z" opacity=".9"/>
+  <path fill="#34d399" d="M17 40.3 32 32l15 8.3L32 49 17 40.3Z"/>
+  <path fill="#e5e7eb" d="M32 27v11l15-8.6V18.5L32 27Z" opacity=".22"/>
+</svg>

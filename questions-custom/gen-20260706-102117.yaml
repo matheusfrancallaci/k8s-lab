@@ -1,0 +1,47 @@
+questions:
+    - id: custom-c7da2c20
+      cert: CKA
+      topic: X
+      difficulty: mid
+      type: lab
+      question: |-
+        Da documentação: execute a operação abaixo e confira o resultado.
+
+        `kubectl apply -f https://k8s.io/examples/controllers/nginx-deployment.yaml`
+
+        Dica: leia cada flag antes de rodar.
+      options: []
+      answer: 0
+      explanation: "Exercício gerado da sua documentação. Pratique até reproduzir sem olhar a dica.\n\n\U0001F4CD Onde a fonte diz isso (https://kubernetes.io/docs/concepts/workloads/controllers/deployment/):\n“kubectl apply -f https://k8s.io/examples/controllers/nginx-deployment.yaml”"
+      doc_url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+      doc_section: Fonte lida pelo tutor
+      hint: kubectl apply -f https://k8s.io/examples/controllers/nginx-deployment.yaml
+      answer_command: kubectl apply -f https://k8s.io/examples/controllers/nginx-deployment.yaml
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-51861cfb
+      cert: CKA
+      topic: X
+      difficulty: mid
+      type: multiple_choice
+      question: Quais são os componentes principais de um Deployment?
+      options:
+        - ReplicaSets
+        - Pods
+        - etcd
+        - kube-scheduler
+      answer: 1
+      explanation: |-
+        Os Deployments criam ReplicaSets que gerenciam Pods. O kube-scheduler é responsável por decidir em qual nó um pod novo será executado.
+
+        (gerada pela IA local a partir da sua documentação)
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []

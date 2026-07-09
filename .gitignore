@@ -14,6 +14,9 @@
 *.test
 *.out
 coverage.*
+/node_modules/
+/playwright-report/
+/test-results/
 
 # IDE / OS
 .DS_Store

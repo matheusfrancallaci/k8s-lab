@@ -96,6 +96,22 @@ var toolCatalog = []toolDef{
 		},
 	},
 	{
+		ID: "localstack", Name: "LocalStack", Icon: "AWS", Scope: "cluster",
+		Desc:    "emulador de AWS dentro do cluster para labs de S3, SQS, IAM e STS sem credenciais reais",
+		After:   "use nos labs AWS: kubectl -n tools exec deploy/localstack -- awslocal s3 ls",
+		check:   "kubectl get deploy localstack -n tools -o name 2>/dev/null",
+		checkNS: "tools", checkDeploy: "localstack",
+		steps: []toolStep{
+			{Desc: "Criando namespace tools...", Cmd: "kubectl create namespace tools 2>/dev/null || true"},
+			{Desc: "Instalando o LocalStack...",
+				Cmd: "kubectl get deploy localstack -n tools >/dev/null 2>&1 || kubectl create deployment localstack --image=localstack/localstack:latest -n tools 2>&1 || true; kubectl set env deployment/localstack -n tools SERVICES=s3,sqs,iam,sts DEBUG=0 2>/dev/null || true"},
+			{Desc: "Expondo endpoint AWS local na porta 4566...",
+				Cmd: "kubectl get svc localstack -n tools >/dev/null 2>&1 || kubectl expose deployment localstack --port=4566 --target-port=4566 -n tools 2>&1 || true"},
+			{Desc: "Aguardando LocalStack ficar pronto...",
+				Cmd: "kubectl rollout status deployment/localstack -n tools --timeout=180s 2>&1 | tail -1; kubectl -n tools exec deploy/localstack -- localstack wait -t 60 2>/dev/null || true"},
+		},
+	},
+	{
 		ID: "prometheus", Name: "Prometheus", Icon: "🔥", Scope: "cluster",
 		Desc:    "coleta de métricas — alimenta o Grafana e os labs de Observability",
 		After:   "no Grafana, adicione o datasource: http://prometheus.tools.svc:9090",

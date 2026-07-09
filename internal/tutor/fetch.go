@@ -37,6 +37,7 @@ var docsIndex = []struct {
 }{
 	{[]string{"init container"}, "https://kubernetes.io/docs/concepts/workloads/pods/init-containers/"},
 	{[]string{"rolling", "rollout", "deployment"}, "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"},
+	{[]string{"replicaset", "replica set", "scaleset", "scale set"}, "https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/"},
 	{[]string{"pod "}, "https://kubernetes.io/docs/concepts/workloads/pods/"},
 	{[]string{"service", "clusterip", "nodeport"}, "https://kubernetes.io/docs/concepts/services-networking/service/"},
 	{[]string{"ingress"}, "https://kubernetes.io/docs/concepts/services-networking/ingress/"},
@@ -65,6 +66,26 @@ var docsIndex = []struct {
 	{[]string{"limitrange", "limit range"}, "https://kubernetes.io/docs/concepts/policy/limit-range/"},
 	{[]string{"volume"}, "https://kubernetes.io/docs/concepts/storage/volumes/"},
 	{[]string{"kustomize"}, "https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/"},
+	{[]string{"aks", "azure kubernetes service", "az-104", "azure administrator"}, "https://learn.microsoft.com/azure/aks/what-is-aks"},
+	{[]string{"aks network", "azure cni"}, "https://learn.microsoft.com/azure/aks/concepts-network"},
+	{[]string{"aks storage", "azure disk", "azure file"}, "https://learn.microsoft.com/azure/aks/concepts-storage"},
+	{[]string{"aks security", "az-500"}, "https://learn.microsoft.com/azure/aks/concepts-security"},
+	{[]string{"aws", "amazon web services", "cloud practitioner", "clf-c02"}, "https://docs.aws.amazon.com/whitepapers/latest/aws-overview/introduction.html"},
+	{[]string{"ec2", "compute", "instancia", "instance"}, "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts.html"},
+	{[]string{"vpc", "subnet", "security group"}, "https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html"},
+	{[]string{"iam", "identity", "policy"}, "https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html"},
+	{[]string{"s3", "bucket", "object storage"}, "https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html"},
+	{[]string{"sqs", "queue", "fila", "messaging"}, "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html"},
+	{[]string{"eks", "elastic kubernetes service"}, "https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html"},
+	{[]string{"linux", "chmod", "permissions", "permissao", "permissão", "grep", "awk", "sed"}, "https://man7.org/linux/man-pages/"},
+	{[]string{"bash", "shell script", "script bash"}, "https://www.gnu.org/software/bash/manual/bash.html"},
+	{[]string{"java", "javac", "jvm"}, "https://docs.oracle.com/en/java/"},
+	{[]string{"helm", "chart", "values.yaml"}, "https://helm.sh/docs/topics/charts/"},
+	{[]string{"docker", "containerfile", "dockerfile", "container image"}, "https://docs.docker.com/get-started/docker-concepts/the-basics/what-is-a-container/"},
+	{[]string{"terraform", "hcl", "provider", "state", "module"}, "https://developer.hashicorp.com/terraform/language"},
+	{[]string{"prometheus", "promql", "alertmanager"}, "https://prometheus.io/docs/introduction/overview/"},
+	{[]string{"grafana", "dashboard", "datasource", "data source"}, "https://grafana.com/docs/grafana/latest/introduction/"},
+	{[]string{"cilium", "ebpf", "cni", "hubble"}, "https://docs.cilium.io/en/stable/overview/intro/"},
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -82,6 +103,17 @@ var certKeywords = map[string][]string{
 	"CKAD": {"probe", "liveness", "readiness", "configmap", "job", "cronjob", "multi-container",
 		"sidecar", "init container", "deployment", "rollout", "canary", "blue-green", "helm"},
 	"ArgoCD": {"argocd", "gitops", "sync", "application", "app of apps", "kustomize", "helm", "rollback"},
+	"CAPA":   {"argocd", "argo project", "gitops", "sync", "application", "rollout", "helm", "kustomize"},
+	"AWS":    {"aws", "amazon web services", "ec2", "vpc", "iam", "s3", "eks", "cloud practitioner", "region", "availability zone", "security group"},
+	"AZ-104": {"aks", "azure kubernetes service", "node pool", "azure cni", "load balancer", "managed identity", "storage", "monitor"},
+	"AZ-204": {"aks", "container apps", "deployment", "configmap", "secret", "ingress", "observability", "managed identity"},
+	"AZ-400": {"aks", "devops", "deployment", "gitops", "helm", "pipeline", "rollout", "observability"},
+	"AZ-500": {"aks", "security", "rbac", "network policy", "pod security", "secret", "managed identity", "private cluster"},
+	"Linux":  {"linux", "chmod", "permiss", "grep", "awk", "sed", "logs", "shell", "filesystem"},
+	"Bash":   {"bash", "shell script", "argument", "csv", "stdout", "stderr", "exit code"},
+	"Java":   {"java", "javac", "jvm", "class", "main", "string args", "compile"},
+	"Helm":   {"helm", "chart", "values", "template", "release"},
+	"Docker": {"docker", "container", "image", "dockerfile", "registry"},
 }
 
 // fontes oficiais curadas por certificação (kubernetes.io + projetos oficiais)
@@ -109,6 +141,37 @@ var certSources = map[string][]string{
 	"ArgoCD": {
 		"https://argo-cd.readthedocs.io/en/stable/getting_started/",
 		"https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/",
+	},
+	"CAPA": {
+		"https://argo-cd.readthedocs.io/en/stable/getting_started/",
+		"https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/",
+		"https://argoproj.github.io/rollouts/",
+	},
+	"AWS": {
+		"https://docs.aws.amazon.com/whitepapers/latest/aws-overview/introduction.html",
+		"https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts.html",
+		"https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html",
+		"https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html",
+		"https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html",
+		"https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html",
+		"https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html",
+	},
+	"AZ-104": {
+		"https://learn.microsoft.com/azure/aks/what-is-aks",
+		"https://learn.microsoft.com/azure/aks/concepts-network",
+		"https://learn.microsoft.com/azure/aks/concepts-storage",
+	},
+	"AZ-204": {
+		"https://learn.microsoft.com/azure/aks/concepts-clusters-workloads",
+		"https://learn.microsoft.com/azure/aks/concepts-security",
+	},
+	"AZ-400": {
+		"https://learn.microsoft.com/azure/aks/cluster-configuration",
+		"https://learn.microsoft.com/azure/aks/concepts-clusters-workloads",
+	},
+	"AZ-500": {
+		"https://learn.microsoft.com/azure/aks/concepts-security",
+		"https://learn.microsoft.com/azure/aks/operator-best-practices-network",
 	},
 }
 
@@ -227,7 +290,7 @@ func EnrichSource(text string) (string, []string, []string) {
 
 var trustedDomains = []string{
 	// Kubernetes & CNCF
-	"kubernetes.io", "cncf.io", "etcd.io", "helm.sh", "istio.io",
+	"kubernetes.io", "cncf.io", "training.linuxfoundation.org", "linuxfoundation.org", "docs.linuxfoundation.org", "etcd.io", "helm.sh", "istio.io",
 	"prometheus.io", "grafana.com", "argo-cd.readthedocs.io", "argoproj.github.io",
 	"cilium.io", "falco.org", "containerd.io",
 	// Código e docs de projetos
@@ -244,6 +307,7 @@ var trustedDomains = []string{
 	// Linguagens / dev
 	"go.dev", "golang.org", "docs.python.org", "python.org", "nodejs.org",
 	"developer.mozilla.org", "git-scm.com", "linux.org", "man7.org",
+	"gnu.org",
 }
 
 // isTrustedURL valida o host contra a allowlist (aceita subdomínios).
@@ -543,10 +607,10 @@ type CurriculumDomain struct {
 
 var certCurricula = map[string][]CurriculumDomain{
 	"CKA": {
-		{"Troubleshooting", 30, []string{"https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/", "https://kubernetes.io/docs/tasks/debug/debug-cluster/"}},
-		{"Cluster Architecture, Installation & Configuration", 25, []string{"https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/", "https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/"}},
-		{"Services & Networking", 20, []string{"https://kubernetes.io/docs/concepts/services-networking/service/"}},
-		{"Workloads & Scheduling", 15, []string{"https://kubernetes.io/docs/concepts/workloads/controllers/deployment/", "https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/"}},
+		{"Troubleshooting", 30, []string{"https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/", "https://kubernetes.io/docs/tasks/debug/debug-cluster/", "https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/"}},
+		{"Cluster Architecture, Installation & Configuration", 25, []string{"https://kubernetes.io/docs/reference/access-authn-authz/rbac/", "https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/", "https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/", "https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/"}},
+		{"Services & Networking", 20, []string{"https://kubernetes.io/docs/concepts/services-networking/service/", "https://kubernetes.io/docs/concepts/services-networking/network-policies/", "https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/", "https://kubernetes.io/docs/concepts/services-networking/ingress/"}},
+		{"Workloads & Scheduling", 15, []string{"https://kubernetes.io/docs/concepts/workloads/controllers/deployment/", "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/", "https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/", "https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/"}},
 		{"Storage", 10, []string{"https://kubernetes.io/docs/concepts/storage/persistent-volumes/"}},
 	},
 	"CKAD": {
@@ -568,12 +632,25 @@ var certCurricula = map[string][]CurriculumDomain{
 		{"Fundamentos GitOps", 40, []string{"https://argo-cd.readthedocs.io/en/stable/getting_started/"}},
 		{"Sync e Rollback", 30, []string{"https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/"}},
 	},
+	"CAPA": {
+		{"Argo CD e GitOps", 40, []string{"https://argo-cd.readthedocs.io/en/stable/getting_started/"}},
+		{"Sync, Health e Rollback", 30, []string{"https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/"}},
+		{"Argo Rollouts", 30, []string{"https://argoproj.github.io/rollouts/"}},
+	},
 	// Ansible — fundamentos + módulos (doc oficial).
 	"Ansible": {
 		{"Fundamentos & Inventário", 25, []string{"https://docs.ansible.com/ansible/latest/getting_started/index.html", "https://docs.ansible.com/ansible/latest/inventory_guide/intro_inventory.html"}},
 		{"Playbooks & Tarefas", 35, []string{"https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_intro.html"}},
 		{"Módulos comuns", 25, []string{"https://docs.ansible.com/ansible/latest/collections/ansible/builtin/index.html"}},
 		{"Variáveis & Templates", 15, []string{"https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_variables.html"}},
+	},
+	"AWS": {
+		{"Cloud fundamentals", 20, []string{"https://docs.aws.amazon.com/whitepapers/latest/aws-overview/introduction.html"}},
+		{"Compute: EC2 e EKS", 25, []string{"https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts.html", "https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html"}},
+		{"Networking: VPC", 20, []string{"https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html"}},
+		{"Security: IAM", 20, []string{"https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html"}},
+		{"Storage: S3", 10, []string{"https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html"}},
+		{"Messaging: SQS", 5, []string{"https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html"}},
 	},
 	// Terraform Associate (003) — domínios oficiais + páginas da doc HashiCorp.
 	"Terraform": {
@@ -582,6 +659,21 @@ var certCurricula = map[string][]CurriculumDomain{
 		{"Estado (state)", 20, []string{"https://developer.hashicorp.com/terraform/language/state", "https://developer.hashicorp.com/terraform/language/backend"}},
 		{"Módulos", 15, []string{"https://developer.hashicorp.com/terraform/language/modules"}},
 		{"Providers", 20, []string{"https://developer.hashicorp.com/terraform/language/providers/requirements"}},
+	},
+	"Linux": {
+		{"Arquivos e permissoes", 35, []string{"https://man7.org/linux/man-pages/man1/chmod.1.html"}},
+		{"Processamento de texto", 35, []string{"https://man7.org/linux/man-pages/man1/grep.1.html", "https://man7.org/linux/man-pages/man1/awk.1p.html"}},
+		{"Shell e processos", 30, []string{"https://www.gnu.org/software/bash/manual/bash.html"}},
+	},
+	"Bash": {
+		{"Scripts e parametros", 40, []string{"https://www.gnu.org/software/bash/manual/bash.html"}},
+		{"Controle de erro", 30, []string{"https://www.gnu.org/software/bash/manual/bash.html"}},
+		{"Texto e arquivos", 30, []string{"https://man7.org/linux/man-pages/man1/awk.1p.html"}},
+	},
+	"Java": {
+		{"Linguagem e main", 40, []string{"https://docs.oracle.com/en/java/"}},
+		{"Compilacao e execucao", 30, []string{"https://docs.oracle.com/en/java/javase/"}},
+		{"Containers para runtime", 30, []string{"https://docs.docker.com/language/java/"}},
 	},
 }
 

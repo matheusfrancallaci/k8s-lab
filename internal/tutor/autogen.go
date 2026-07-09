@@ -291,7 +291,7 @@ func specToQuestion(fam *labFamily, s labSpec, topic string, level int) models.Q
 	if topic == "" {
 		topic = "Gerado pela IA"
 	}
-	return models.Question{
+	q := models.Question{
 		ID:         id,
 		Cert:       models.Cert(fam.cert),
 		Topic:      topic,
@@ -316,6 +316,7 @@ func specToQuestion(fam *labFamily, s labSpec, topic string, level int) models.Q
 		Teardown:    []string{`rm -rf "` + work + `"`},
 		DocURL:      fam.docURL,
 	}
+	return FinalizeLab(q, "")
 }
 
 func trunc(s string, n int) string {

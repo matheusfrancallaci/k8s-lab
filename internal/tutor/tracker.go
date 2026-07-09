@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -41,13 +42,37 @@ type TopicSkill struct {
 	LastAttempt time.Time `json:"last_attempt"`
 }
 
+type ReviewItem struct {
+	Cert         string    `json:"cert"`
+	Topic        string    `json:"topic"`
+	QuestionID   string    `json:"question_id"`
+	Reason       string    `json:"reason"`
+	Due          time.Time `json:"due"`
+	IntervalDays int       `json:"interval_days"`
+	Failures     int       `json:"failures"`
+	LastSeen     time.Time `json:"last_seen"`
+	Ready        bool      `json:"ready,omitempty"`
+}
+
+type DomainMastery struct {
+	Cert       string   `json:"cert"`
+	Domain     string   `json:"domain"`
+	Weight     int      `json:"weight"`
+	Score      float64  `json:"score"`
+	Attempts   int      `json:"attempts"`
+	DueReviews int      `json:"due_reviews"`
+	Sources    []string `json:"sources"`
+}
+
 // Profile é o estado adaptativo de UM usuário (isolado dos demais).
 type Profile struct {
 	mu          sync.Mutex
 	id          string
 	Skills      map[string]*TopicSkill `json:"skills"`
+	Review      map[string]*ReviewItem `json:"review"`
 	activeCert  string
 	activeTopic string
+	activeLab   *models.Question
 	lastAdvised map[string]time.Time // cooldown de recomendações
 	saveTimer   *time.Timer
 }
@@ -90,10 +115,11 @@ func profileFor(userID string) *Profile {
 
 type skillsDoc struct {
 	Skills map[string]*TopicSkill `json:"skills"`
+	Review map[string]*ReviewItem `json:"review,omitempty"`
 }
 
 func loadProfile(id string) *Profile {
-	p := &Profile{id: id, Skills: map[string]*TopicSkill{}, lastAdvised: map[string]time.Time{}}
+	p := &Profile{id: id, Skills: map[string]*TopicSkill{}, Review: map[string]*ReviewItem{}, lastAdvised: map[string]time.Time{}}
 	b, err := os.ReadFile(profilePath(id))
 	if err != nil && id == "default" {
 		// Migração única: progresso legado morava em data/tutor.json.
@@ -101,8 +127,13 @@ func loadProfile(id string) *Profile {
 	}
 	if err == nil {
 		var s skillsDoc
-		if json.Unmarshal(b, &s) == nil && s.Skills != nil {
-			p.Skills = s.Skills
+		if json.Unmarshal(b, &s) == nil {
+			if s.Skills != nil {
+				p.Skills = s.Skills
+			}
+			if s.Review != nil {
+				p.Review = s.Review
+			}
 		}
 	}
 	return p
@@ -115,7 +146,7 @@ func (p *Profile) scheduleSave() {
 	}
 	p.saveTimer = time.AfterFunc(2*time.Second, func() {
 		p.mu.Lock()
-		b, err := json.MarshalIndent(skillsDoc{Skills: p.Skills}, "", "  ")
+		b, err := json.MarshalIndent(skillsDoc{Skills: p.Skills, Review: p.Review}, "", "  ")
 		p.mu.Unlock()
 		if err != nil {
 			return
@@ -151,6 +182,20 @@ func SetActiveQuestion(userID string, q models.Question) {
 	defer p.mu.Unlock()
 	p.activeCert = string(q.Cert)
 	p.activeTopic = q.Topic
+	cp := q
+	p.activeLab = &cp
+}
+
+// ActiveQuestion devolve uma cópia do lab aberto pelo usuário. O terminal usa
+// isto para gerar RBAC por lab e não depender de permissões amplas.
+func ActiveQuestion(userID string) (models.Question, bool) {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.activeLab == nil {
+		return models.Question{}, false
+	}
+	return *p.activeLab, true
 }
 
 // RecordGoal registra o resultado de um CHECK de goal.
@@ -160,7 +205,8 @@ func RecordGoal(userID string, q models.Question, success bool) {
 	defer p.mu.Unlock()
 	s := p.skillFor(string(q.Cert), q.Topic)
 	s.Attempts++
-	s.LastAttempt = time.Now()
+	now := time.Now()
+	s.LastAttempt = now
 	v := 0.0
 	if success {
 		v = 1.0
@@ -170,7 +216,58 @@ func RecordGoal(userID string, q models.Question, success bool) {
 		s.FailStreak++
 	}
 	s.Score = s.Score*(1-ewmaAlpha) + v*ewmaAlpha
+	p.recordReview(q, success, now)
 	p.scheduleSave()
+}
+
+func reviewKey(q models.Question) string {
+	id := strings.TrimSpace(q.ID)
+	if id == "" {
+		id = string(q.Cert) + "|" + q.Topic
+	}
+	return string(q.Cert) + "|" + q.Topic + "|" + id
+}
+
+func (p *Profile) recordReview(q models.Question, success bool, now time.Time) {
+	if p.Review == nil {
+		p.Review = map[string]*ReviewItem{}
+	}
+	key := reviewKey(q)
+	item := p.Review[key]
+	if item == nil && success {
+		return
+	}
+	if item == nil {
+		item = &ReviewItem{
+			Cert:         string(q.Cert),
+			Topic:        q.Topic,
+			QuestionID:   q.ID,
+			IntervalDays: 1,
+		}
+		p.Review[key] = item
+	}
+	item.LastSeen = now
+	if success {
+		if item.Failures == 0 {
+			item.Reason = "reforco espacacado apos acerto"
+		} else {
+			item.Reason = "erro anterior corrigido; revisar para consolidar"
+		}
+		if item.IntervalDays < 1 {
+			item.IntervalDays = 1
+		} else {
+			item.IntervalDays *= 2
+		}
+		if item.IntervalDays > 21 {
+			item.IntervalDays = 21
+		}
+		item.Due = now.Add(time.Duration(item.IntervalDays) * 24 * time.Hour)
+		return
+	}
+	item.Failures++
+	item.IntervalDays = 1
+	item.Due = now
+	item.Reason = "falha em validador; revisar com lab guiado"
 }
 
 // RecordHint registra a abertura da aba HINT.
@@ -205,14 +302,32 @@ func RecordDone(userID string, q models.Question, seconds int) {
 // RecordTermError registra um erro de comando visto no terminal do lab,
 // atribuído ao tópico da questão ativa do usuário.
 func RecordTermError(userID string) {
+	RecordTermErrorText(userID, "")
+}
+
+// RecordTermErrorText registra erro de terminal e também alimenta a
+// observabilidade por lab quando há uma questão ativa.
+func RecordTermErrorText(userID, output string) {
 	p := profileFor(userID)
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	if p.activeTopic == "" {
+		p.mu.Unlock()
 		return
 	}
-	p.skillFor(p.activeCert, p.activeTopic).TermErrors++
+	activeTopic := p.activeTopic
+	activeCert := p.activeCert
+	var q models.Question
+	hasLab := false
+	if p.activeLab != nil {
+		q = *p.activeLab
+		hasLab = true
+	}
+	p.skillFor(activeCert, activeTopic).TermErrors++
 	p.scheduleSave()
+	p.mu.Unlock()
+	if hasLab {
+		recordLabTerminalError(userID, q, output)
+	}
 }
 
 // Stats devolve uma cópia dos skills do usuário para o dashboard.
@@ -225,4 +340,96 @@ func Stats(userID string) []TopicSkill {
 		out = append(out, *s)
 	}
 	return out
+}
+
+func ReviewQueue(userID string) []ReviewItem {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	now := time.Now()
+	out := make([]ReviewItem, 0, len(p.Review))
+	for _, item := range p.Review {
+		if item == nil {
+			continue
+		}
+		cp := *item
+		cp.Ready = !cp.Due.After(now)
+		out = append(out, cp)
+	}
+	sortReview(out)
+	if len(out) > 12 {
+		out = out[:12]
+	}
+	return out
+}
+
+func DomainMap(userID, cert string) []DomainMastery {
+	cert = CanonicalCert(cert)
+	if cert == "" {
+		cert = "CKA"
+	}
+	cur, ok := CurriculumFor(cert)
+	if !ok {
+		return nil
+	}
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	now := time.Now()
+	out := make([]DomainMastery, 0, len(cur))
+	for _, d := range cur {
+		domainNorm := normalizeEvidenceText(d.Domain)
+		var scoreSum float64
+		var attempts int
+		for _, s := range p.Skills {
+			if s == nil || !strings.EqualFold(s.Cert, cert) {
+				continue
+			}
+			topicNorm := normalizeEvidenceText(s.Topic)
+			if strings.Contains(domainNorm, topicNorm) || strings.Contains(topicNorm, domainNorm) || domainMatchesTopic(domainNorm, topicNorm) {
+				scoreSum += s.Score * float64(s.Attempts)
+				attempts += s.Attempts
+			}
+		}
+		due := 0
+		for _, item := range p.Review {
+			if item == nil || !strings.EqualFold(item.Cert, cert) || item.Due.After(now) {
+				continue
+			}
+			topicNorm := normalizeEvidenceText(item.Topic)
+			if strings.Contains(domainNorm, topicNorm) || strings.Contains(topicNorm, domainNorm) || domainMatchesTopic(domainNorm, topicNorm) {
+				due++
+			}
+		}
+		score := 0.0
+		if attempts > 0 {
+			score = scoreSum / float64(attempts)
+		}
+		srcs := append([]string{}, d.URLs...)
+		if len(srcs) > 2 {
+			srcs = srcs[:2]
+		}
+		out = append(out, DomainMastery{
+			Cert:       cert,
+			Domain:     d.Domain,
+			Weight:     d.Weight,
+			Score:      score,
+			Attempts:   attempts,
+			DueReviews: due,
+			Sources:    srcs,
+		})
+	}
+	return out
+}
+
+func sortReview(items []ReviewItem) {
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].Ready != items[j].Ready {
+			return items[i].Ready
+		}
+		if !items[i].Due.Equal(items[j].Due) {
+			return items[i].Due.Before(items[j].Due)
+		}
+		return items[i].Failures > items[j].Failures
+	})
 }

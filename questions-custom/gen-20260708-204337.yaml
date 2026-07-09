@@ -1,0 +1,480 @@
+questions:
+    - id: custom-6cd209e6
+      cert: kcna
+      topic: GitOps
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie uma Application ArgoCD **titan-worker-app** usando o repo `https://github.com/argoproj/argocd-example-apps.git`, path `guestbook`, destino `https://kubernetes.default.svc` e namespace `lab-titan`.
+
+        Foco do treino: **GitOps**.
+
+        Resolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION.
+      options: []
+      answer: 0
+      explanation: 'A Application e o recurso central do ArgoCD: source define onde esta o desejado; destination define onde aplicar; syncPolicy automatiza a reconciliacao.'
+      doc_url: https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/
+      doc_section: ArgoCD -> Declarative setup -> Applications
+      hint: 'apiVersion: argoproj.io/v1alpha1; kind: Application; spec.source.repoURL/path; spec.destination.server/namespace; syncPolicy.automated'
+      answer_command: 'kubectl apply -f app.yaml  # Application titan-worker-app apontando para guestbook'
+      validation: null
+      goals:
+        - description: Application **titan-worker-app** existe em **argocd** apontando para **guestbook**
+          hint: Confira repoURL e path no spec.source.
+          validation:
+            command: kubectl get application titan-worker-app -n argocd -o jsonpath='{.spec.source.path}:{.spec.destination.namespace}' 2>/dev/null
+            expected_contains: guestbook:lab-titan
+            expected_output: ""
+        - description: Sync automatico esta habilitado
+          hint: syncPolicy.automated deve existir.
+          validation:
+            command: kubectl get application titan-worker-app -n argocd -o jsonpath='{.spec.syncPolicy.automated.prune}:{.spec.syncPolicy.automated.selfHeal}' 2>/dev/null
+            expected_contains: true:true
+            expected_output: ""
+      setup:
+        - description: Instalando ArgoCD se necessario...
+          command: kubectl create namespace argocd 2>/dev/null || true; kubectl get deployment argocd-server -n argocd >/dev/null 2>&1 || kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml 2>&1 | tail -5; kubectl wait deployment argocd-server -n argocd --for=condition=available --timeout=300s 2>/dev/null || true
+        - description: Criando namespace destino lab-titan...
+          command: kubectl create namespace lab-titan 2>/dev/null || true
+      teardown:
+        - kubectl delete application titan-worker-app -n argocd --ignore-not-found=true
+        - kubectl delete namespace lab-titan --ignore-not-found=true --wait=false
+      lab_spec:
+        objective: Declarar uma aplicacao GitOps e validar reconciliacao no ArgoCD
+        scenario: Cenario hands-on para kcna em GitOps.
+        skills:
+            - kcna
+            - GitOps
+        estimated_minutes: 17
+        dependencies:
+            - name: argocd
+              kind: gitops controller
+              install_action: auto setup
+              status_command: kubectl get deploy argocd-server -n argocd
+              required: true
+        sources:
+            - title: ArgoCD -> Declarative setup -> Applications
+              url: https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/
+              section: ArgoCD -> Declarative setup -> Applications
+        evidence:
+            - domain: GitOps
+              weight: 0
+              confidence: 65
+              matched_terms:
+                - gitops
+                - kcna
+              sources:
+                - title: argo-cd.readthedocs.io / declarative setup
+                  url: https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/
+                  section: GitOps
+        evidence_score: 65
+        chunks: []
+        plan:
+            - 'Preparar: Instalando ArgoCD se necessario...'
+            - 'Preparar: Criando namespace destino lab-titan...'
+            - 'Validar: Application **titan-worker-app** existe em **argocd** apontando para **guestbook**'
+            - 'Validar: Sync automatico esta habilitado'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - Application **titan-worker-app** existe em **argocd** apontando para **guestbook**
+            - Sync automatico esta habilitado
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 90
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - evidencia curricular parcial
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+                - setup automatizado
+            warnings:
+                - sem chunks RAG
+                - evidencia curricular abaixo do ideal
+    - id: custom-0fb1fbee
+      cert: kcna
+      topic: Core Concepts
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie um Pod chamado **lunar-gateway** com a imagem **busybox:1.35** e a label **app=lunar-gateway**.
+
+        Foco do treino: **Core Concepts**.
+
+        Resolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION.
+      options: []
+      answer: 0
+      explanation: kubectl run cria um Pod único (sem controller). Labels permitem que Services e selectors encontrem o pod.
+      doc_url: https://kubernetes.io/docs/concepts/workloads/pods/
+      doc_section: Concepts → Workloads → Pods
+      hint: 'Quebre a tarefa em passos pequenos: criar recurso, ajustar configuracao e validar os goals.'
+      answer_command: kubectl run lunar-gateway --image=busybox:1.35 --labels=app=lunar-gateway
+      validation: null
+      goals:
+        - description: Pod **lunar-gateway** está **Running**
+          hint: kubectl run cria o pod; aguarde ficar Ready.
+          validation:
+            command: kubectl get pod lunar-gateway -o jsonpath='{.status.phase}' 2>/dev/null
+            expected_contains: Running
+            expected_output: ""
+        - description: Pod tem a label **app=lunar-gateway**
+          hint: --labels no run, ou kubectl label depois.
+          validation:
+            command: kubectl get pod lunar-gateway -o jsonpath='{.metadata.labels.app}' 2>/dev/null
+            expected_contains: lunar-gateway
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete pod lunar-gateway --ignore-not-found=true
+      lab_spec:
+        objective: Praticar Core Concepts com comandos reais e validacao automatica
+        scenario: Cenario hands-on para kcna em Core Concepts.
+        skills:
+            - kcna
+            - Core Concepts
+        estimated_minutes: 14
+        dependencies:
+            - name: cluster ativo
+              kind: kubernetes
+              install_action: preflight
+              status_command: kubectl cluster-info
+              required: true
+        sources:
+            - title: Concepts → Workloads → Pods
+              url: https://kubernetes.io/docs/concepts/workloads/pods/
+              section: Concepts → Workloads → Pods
+        evidence:
+            - domain: Core Concepts
+              weight: 0
+              confidence: 65
+              matched_terms:
+                - core concepts
+                - kcna
+              sources:
+                - title: kubernetes.io / pods
+                  url: https://kubernetes.io/docs/concepts/workloads/pods/
+                  section: Core Concepts
+        evidence_score: 65
+        chunks: []
+        plan:
+            - Confirmar o cluster ativo e o contexto correto
+            - 'Validar: Pod **lunar-gateway** está **Running**'
+            - 'Validar: Pod tem a label **app=lunar-gateway**'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - Pod **lunar-gateway** está **Running**
+            - Pod tem a label **app=lunar-gateway**
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 90
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - evidencia curricular parcial
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+            warnings:
+                - sem chunks RAG
+                - evidencia curricular abaixo do ideal
+    - id: custom-ade49970
+      cert: kcna
+      topic: Autoscaling
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie um HPA para o Deployment **orion-portal**: **min=2**, **max=5**, **CPU 50%**.
+
+        Foco do treino: **Autoscaling**.
+
+        Resolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION.
+      options: []
+      answer: 0
+      explanation: O HorizontalPodAutoscaler observa metricas do Metrics Server e altera o numero desejado de replicas do Deployment dentro dos limites min/max.
+      doc_url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+      doc_section: Tasks -> Horizontal Pod Autoscaling
+      hint: 'Quebre a tarefa em passos pequenos: criar recurso, ajustar configuracao e validar os goals.'
+      answer_command: kubectl autoscale deployment orion-portal --name=orion-portal-hpa --cpu-percent=50 --min=2 --max=5
+      validation: null
+      goals:
+        - description: HPA **orion-portal-hpa** aponta para o Deployment **orion-portal**
+          hint: kubectl autoscale deployment ... --name ...
+          validation:
+            command: kubectl get hpa orion-portal-hpa -o jsonpath='{.spec.scaleTargetRef.name}:{.spec.minReplicas}:{.spec.maxReplicas}' 2>/dev/null
+            expected_contains: orion-portal:2:5
+            expected_output: ""
+        - description: HPA usa alvo de **50% CPU**
+          hint: Confira o campo averageUtilization.
+          validation:
+            command: kubectl get hpa orion-portal-hpa -o jsonpath='{.spec.metrics[0].resource.target.averageUtilization}' 2>/dev/null
+            expected_contains: "50"
+            expected_output: ""
+      setup:
+        - description: Instalando Metrics Server se necessario...
+          command: kubectl get deploy metrics-server -n kube-system >/dev/null 2>&1 || kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml 2>&1 | tail -3; kubectl get deploy metrics-server -n kube-system -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null | grep -q -- '--kubelet-insecure-tls' || kubectl patch deployment metrics-server -n kube-system --type=json -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]' 2>/dev/null || true; kubectl rollout status deployment/metrics-server -n kube-system --timeout=180s 2>/dev/null || true
+        - description: Criando workload alvo orion-portal com requests de CPU...
+          command: kubectl create deployment orion-portal --image=registry.k8s.io/hpa-example --port=80 2>/dev/null || true; kubectl set resources deployment/orion-portal --requests=cpu=100m --limits=cpu=200m 2>/dev/null || true; kubectl rollout status deployment/orion-portal --timeout=120s 2>/dev/null || true
+      teardown:
+        - kubectl delete hpa orion-portal-hpa --ignore-not-found=true
+        - kubectl delete deployment orion-portal --ignore-not-found=true
+      lab_spec:
+        objective: Criar e validar autoscaling com HorizontalPodAutoscaler
+        scenario: Cenario hands-on para kcna em Autoscaling.
+        skills:
+            - kcna
+            - Autoscaling
+            - metrics-server
+        estimated_minutes: 17
+        dependencies:
+            - name: metrics-server
+              kind: kubernetes addon
+              install_action: auto setup
+              status_command: kubectl get deploy metrics-server -n kube-system
+              required: true
+        sources:
+            - title: Tasks -> Horizontal Pod Autoscaling
+              url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+              section: Tasks -> Horizontal Pod Autoscaling
+        evidence:
+            - domain: Autoscaling
+              weight: 0
+              confidence: 65
+              matched_terms:
+                - autoscaling
+                - kcna
+              sources:
+                - title: kubernetes.io / horizontal pod autoscale
+                  url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+                  section: Autoscaling
+        evidence_score: 65
+        chunks: []
+        plan:
+            - 'Preparar: Instalando Metrics Server se necessario...'
+            - 'Preparar: Criando workload alvo orion-portal com requests de CPU...'
+            - 'Validar: HPA **orion-portal-hpa** aponta para o Deployment **orion-portal**'
+            - 'Validar: HPA usa alvo de **50% CPU**'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - HPA **orion-portal-hpa** aponta para o Deployment **orion-portal**
+            - HPA usa alvo de **50% CPU**
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 90
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - evidencia curricular parcial
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+                - setup automatizado
+            warnings:
+                - sem chunks RAG
+                - evidencia curricular abaixo do ideal
+    - id: custom-48f90dfe
+      cert: kcna
+      topic: ReplicaSet
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie um ReplicaSet chamado **orion-cache-rs** que mantenha **2 pods** com a label **app=orion-cache** usando a imagem **busybox:1.35**.
+
+        Resolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION.
+      options: []
+      answer: 0
+      explanation: ReplicaSet garante que um conjunto de pods com labels compatíveis exista na quantidade desejada. Na prática, Deployments normalmente criam e gerenciam ReplicaSets, mas praticar o recurso diretamente ajuda a entender selectors e reconciliação.
+      doc_url: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
+      doc_section: Concepts -> Workloads -> ReplicaSet
+      hint: ReplicaSet usa `spec.replicas`, `spec.selector.matchLabels` e `spec.template.metadata.labels`; selector e template precisam casar.
+      answer_command: |-
+        cat <<'EOF' | kubectl apply -f -
+        apiVersion: apps/v1
+        kind: ReplicaSet
+        metadata:
+          name: orion-cache-rs
+        spec:
+          replicas: 2
+          selector:
+            matchLabels:
+              app: orion-cache
+          template:
+            metadata:
+              labels:
+                app: orion-cache
+            spec:
+              containers:
+              - name: app
+                image: busybox:1.35
+        EOF
+      validation: null
+      goals:
+        - description: ReplicaSet **orion-cache-rs** existe com selector `app=orion-cache`
+          hint: Confira se `spec.selector.matchLabels.app` e `spec.template.metadata.labels.app` possuem o mesmo valor.
+          validation:
+            command: kubectl get rs orion-cache-rs -o jsonpath='{.spec.selector.matchLabels.app}:{.spec.template.metadata.labels.app}' 2>/dev/null
+            expected_contains: orion-cache:orion-cache
+            expected_output: ""
+        - description: ReplicaSet mantém **2 pods prontos**
+          hint: A quantidade desejada fica em `spec.replicas`; aguarde os pods ficarem Ready antes de validar.
+          validation:
+            command: kubectl get rs orion-cache-rs -o jsonpath='{.status.readyReplicas}' 2>/dev/null
+            expected_contains: "2"
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete rs orion-cache-rs --ignore-not-found=true
+      lab_spec:
+        objective: Praticar ReplicaSet com comandos reais e validacao automatica
+        scenario: Cenario hands-on para kcna em ReplicaSet.
+        skills:
+            - kcna
+            - ReplicaSet
+        estimated_minutes: 14
+        dependencies:
+            - name: cluster ativo
+              kind: kubernetes
+              install_action: preflight
+              status_command: kubectl cluster-info
+              required: true
+        sources:
+            - title: Concepts -> Workloads -> ReplicaSet
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
+              section: Concepts -> Workloads -> ReplicaSet
+        evidence:
+            - domain: ReplicaSet
+              weight: 0
+              confidence: 65
+              matched_terms:
+                - replicaset
+                - kcna
+              sources:
+                - title: kubernetes.io / replicaset
+                  url: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
+                  section: ReplicaSet
+        evidence_score: 65
+        chunks: []
+        plan:
+            - Confirmar o cluster ativo e o contexto correto
+            - 'Validar: ReplicaSet **orion-cache-rs** existe com selector `app=orion-cache`'
+            - 'Validar: ReplicaSet mantém **2 pods prontos**'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - ReplicaSet **orion-cache-rs** existe com selector `app=orion-cache`
+            - ReplicaSet mantém **2 pods prontos**
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 90
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - evidencia curricular parcial
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+            warnings:
+                - sem chunks RAG
+                - evidencia curricular abaixo do ideal
+    - id: custom-8d21c6e6
+      cert: kcna
+      topic: Workloads
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie um Job **nova-cache-job** com busybox:1.35 rodando `comando apropriado`.
+
+        Foco do treino: **Workloads**.
+
+        Resolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION.
+      options: []
+      answer: 0
+      explanation: O Job cria pods e os re-executa (backoffLimit) até atingir completions. status.succeeded conta as execuções bem-sucedidas.
+      doc_url: https://kubernetes.io/docs/concepts/workloads/controllers/job/
+      doc_section: Concepts → Workloads → Jobs
+      hint: 'Quebre a tarefa em passos pequenos: criar recurso, ajustar configuracao e validar os goals.'
+      answer_command: kubectl create job nova-cache-job --image=busybox:1.35 -- sh -c 'echo concluido'
+      validation: null
+      goals:
+        - description: Job **nova-cache-job** completou (**succeeded=1**)
+          hint: kubectl create job --image -- <cmd>; aguarde completar.
+          validation:
+            command: kubectl get job nova-cache-job -o jsonpath='{.status.succeeded}' 2>/dev/null
+            expected_contains: "1"
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete job nova-cache-job --ignore-not-found=true
+      lab_spec:
+        objective: Praticar Workloads com comandos reais e validacao automatica
+        scenario: Cenario hands-on para kcna em Workloads.
+        skills:
+            - kcna
+            - Workloads
+        estimated_minutes: 11
+        dependencies:
+            - name: cluster ativo
+              kind: kubernetes
+              install_action: preflight
+              status_command: kubectl cluster-info
+              required: true
+        sources:
+            - title: Concepts → Workloads → Jobs
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/job/
+              section: Concepts → Workloads → Jobs
+        evidence:
+            - domain: Workloads
+              weight: 0
+              confidence: 65
+              matched_terms:
+                - workloads
+                - kcna
+              sources:
+                - title: kubernetes.io / job
+                  url: https://kubernetes.io/docs/concepts/workloads/controllers/job/
+                  section: Workloads
+        evidence_score: 65
+        chunks: []
+        plan:
+            - Confirmar o cluster ativo e o contexto correto
+            - 'Validar: Job **nova-cache-job** completou (**succeeded=1**)'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - Job **nova-cache-job** completou (**succeeded=1**)
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 90
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - evidencia curricular parcial
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+            warnings:
+                - sem chunks RAG
+                - evidencia curricular abaixo do ideal

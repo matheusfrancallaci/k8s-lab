@@ -1,0 +1,224 @@
+questions:
+    - id: custom-0da6a767
+      cert: Terraform
+      topic: Terraform · Currículo
+      difficulty: mid
+      type: lab
+      question: |-
+        Da documentação: execute a operação abaixo e confira o resultado.
+
+        `terraform block (which can also contain other settings).`
+
+        Dica: leia cada flag antes de rodar.
+      options: []
+      answer: 0
+      explanation: "Exercício gerado da sua documentação. Pratique até reproduzir sem olhar a dica.\n\n\U0001F4CD Onde a fonte diz isso (https://developer.hashicorp.com/terraform/language/providers/requirements):\n“terraform block (which can also contain other settings).”"
+      doc_url: https://developer.hashicorp.com/terraform/language/providers/requirements
+      doc_section: Fonte lida pelo tutor
+      hint: terraform block (which can also contain other settings).
+      answer_command: terraform block (which can also contain other settings).
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-a43e3825
+      cert: Terraform
+      topic: Terraform · Currículo
+      difficulty: mid
+      type: multiple_choice
+      question: Por que Terraform usa um arquivo de estado?
+      options:
+        - Para armazenar a configuração do recurso
+        - Para gerenciar a segurança da rede
+        - Para monitorar as alterações na infraestrutura
+        - Para determinar as alterações necessárias para aplicar a configuração
+      answer: 3
+      explanation: |-
+        Terraform usa um arquivo de estado para armazenar a realidade atual da infraestrutura e compará-lo com a configuração fornecida, determinando as alterações necessárias para aplicar a configuração.
+
+        (gerada pela IA local a partir da sua documentação)
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-b750cf56
+      cert: Terraform
+      topic: Terraform · Currículo
+      difficulty: easy
+      type: multiple_choice
+      question: |-
+        Este conceito apareceu na sua documentação. Qual termo corresponde à definição?
+
+        "Abstração que dá IP/DNS estável e balanceia tráfego entre pods via selector"
+      options:
+        - Job
+        - StatefulSet
+        - NetworkPolicy
+        - Service
+      answer: 3
+      explanation: "Service: Abstração que dá IP/DNS estável e balanceia tráfego entre pods via selector.\n\n\U0001F4CD Onde a fonte diz isso (https://developer.hashicorp.com/terraform/intro):\n“Hands On: Try the Get Started tutorials to start managing infrastructure on popular cloud providers: Amazon Web Services, Azure, Google Cloud Platform, Oracle Cloud Infrastructu...”"
+      doc_url: https://developer.hashicorp.com/terraform/intro
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-2f2fed6a
+      cert: Terraform
+      topic: Terraform · Currículo
+      difficulty: easy
+      type: multiple_choice
+      question: |-
+        Este conceito apareceu na sua documentação. Qual termo corresponde à definição?
+
+        "Partição lógica do cluster para isolar nomes, quotas e permissões"
+      options:
+        - Namespace
+        - CronJob
+        - ResourceQuota
+        - DaemonSet
+      answer: 0
+      explanation: "Namespace: Partição lógica do cluster para isolar nomes, quotas e permissões.\n\n\U0001F4CD Onde a fonte diz isso (https://developer.hashicorp.com/terraform/language/providers/requirements):\n“[<HOSTNAME>/]<NAMESPACE>/<TYPE>”"
+      doc_url: https://developer.hashicorp.com/terraform/language/providers/requirements
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-7c38f866
+      cert: Terraform
+      topic: Terraform · Currículo
+      difficulty: easy
+      type: multiple_choice
+      question: |-
+        Este conceito apareceu na sua documentação. Qual termo corresponde à definição?
+
+        "Armazena dados sensíveis (base64) consumidos como env vars ou volumes"
+      options:
+        - HorizontalPodAutoscaler
+        - Secret
+        - ServiceAccount
+        - Role
+      answer: 1
+      explanation: "Secret: Armazena dados sensíveis (base64) consumidos como env vars ou volumes.\n\n\U0001F4CD Onde a fonte diz isso (https://developer.hashicorp.com/terraform/intro):\n“Since your configuration is written in a file, you can commit it to a Version Control System (VCS) and use HCP Terraform to efficiently manage Terraform workflows across teams. ...”"
+      doc_url: https://developer.hashicorp.com/terraform/intro
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-27e35b7c
+      cert: Terraform
+      topic: Services
+      difficulty: mid
+      type: lab
+      question: |-
+        Exponha o Deployment **lunar-portal** (já criado) com um Service **ClusterIP** chamado **lunar-worker-svc** na porta **8080**.
+
+        Dica: `kubectl expose deployment` herda o selector das labels do Deployment.
+      options: []
+      answer: 0
+      explanation: Service ClusterIP dá um IP estável interno; o selector conecta o Service aos pods e popula os endpoints.
+      doc_url: https://kubernetes.io/docs/concepts/services-networking/service/
+      doc_section: Concepts → Services
+      hint: kubectl expose deployment lunar-portal --name=lunar-worker-svc --port=8080 --target-port=80
+      answer_command: kubectl expose deployment lunar-portal --name=lunar-worker-svc --port=8080 --target-port=80
+      validation: null
+      goals:
+        - description: Service **lunar-worker-svc** é **ClusterIP** na porta **8080**
+          hint: kubectl expose deployment --name --port
+          validation:
+            command: kubectl get svc lunar-worker-svc -o jsonpath='{.spec.type}:{.spec.ports[0].port}' 2>/dev/null
+            expected_contains: ClusterIP:8080
+            expected_output: ""
+        - description: "\U0001F310 Service tem **endpoints ativos** (app acessível)"
+          hint: Endpoints aparecem quando o selector casa com pods Ready.
+          validation:
+            command: kubectl get endpoints lunar-worker-svc -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -qE '[0-9]' && echo REACHABLE || echo DOWN
+            expected_contains: REACHABLE
+            expected_output: ""
+      setup:
+        - description: Criando o Deployment lunar-portal...
+          command: kubectl create deployment lunar-portal --image=nginx:1.21 --replicas=2 2>/dev/null || true
+        - description: Aguardando pods ficarem prontos...
+          command: kubectl rollout status deployment/lunar-portal --timeout=90s 2>/dev/null || true
+      teardown:
+        - kubectl delete svc lunar-worker-svc --ignore-not-found=true
+        - kubectl delete deployment lunar-portal --ignore-not-found=true
+    - id: custom-f419f614
+      cert: Terraform
+      topic: Storage
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie um PVC **delta-feed-pvc** de **1Gi** (ReadWriteOnce) e um Pod **delta-feed** montando-o em **/data**.
+
+        Dica: PVC e Pod via YAML (`kubectl apply -f`); no pod, `volumes.persistentVolumeClaim` + `volumeMounts`.
+      options: []
+      answer: 0
+      explanation: O PVC é o pedido de storage do usuário; um PV satisfaz o pedido (binding). O pod referencia o claim, não o volume físico.
+      doc_url: https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+      doc_section: Concepts → Storage → Persistent Volumes
+      hint: 'PVC: accessModes [ReadWriteOnce], storage 1Gi. Pod: volumes.persistentVolumeClaim.claimName=delta-feed-pvc + volumeMounts mountPath=/data'
+      answer_command: 'kubectl apply -f pvc.yaml && kubectl apply -f pod.yaml  # PVC delta-feed-pvc 1Gi RWO + pod delta-feed montando em /data'
+      validation: null
+      goals:
+        - description: PVC **delta-feed-pvc** está **Bound**
+          hint: kubectl apply do PVC; storageclass default do minikube provisiona sozinha.
+          validation:
+            command: kubectl get pvc delta-feed-pvc -o jsonpath='{.status.phase}' 2>/dev/null
+            expected_contains: Bound
+            expected_output: ""
+        - description: Pod **delta-feed** monta o PVC em **/data** e está Running
+          hint: volumes + volumeMounts no spec do pod.
+          validation:
+            command: kubectl get pod delta-feed -o jsonpath='{.spec.volumes[*].persistentVolumeClaim.claimName}:{.status.phase}' 2>/dev/null
+            expected_contains: delta-feed-pvc:Running
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete pod delta-feed --ignore-not-found=true
+        - kubectl delete pvc delta-feed-pvc --ignore-not-found=true
+    - id: custom-ec262014
+      cert: Terraform
+      topic: Workloads
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie um Deployment **titan-feed** com **4 réplicas** da imagem **redis:7** e depois escale para **5**.
+
+        Dica: `kubectl create deployment` + `kubectl scale`.
+      options: []
+      answer: 0
+      explanation: O Deployment declara o estado desejado; o ReplicaSet materializa o número de pods. kubectl scale altera .spec.replicas.
+      doc_url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+      doc_section: Concepts → Workloads → Deployments
+      hint: kubectl create deployment titan-feed --image=redis:7 --replicas=4 && kubectl scale deployment titan-feed --replicas=5
+      answer_command: kubectl create deployment titan-feed --image=redis:7 --replicas=4; kubectl scale deployment titan-feed --replicas=5
+      validation: null
+      goals:
+        - description: Deployment **titan-feed** existe com imagem **redis:7**
+          hint: kubectl create deployment ...
+          validation:
+            command: kubectl get deploy titan-feed -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null
+            expected_contains: redis:7
+            expected_output: ""
+        - description: '**5 réplicas** prontas após o scale'
+          hint: kubectl scale deployment --replicas=N
+          validation:
+            command: kubectl get deploy titan-feed -o jsonpath='{.status.readyReplicas}' 2>/dev/null
+            expected_contains: "5"
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete deployment titan-feed --ignore-not-found=true

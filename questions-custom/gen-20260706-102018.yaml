@@ -1,0 +1,95 @@
+questions:
+    - id: custom-1b220247
+      cert: CKA
+      topic: Workloads
+      difficulty: mid
+      type: lab
+      question: |-
+        Da documentação: execute a operação abaixo e confira o resultado.
+
+        `kubectl apply -f https://k8s.io/examples/controllers/nginx-deployment.yaml`
+
+        Dica: leia cada flag antes de rodar.
+      options: []
+      answer: 0
+      explanation: "Exercício gerado da sua documentação. Pratique até reproduzir sem olhar a dica.\n\n\U0001F4CD Onde a fonte diz isso (https://kubernetes.io/docs/concepts/workloads/controllers/deployment/):\n“kubectl apply -f https://k8s.io/examples/controllers/nginx-deployment.yaml”"
+      doc_url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+      doc_section: Fonte lida pelo tutor
+      hint: kubectl apply -f https://k8s.io/examples/controllers/nginx-deployment.yaml
+      answer_command: kubectl apply -f https://k8s.io/examples/controllers/nginx-deployment.yaml
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-bd1658f3
+      cert: CKA
+      topic: Workloads
+      difficulty: mid
+      type: lab
+      question: |-
+        Da documentação: execute a operação abaixo e confira o resultado.
+
+        `kubectl set image deployment.v1.apps/nginx-deployment nginx=nginx:1.16.1`
+
+        Dica: leia cada flag antes de rodar.
+      options: []
+      answer: 0
+      explanation: "Exercício gerado da sua documentação. Pratique até reproduzir sem olhar a dica.\n\n\U0001F4CD Onde a fonte diz isso (https://kubernetes.io/docs/concepts/workloads/controllers/deployment/):\n“kubectl set image deployment.v1.apps/nginx-deployment nginx=nginx:1.16.1”"
+      doc_url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+      doc_section: Fonte lida pelo tutor
+      hint: kubectl set image deployment.v1.apps/nginx-deployment nginx=nginx:1.16.1
+      answer_command: kubectl set image deployment.v1.apps/nginx-deployment nginx=nginx:1.16.1
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-3fb5904a
+      cert: CKA
+      topic: Workloads
+      difficulty: mid
+      type: multiple_choice
+      question: Qual componente decide em qual nó um pod novo será executado?
+      options:
+        - kube-scheduler
+        - kubelet
+        - kube-proxy
+        - etcd
+      answer: 0
+      explanation: |-
+        O kube-scheduler avalia os nós elegíveis e faz o bind do pod ao nó escolhido. O kubelet apenas executa o que já foi agendado.
+
+        (gerada pela IA local a partir da sua documentação)
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-4f7af350
+      cert: CKA
+      topic: Workloads
+      difficulty: mid
+      type: multiple_choice
+      question: |-
+        Da sua documentação — qual flag completa corretamente o comando?
+
+        `kubectl rollout history deployment/nginx-deployment ____=2`
+      options:
+        - --revision
+        - --port
+        - --replicas
+        - --image
+      answer: 0
+      explanation: |-
+        O comando original da documentação é:
+        kubectl rollout history deployment/nginx-deployment --revision=2
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []

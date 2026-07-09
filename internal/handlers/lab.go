@@ -69,6 +69,7 @@ func (h *LabHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/lab", http.StatusSeeOther)
 		return
 	}
+	q = tutor.FinalizeLab(q, "")
 	prevID, nextID := h.repo.GetLabNeighbors(id)
 
 	// Contexto do tutor: eventos do terminal serão atribuídos a esta questão.
@@ -180,6 +181,9 @@ func runCmd(cmdStr, userID string) (string, error) {
 	// LAB_USER isola o workspace de labs de IaC (Terraform): cada conta usa
 	// ~/tflab/$LAB_USER/<lab>, evitando colisão no cluster/host compartilhado.
 	env := append(os.Environ(), "LAB_USER="+tutor.SanitizeID(userID))
+	if ns := userLabNamespace(userID); ns != "" {
+		env = append(env, "LAB_NAMESPACE="+ns)
+	}
 	if kc := userKubeconfig(userID); kc != "" {
 		env = append(env, "KUBECONFIG="+kc)
 	}
@@ -207,6 +211,8 @@ func (h *LabHandler) Setup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	q = tutor.FinalizeLab(q, "")
+
 	if len(q.Setup) == 0 {
 		fmt.Fprintf(w, "data: {\"type\":\"done\"}\n\n")
 		flusher.Flush()
@@ -214,6 +220,7 @@ func (h *LabHandler) Setup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	total := len(q.Setup)
+	uid := userID(r)
 	for i, step := range q.Setup {
 		msg, _ := json.Marshal(map[string]any{
 			"type":        "step",
@@ -225,7 +232,14 @@ func (h *LabHandler) Setup(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "data: %s\n\n", msg)
 		flusher.Flush()
 
-		output, err := runCmd(step.Command, userID(r))
+		var output string
+		var err error
+		if reason := tutor.BlockedLabCommandReason(step.Command); reason != "" {
+			output = "bloqueado pelo guardrail do Lab Agent: " + reason
+			err = fmt.Errorf("%s", reason)
+		} else {
+			output, err = runCmd(step.Command, userID(r))
+		}
 
 		status := "done"
 		if err != nil {
@@ -234,6 +248,7 @@ func (h *LabHandler) Setup(w http.ResponseWriter, r *http.Request) {
 				status = "warn"
 			}
 		}
+		tutor.RecordLabSetup(uid, q, step.Command, status, output)
 
 		msg, _ = json.Marshal(map[string]any{
 			"type":        "step",
@@ -262,6 +277,8 @@ func (h *LabHandler) Teardown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	q = tutor.FinalizeLab(q, "")
+
 	for _, cmdStr := range q.Teardown {
 		runCmd(cmdStr, userID(r)) //nolint:errcheck
 	}
@@ -287,12 +304,16 @@ func (h *LabHandler) Validate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	q = tutor.FinalizeLab(q, "")
+
 	// Determine which validation to run: specific goal or the question's own.
 	var validation *models.Validation
+	goalIdx := -1
 	goalIdxStr := r.URL.Query().Get("goal")
 	if goalIdxStr != "" {
-		goalIdx, err := strconv.Atoi(goalIdxStr)
-		if err == nil && goalIdx >= 0 && goalIdx < len(q.Goals) {
+		idx, err := strconv.Atoi(goalIdxStr)
+		if err == nil && idx >= 0 && idx < len(q.Goals) {
+			goalIdx = idx
 			validation = q.Goals[goalIdx].Validation
 		}
 	}
@@ -330,11 +351,16 @@ func (h *LabHandler) Validate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Alimenta o modelo de habilidade do tutor com o resultado do check.
-	tutor.RecordGoal(userID(r), q, success)
+	uid := userID(r)
+	tutor.RecordLabValidation(uid, q, goalIdx, validation.Command, success, output)
+	tutor.RecordGoal(uid, q, success)
 
 	resp := validateResponse{
 		Success: success,
 		Output:  output,
+	}
+	if !success {
+		resp.Output = validationFailureOutput(output, q, validation)
 	}
 	// Only send explanation/docs on success to avoid giving away the answer on failure.
 	if success {
@@ -343,4 +369,26 @@ func (h *LabHandler) Validate(w http.ResponseWriter, r *http.Request) {
 		resp.DocSection = q.DocSection
 	}
 	json.NewEncoder(w).Encode(resp)
+}
+
+func validationFailureOutput(output string, q models.Question, validation *models.Validation) string {
+	output = strings.TrimSpace(output)
+	if output == "" {
+		output = "Validador nao encontrou o estado esperado."
+	}
+	ns := "default"
+	if q.LabSpec != nil && strings.TrimSpace(q.LabSpec.Namespace) != "" {
+		ns = strings.TrimSpace(q.LabSpec.Namespace)
+	}
+	cmd := ""
+	if validation != nil {
+		cmd = validation.Command
+	}
+	lower := strings.ToLower(output + " " + cmd)
+	if strings.Contains(lower, "notfound") || strings.Contains(lower, "not found") ||
+		strings.Contains(lower, "forbidden") || strings.Contains(lower, "no resources found") {
+		output += "\n\nDiagnostico: esta validacao esta alinhada ao namespace `" + ns +
+			"`. Confira nome e namespace com `kubectl get all -n " + ns + "` antes de tentar novamente."
+	}
+	return output
 }

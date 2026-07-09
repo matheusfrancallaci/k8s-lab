@@ -84,7 +84,7 @@
                         </label>
 
                     </div>
-                    {{if .ExtraCerts}}<div class="chip-row" style="margin-top:8px;">{{range .ExtraCerts}}<label class="filter-chip"><input type="checkbox" name="cert" value="{{.}}" class="sr-only">✦ {{.}}</label>{{end}}</div>{{end}}
+                    {{if .ExtraCerts}}<div class="chip-row" style="margin-top:8px;">{{range .ExtraCerts}}<label class="filter-chip"><input type="checkbox" name="cert" value="{{.}}" class="sr-only">{{.}}</label>{{end}}</div>{{end}}
                     <p class="comment" style="margin-top:7px;">// vazio = todas as certificações</p>
                 </div>
 

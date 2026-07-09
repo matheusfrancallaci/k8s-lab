@@ -3,6 +3,7 @@ package tutor
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,10 +18,20 @@ import (
 
 // ChatAction diz à UI o que fazer além de exibir a resposta.
 type ChatAction struct {
-	Type  string `json:"type"`            // session | stats | exam | none
-	First string `json:"first,omitempty"` // primeira questão (session)
-	ID    string `json:"id,omitempty"`    // id da sessão
-	Total int    `json:"total,omitempty"` //
+	Type         string   `json:"type"`            // session | stats | exam | none
+	First        string   `json:"first,omitempty"` // primeira questão (session)
+	ID           string   `json:"id,omitempty"`    // id da sessão
+	Total        int      `json:"total,omitempty"` //
+	Cert         string   `json:"cert,omitempty"`
+	Topic        string   `json:"topic,omitempty"`
+	Quality      int      `json:"quality,omitempty"`
+	Sources      []string `json:"sources,omitempty"`
+	Dependencies []string `json:"dependencies,omitempty"`
+	Evidence     []string `json:"evidence,omitempty"`
+	Chunks       []string `json:"chunks,omitempty"`
+	DurationMin  int      `json:"duration_min,omitempty"`
+	NoHints      bool     `json:"no_hints,omitempty"`
+	Mode         string   `json:"mode,omitempty"`
 }
 
 // ChatResult é a resposta completa do tutor.
@@ -41,9 +52,12 @@ type ChatResult struct {
 const capabilitiesReply = "Posso te ajudar assim:\n" +
 	"• **\"criar certificação Terraform\"** — coloco a cert no seu board\n" +
 	"• **\"montar currículo de <cert>\"** — pesquiso a prova e gero labs+quiz\n" +
+	"• **\"crie um lab de AWS\"** — gero fundamentos: compute, VPC, IAM e storage\n" +
+	"• **\"crie labs para AZ-104/qualquer certificação\"** — entendo o foco e preparo labs no AKS\n" +
 	"• **\"lab de storage nível 3\"** — crio labs sob medida\n" +
 	"• **\"modo incidente\"** — quebro o cluster e você conserta\n" +
 	"• **\"simulado\"** — exame completo cronometrado\n" +
+	"• **\"revisar meus erros\"** — crio uma sessao guiada com seu caderno de erros\n" +
 	"• **cole uma URL** (kubernetes.io, GitHub) — gero questões dela\n" +
 	"• **\"como está meu desempenho?\"** — seu painel"
 
@@ -56,6 +70,14 @@ var topicSynonyms = []struct {
 	re    *regexp.Regexp
 	topic string
 }{
+	{regexp.MustCompile(`(?i)\bhpa\b|horizontal.?pod.?autoscal|autoscal|auto.?scal|escala(?:mento)? automatic`), "Autoscaling"},
+	{regexp.MustCompile(`(?i)\breplica.?set\b|\breplicaset\b|\bscale.?set\b`), "ReplicaSet"},
+	{regexp.MustCompile(`(?i)\blinux\b|chmod|permiss(?:ao|[ãa]o)|logs?|processamento de texto|grep|awk|sed`), "Linux"},
+	{regexp.MustCompile(`(?i)\bbash\b|shell script|script bash|argumentos?|csv`), "Bash"},
+	{regexp.MustCompile(`(?i)\bjava\b|javac|jvm|spring|classe|public static void main`), "Java"},
+	{regexp.MustCompile(`(?i)\bhelm\b|helm chart|values\.yaml|chart\.yaml`), "Helm"},
+	{regexp.MustCompile(`(?i)\bdockerfile\b|\bdocker\b|containerfile|container image`), "Docker"},
+	{regexp.MustCompile(`(?i)argocd|argo.?cd|gitops|application.?set|sync.?policy`), "GitOps"},
 	{regexp.MustCompile(`(?i)storage|armazenament|volume|pvc|pv\b`), "Storage"},
 	{regexp.MustCompile(`(?i)seguran|security|rbac|networkpolicy|secret`), "Security"},
 	// "networkpolicy" nunca chega aqui: Security vem antes na lista
@@ -97,16 +119,35 @@ func detectCount(msg string, def int) int {
 	if m := countRe.FindStringSubmatch(strings.ToLower(msg)); m != nil {
 		n := 0
 		fmt.Sscanf(m[1], "%d", &n) //nolint:errcheck
-		if n >= 1 && n <= 10 {
+		if n >= 1 && n <= 12 {
 			return n
 		}
 	}
 	return def
 }
 
+func routeCertForLabRequest(active, msg, topic string) string {
+	cert := inferCertFromMessage(msg, active)
+	if isAWSFocus(cert, msg) {
+		cert = "AWS"
+	}
+	if cert == "" {
+		cert = "CKA"
+	}
+	if topic == "GitOps" {
+		if regexp.MustCompile(`(?i)\bCAPA\b`).MatchString(msg) || strings.EqualFold(cert, "CAPA") {
+			return "CAPA"
+		}
+		if regexp.MustCompile(`(?i)argocd|argo.?cd`).MatchString(msg + " " + cert) {
+			return "ArgoCD"
+		}
+	}
+	return cert
+}
+
 // Chat processa uma mensagem e devolve a resposta + ação.
 // createSession é injetado pelo handler (cria LabSession e devolve id/first).
-func Chat(msg, cert string, createSession func(ids []string) (string, string, int)) ChatResult {
+func Chat(userID, msg, cert string, createSession func(ids []string) (string, string, int)) ChatResult {
 	l := strings.ToLower(strings.TrimSpace(msg))
 	if cert == "" {
 		cert = "CKA"
@@ -141,6 +182,7 @@ func Chat(msg, cert string, createSession func(ids []string) (string, string, in
 				break
 			}
 		}
+		WarmRAG(target, msg)
 		text, srcs, domains, ok := FetchCurriculum(target, 1)
 		if !ok {
 			return ChatResult{Reply: fmt.Sprintf(
@@ -164,7 +206,7 @@ func Chat(msg, cert string, createSession func(ids []string) (string, string, in
 		res := ChatResult{Reply: reply, Questions: qs}
 		if len(labIDs) > 0 {
 			sid, first, total := createSession(labIDs)
-			res.Action = &ChatAction{Type: "session", ID: sid, First: first, Total: total}
+			res.Action = sessionAction(sid, first, total, qs)
 		}
 		return res
 	}
@@ -174,6 +216,52 @@ func Chat(msg, cert string, createSession func(ids []string) (string, string, in
 		return ChatResult{
 			Reply:  "Aqui está o seu panorama. Onde o score está baixo é onde eu atacaria primeiro — quer que eu gere um lab focado nele?",
 			Action: &ChatAction{Type: "stats"},
+		}
+	}
+
+	if regexp.MustCompile(`(?i)\b(trilha|plano de estudo|roadmap|sequ[eê]ncia|curriculo pratico|curr[ií]culo pr[aá]tico)\b`).MatchString(l) {
+		qs, path, err := GenerateLearningPath(msg, cert, detectLevel(msg))
+		if err != nil {
+			return ChatResult{Reply: "Nao consegui montar uma trilha segura agora: " + err.Error()}
+		}
+		sid, first, total := createSession(questionIDs(qs))
+		return ChatResult{
+			Reply: fmt.Sprintf("Montei a trilha **%s** com **%d lab(s)** em sequencia: %s. Ela cobre fundamento, pratica, validacao e troubleshooting.",
+				path.Name, total, strings.Join(path.Topics, " -> ")),
+			Action:    sessionAction(sid, first, total, qs),
+			Questions: qs,
+		}
+	}
+
+	if regexp.MustCompile(`(?i)\b(replay|refazer erro|repetir erro|treinar erro|corrigir erro anterior)\b`).MatchString(l) {
+		qs, topic := GenerateReplayLab(userID, cert)
+		if len(qs) == 0 {
+			return ChatResult{Reply: "Ainda nao tenho erro pronto para replay. Faz um lab, deixa a validacao registrar a falha, e eu monto o reforco exato depois."}
+		}
+		sid, first, total := createSession(questionIDs(qs))
+		return ChatResult{
+			Reply:     fmt.Sprintf("Criei um replay focado no seu erro anterior de **%s**. Vem sem mao na roda para reforcar memoria de prova.", topic),
+			Action:    sessionAction(sid, first, total, qs),
+			Questions: qs,
+		}
+	}
+
+	if regexp.MustCompile(`(?i)revis|caderno|erros?|falhas?|refor[cç]o`).MatchString(l) {
+		qs := reviewLabs(userID, cert, detectCount(msg, 5))
+		if len(qs) == 0 {
+			return ChatResult{
+				Reply:  "Ainda nao tenho erros suficientes no seu perfil para montar uma revisao automatica. Faz alguns labs ou pede um topico exato que eu crio o treino agora.",
+				Action: &ChatAction{Type: "stats"},
+			}
+		}
+		if err := persist(qs); err != nil {
+			return ChatResult{Reply: "Montei a revisao, mas nao consegui salvar os labs: " + err.Error()}
+		}
+		sid, first, total := createSession(questionIDs(qs))
+		return ChatResult{
+			Reply:     fmt.Sprintf("Montei uma revisao guiada com **%d lab(s)** baseada no seu caderno de erros. Comecei pelos topicos vencidos e com mais falhas.", total),
+			Action:    sessionAction(sid, first, total, qs),
+			Questions: qs,
 		}
 	}
 
@@ -187,7 +275,7 @@ func Chat(msg, cert string, createSession func(ids []string) (string, string, in
 		sid, first, total := createSession(ids)
 		return ChatResult{
 			Reply:     fmt.Sprintf("🚨 Preparei **%d incidente(s)** — o cluster vai estar quebrado quando você chegar. Diagnostique com `kubectl get/describe` antes de agir. Boa caçada!", total),
-			Action:    &ChatAction{Type: "session", ID: sid, First: first, Total: total},
+			Action:    sessionAction(sid, first, total, qs),
 			Questions: qs,
 		}
 	}
@@ -196,7 +284,7 @@ func Chat(msg, cert string, createSession func(ids []string) (string, string, in
 	if regexp.MustCompile(`exame|simulado|prova completa`).MatchString(l) {
 		return ChatResult{
 			Reply:  "🏆 Modo Exame: 16 questões, 2 horas, sem dicas — como na prova real. Pronto?",
-			Action: &ChatAction{Type: "exam"},
+			Action: &ChatAction{Type: "exam", Total: 16, DurationMin: 120, NoHints: true, Mode: "strict"},
 		}
 	}
 
@@ -206,7 +294,8 @@ func Chat(msg, cert string, createSession func(ids []string) (string, string, in
 		if topic == "" {
 			topic = "Custom"
 		}
-		qs, rep, err := Ingest(msg, cert, topic, detectLevel(msg), detectCount(msg, 2), 2)
+		WarmRAG(cert, msg)
+		qs, rep, err := Ingest(msg, cert, topic, detectLevel(msg), detectCount(msg, 5), 4)
 		if err != nil {
 			return ChatResult{Reply: "Não consegui gerar daí: " + err.Error()}
 		}
@@ -224,7 +313,7 @@ func Chat(msg, cert string, createSession func(ids []string) (string, string, in
 		res := ChatResult{Reply: reply, Questions: qs}
 		if len(labIDs) > 0 {
 			sid, first, total := createSession(labIDs)
-			res.Action = &ChatAction{Type: "session", ID: sid, First: first, Total: total}
+			res.Action = sessionAction(sid, first, total, qs)
 		}
 		return res
 	}
@@ -247,23 +336,78 @@ func Chat(msg, cert string, createSession func(ids []string) (string, string, in
 		sid, first, total := createSession([]string{q.ID})
 		return ChatResult{
 			Reply:     "🤖 Gerei um lab de **" + fam.name + " do zero** e **auto-verifiquei** rodando a solução de verdade — a correção funciona. Bora praticar?",
-			Action:    &ChatAction{Type: "session", ID: sid, First: first, Total: total},
+			Action:    sessionAction(sid, first, total, []models.Question{q}),
 			Questions: []models.Question{q},
+		}
+	}
+
+	routeCert := routeCertForLabRequest(cert, msg, "")
+	if topic := exactTopicForRequest(routeCert, msg); topic != "" && regexp.MustCompile(`lab|exerc|quest|pergunta|praticar|treinar|criar?|gera`).MatchString(l) {
+		level := detectLevel(msg)
+		cert = routeCertForLabRequest(cert, msg, topic)
+		qs, err := Generate(topic, cert, level, detectCount(msg, 5))
+		if err != nil {
+			return ChatResult{Reply: err.Error()}
+		}
+		for _, q := range qs {
+			if err := LabRequestAdherence(q, msg); err != nil {
+				return ChatResult{Reply: "Nao gerei esse lab: " + err.Error()}
+			}
+		}
+		sid, first, total := createSession(questionIDs(qs))
+		levelDesc := map[int]string{1: "modo desafio (sem dicas)", 2: "guiado", 3: "passo a passo completo"}[level]
+		return ChatResult{
+			Reply:     fmt.Sprintf("Criei **%d lab(s) de %s** no nivel %d - %s. O ambiente ja esta sendo preparado.", total, topic, level, levelDesc),
+			Action:    sessionAction(sid, first, total, qs),
+			Questions: qs,
 		}
 	}
 
 	// 5. Criar lab por tópico
 	if topic := detectTopic(msg); topic != "" && regexp.MustCompile(`lab|exerc[ií]cio|praticar|treinar|criar?|gera`).MatchString(l) {
 		level := detectLevel(msg)
-		qs, err := Generate(topic, cert, level, detectCount(msg, 2))
+		cert = routeCertForLabRequest(cert, msg, topic)
+		qs, err := Generate(topic, cert, level, detectCount(msg, 5))
 		if err != nil {
 			return ChatResult{Reply: err.Error()}
+		}
+		for _, q := range qs {
+			if err := LabRequestAdherence(q, msg); err != nil {
+				return ChatResult{Reply: "Nao gerei esse lab: " + err.Error()}
+			}
 		}
 		sid, first, total := createSession(questionIDs(qs))
 		levelDesc := map[int]string{1: "modo desafio (sem dicas)", 2: "guiado", 3: "passo a passo completo"}[level]
 		return ChatResult{
 			Reply:     fmt.Sprintf("✦ Criei **%d lab(s) de %s** no nível %d — %s. O ambiente já está sendo preparado.", total, topic, level, levelDesc),
-			Action:    &ChatAction{Type: "session", ID: sid, First: first, Total: total},
+			Action:    sessionAction(sid, first, total, qs),
+			Questions: qs,
+		}
+	}
+
+	// 5.5. Pedido amplo de lab/certificacao: entende o foco livre (ex.: AZ-104,
+	// AKS, DevOps, cloud security), registra a certificacao e entrega labs
+	// Kubernetes/AKS seguros em vez de cair em resposta generica.
+	if isBroadLabRequest(msg) {
+		level := detectLevel(msg)
+		if err := LabRequestPreflight(msg, cert); err != nil {
+			return ChatResult{Reply: "Nao gerei um lab generico para esse pedido. " + err.Error()}
+		}
+		qs, rep, err := GenerateSmartLabs(msg, cert, level, detectCount(msg, 5))
+		if err != nil {
+			return ChatResult{Reply: "Nao gerei um lab generico para esse pedido: " + err.Error()}
+		}
+		sid, first, total := createSession(questionIDs(qs))
+		reply := fmt.Sprintf("Preparei **%d lab(s)** para **%s** com foco em **%s**. O ambiente AKS/Kubernetes ja fica pronto com setup, validacao automatica e limpeza.", total, rep.Cert, rep.Topic)
+		if rep.UsedLLM && rep.Reason != "" {
+			reply += "\n\nCriterio usado pela IA: " + rep.Reason
+		}
+		if len(rep.Ingest.Sources) > 0 {
+			reply += fmt.Sprintf("\n\nPesquisei %d fonte(s) confiavel(is) para contextualizar o pedido.", len(rep.Ingest.Sources))
+		}
+		return ChatResult{
+			Reply:     reply,
+			Action:    sessionAction(sid, first, total, qs),
 			Questions: qs,
 		}
 	}
@@ -285,15 +429,125 @@ func questionIDs(qs []models.Question) []string {
 	return ids
 }
 
+func reviewLabs(userID, activeCert string, count int) []models.Question {
+	if count < 1 {
+		count = 3
+	}
+	if count > 6 {
+		count = 6
+	}
+	var qs []models.Question
+	seen := map[string]bool{}
+	addTopic := func(cert, topic string) {
+		if len(qs) >= count || topic == "" {
+			return
+		}
+		if _, ok := templates[topic]; !ok {
+			return
+		}
+		if cert == "" {
+			cert = activeCert
+		}
+		if cert == "" {
+			cert = "CKA"
+		}
+		key := cert + "|" + topic
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		WarmRAG(cert, topic)
+		qs = append(qs, generateQuestions(topic, cert, 3, 1)...)
+	}
+	for _, item := range ReviewQueue(userID) {
+		if activeCert != "" && item.Cert != "" && !strings.EqualFold(item.Cert, activeCert) && len(qs) > 0 {
+			continue
+		}
+		addTopic(item.Cert, item.Topic)
+	}
+	stats := Stats(userID)
+	sort.SliceStable(stats, func(i, j int) bool {
+		if stats[i].Score == stats[j].Score {
+			return stats[i].Failures > stats[j].Failures
+		}
+		return stats[i].Score < stats[j].Score
+	})
+	for _, s := range stats {
+		if s.Attempts == 0 {
+			continue
+		}
+		addTopic(s.Cert, s.Topic)
+	}
+	return qs
+}
+
+func sessionAction(id, first string, total int, qs []models.Question) *ChatAction {
+	a := &ChatAction{Type: "session", ID: id, First: first, Total: total}
+	if len(qs) == 0 {
+		return a
+	}
+	a.Cert = string(qs[0].Cert)
+	a.Topic = qs[0].Topic
+	qualitySum, qualityN := 0, 0
+	seenSources := map[string]bool{}
+	seenDeps := map[string]bool{}
+	seenEvidence := map[string]bool{}
+	seenChunks := map[string]bool{}
+	for _, q := range qs {
+		if q.LabSpec == nil {
+			q = FinalizeLab(q, "")
+		}
+		if q.LabSpec == nil {
+			continue
+		}
+		if q.LabSpec.Quality.Score > 0 {
+			qualitySum += q.LabSpec.Quality.Score
+			qualityN++
+		}
+		for _, s := range q.LabSpec.Sources {
+			if s.URL != "" && !seenSources[s.URL] && len(a.Sources) < 3 {
+				seenSources[s.URL] = true
+				a.Sources = append(a.Sources, s.Title)
+			}
+		}
+		for _, d := range q.LabSpec.Dependencies {
+			if d.Name != "" && !seenDeps[d.Name] && len(a.Dependencies) < 4 {
+				seenDeps[d.Name] = true
+				a.Dependencies = append(a.Dependencies, d.Name)
+			}
+		}
+		for _, e := range q.LabSpec.Evidence {
+			label := e.Domain
+			if e.Confidence > 0 {
+				label = fmt.Sprintf("%s %d", e.Domain, e.Confidence)
+			}
+			if label != "" && !seenEvidence[label] && len(a.Evidence) < 4 {
+				seenEvidence[label] = true
+				a.Evidence = append(a.Evidence, label)
+			}
+		}
+		for _, c := range q.LabSpec.Chunks {
+			label := c.Domain
+			if c.Relevance > 0 {
+				label = fmt.Sprintf("%s %d", c.Domain, c.Relevance)
+			}
+			if label != "" && !seenChunks[label] && len(a.Chunks) < 4 {
+				seenChunks[label] = true
+				a.Chunks = append(a.Chunks, label)
+			}
+		}
+	}
+	if qualityN > 0 {
+		a.Quality = qualitySum / qualityN
+	}
+	return a
+}
+
 // llmChatReply responde conversa livre com persona restrita ao escopo.
 func llmChatReply(msg string) (string, error) {
-	if len(msg) > 1500 {
-		msg = msg[:1500]
+	prompt, report := BuildGroundedChatPrompt(msg)
+	if technicalQuestion(msg) && !report.Answerable {
+		return report.Refusal(), nil
 	}
-	prompt := fmt.Sprintf(`Você é o Tutor do k8s-lab: um mentor especialista em infraestrutura, cloud, IaC e programação. Responda em português do Brasil, direto e didático, em NO MÁXIMO 6 frases.
-
-ESCOPO (tudo isto é válido, responda normalmente): Kubernetes, containers, cloud (Azure/AWS/GCP), Terraform e Infraestrutura como Código, Linux, redes, DevOps, CI/CD, GitOps/ArgoCD, Helm e programação. Terraform/IaC SÃO tópicos centrais — ajude com HCL, providers, state, módulos, plan/apply. Só recuse se a pergunta fugir TOTALMENTE de tecnologia (ex.: culinária, política); aí recuse em 1 frase.
-
-Pergunta do aluno: %s`, strings.TrimSpace(msg))
 	return llmGenerate(prompt, false, 60*time.Second, tokensChat, "")
 }

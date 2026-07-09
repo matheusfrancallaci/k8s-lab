@@ -12,12 +12,14 @@ import (
 )
 
 var funcMap = template.FuncMap{
-	"not":   func(b bool) bool { return !b },
-	"join":  func(s []string, sep string) string { return strings.Join(s, sep) },
-	"add":   func(a, b int) int { return a + b },
-	"mul":   func(a int, b float64) float64 { return float64(a) * b },
-	"div":   func(a float64, b int) float64 { return a / float64(b) },
-	"slice": func(args ...string) []string { return args },
+	"not":        func(b bool) bool { return !b },
+	"join":       func(s []string, sep string) string { return strings.Join(s, sep) },
+	"add":        func(a, b int) int { return a + b },
+	"mul":        func(a int, b float64) float64 { return float64(a) * b },
+	"div":        func(a float64, b int) float64 { return a / float64(b) },
+	"slice":      func(args ...string) []string { return args },
+	"techIcon":   techIconPath,
+	"sourceIcon": sourceIconPath,
 	"seq": func(n int) []int {
 		s := make([]int, n)
 		for i := range s {
@@ -210,11 +212,17 @@ func (h *QuizHandler) Result(w http.ResponseWriter, r *http.Request) {
 // extraCerts devolve certificações fora do conjunto embutido (criadas pela
 // ingestão do tutor) — as UIs as exibem dinamicamente.
 func extraCerts(all []string) []string {
-	builtin := map[string]bool{"CKA": true, "CKAD": true, "CKS": true, "ArgoCD": true}
+	builtin := map[string]bool{
+		"CKA": true, "CKAD": true, "CKS": true, "ArgoCD": true,
+		"CAPA": true, "AWS": true, "Terraform": true, "Ansible": true,
+	}
 	var out []string
+	seen := map[string]bool{}
 	for _, c := range all {
-		if !builtin[c] {
+		key := strings.ToLower(c)
+		if !builtin[c] && !seen[key] {
 			out = append(out, c)
+			seen[key] = true
 		}
 	}
 	return out

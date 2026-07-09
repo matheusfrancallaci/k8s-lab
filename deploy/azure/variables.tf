@@ -56,3 +56,9 @@ variable "ollama_model" {
   type        = string
   default     = "llama3.2:1b"
 }
+
+variable "ollama_embed_model" {
+  description = "Modelo Ollama dedicado a embeddings persistidos do RAG. Vazio usa fallback local sem embedding neural."
+  type        = string
+  default     = "nomic-embed-text"
+}

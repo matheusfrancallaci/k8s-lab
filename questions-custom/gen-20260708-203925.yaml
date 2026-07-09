@@ -1,0 +1,522 @@
+questions:
+    - id: custom-b0be064c
+      cert: CKA
+      topic: Troubleshooting
+      difficulty: hard
+      type: lab
+      question: "\U0001F6A8 **INCIDENTE** — a aplicação **nova-worker** está fora do ar: os pods não sobem.\n\nDiagnostique a causa e restaure o serviço. O Deployment deve ficar **Available** com a imagem **nginx:1.21**.\n\nFoco do treino: **Troubleshooting**.\n\nResolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION."
+      options: []
+      answer: 0
+      explanation: 'Pods em ImagePullBackOff/ErrImagePull indicam imagem inexistente ou sem acesso. Diagnóstico: kubectl describe pod (Events) ou kubectl get deploy -o wide. Correção: kubectl set image (ou rollout undo). Sempre confirme com rollout status.'
+      doc_url: https://kubernetes.io/docs/concepts/containers/images/
+      doc_section: Concepts → Images
+      hint: kubectl get pods → status dos pods; kubectl describe pod → Events contam a história.
+      answer_command: kubectl set image deployment/nova-worker nginx=nginx:1.21
+      validation: null
+      goals:
+        - description: Deployment **nova-worker** voltou a ficar **Available** com imagem válida
+          hint: ""
+          validation:
+            command: kubectl get deploy nova-worker -o jsonpath='{.spec.template.spec.containers[0].image}:{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null
+            expected_contains: nginx:1.21:True
+            expected_output: ""
+      setup:
+        - description: Provisionando a aplicação...
+          command: kubectl create deployment nova-worker --image=nginx:1.21 --replicas=2 2>/dev/null || true
+        - description: "\U0001F4A5 Injetando a falha..."
+          command: kubectl set image deployment/nova-worker nginx=nginx:INEXISTENTE_v99 2>/dev/null || true
+      teardown:
+        - kubectl delete deployment nova-worker --ignore-not-found=true
+      lab_spec:
+        objective: Praticar Troubleshooting com comandos reais e validacao automatica
+        scenario: Cenario hands-on para CKA em Troubleshooting.
+        skills:
+            - CKA
+            - Troubleshooting
+        estimated_minutes: 19
+        dependencies:
+            - name: cluster ativo
+              kind: kubernetes
+              install_action: preflight
+              status_command: kubectl cluster-info
+              required: true
+        sources:
+            - title: Concepts → Images
+              url: https://kubernetes.io/docs/concepts/containers/images/
+              section: Concepts → Images
+            - title: Troubleshooting
+              url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/
+              section: Troubleshooting
+            - title: Troubleshooting
+              url: https://kubernetes.io/docs/tasks/debug/debug-cluster/
+              section: Troubleshooting
+            - title: Troubleshooting
+              url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/
+              section: Troubleshooting
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+              section: Workloads & Scheduling
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/service/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+              section: Services & Networking
+        evidence:
+            - domain: Troubleshooting
+              weight: 30
+              confidence: 100
+              matched_terms:
+                - troubleshooting
+                - kubernetes
+                - pods
+              sources:
+                - title: Troubleshooting
+                  url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/
+                  section: Troubleshooting
+                - title: Troubleshooting
+                  url: https://kubernetes.io/docs/tasks/debug/debug-cluster/
+                  section: Troubleshooting
+                - title: Troubleshooting
+                  url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/
+                  section: Troubleshooting
+            - domain: Workloads & Scheduling
+              weight: 15
+              confidence: 100
+              matched_terms:
+                - workloads & scheduling
+                - kubernetes
+                - deployment
+                - pod
+              sources:
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+                  section: Workloads & Scheduling
+            - domain: Services & Networking
+              weight: 20
+              confidence: 40
+              matched_terms:
+                - kubernetes
+                - pod
+              sources:
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/service/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+                  section: Services & Networking
+        evidence_score: 100
+        chunks:
+            - id: 09faff71705c
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` kubectl set image deployment.v1.apps/nginx-deployment nginx=nginx:1.16.1 ``` or use the following command: ``` kubectl set image deployment/nginx-deployment nginx=nginx:1.16.1...'
+              relevance: 61
+            - id: f3f7709c243d
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` apiVersion: apps/v1 kind: Deployment metadata: name: nginx-deployment labels: app: nginx spec: replicas: 3 selector: matchLabels: app: nginx template: metadata: labels: app: n...'
+              relevance: 54
+            - id: 51d8e6fdcf49
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: 'The .spec.template field contains the following sub-fields: The Pods are labeled app: nginxusing the .metadata.labels field. The Pod template''s specification, or .spec field, indi...'
+              relevance: 49
+        plan:
+            - 'Preparar: Provisionando a aplicação...'
+            - "Preparar: \U0001F4A5 Injetando a falha..."
+            - 'Validar: Deployment **nova-worker** voltou a ficar **Available** com imagem válida'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - Deployment **nova-worker** voltou a ficar **Available** com imagem válida
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 100
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - chunks RAG associados
+                - evidencia curricular forte
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+                - setup automatizado
+            warnings: []
+    - id: custom-43fe27fe
+      cert: CKA
+      topic: Troubleshooting
+      difficulty: hard
+      type: lab
+      question: "\U0001F6A8 **INCIDENTE** — o serviço **ember-store-svc** não entrega tráfego: usuários reportam timeout.\n\nOs pods estão saudáveis. Encontre a desconexão e restaure os **endpoints** do Service.\n\nFoco do treino: **Troubleshooting**.\n\nResolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION."
+      options: []
+      answer: 0
+      explanation: 'Endpoints vazios com pods saudáveis = selector não casa com as labels. É um dos incidentes mais comuns de prova e de produção. Diagnóstico: describe svc (Selector) vs get pods --show-labels; correção via kubectl patch/edit.'
+      doc_url: https://kubernetes.io/docs/concepts/services-networking/service/
+      doc_section: Services → Selectors
+      hint: Compare o selector do Service com as labels reais dos pods (describe svc vs get pods --show-labels).
+      answer_command: kubectl patch svc ember-store-svc -p '{"spec":{"selector":{"app":"ember-worker"}}}'
+      validation: null
+      goals:
+        - description: "\U0001F310 Service **ember-store-svc** com **endpoints ativos** (tráfego restaurado)"
+          hint: ""
+          validation:
+            command: kubectl get endpoints ember-store-svc -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -qE '[0-9]' && echo RECOVERED || echo DOWN
+            expected_contains: RECOVERED
+            expected_output: ""
+      setup:
+        - description: Provisionando a aplicação...
+          command: kubectl create deployment ember-worker --image=nginx:1.21 --replicas=2 2>/dev/null || true; kubectl rollout status deployment/ember-worker --timeout=90s 2>/dev/null || true
+        - description: "\U0001F4A5 Injetando a falha..."
+          command: kubectl create service clusterip ember-store-svc --tcp=80:80 2>/dev/null || true; kubectl set selector service ember-store-svc 'app=ember-worker-QUEBRADO' 2>/dev/null || true
+      teardown:
+        - kubectl delete svc ember-store-svc --ignore-not-found=true
+        - kubectl delete deployment ember-worker --ignore-not-found=true
+      lab_spec:
+        objective: Praticar Troubleshooting com comandos reais e validacao automatica
+        scenario: Cenario hands-on para CKA em Troubleshooting.
+        skills:
+            - CKA
+            - Troubleshooting
+            - service discovery
+        estimated_minutes: 19
+        dependencies:
+            - name: cluster ativo
+              kind: kubernetes
+              install_action: preflight
+              status_command: kubectl cluster-info
+              required: true
+        sources:
+            - title: Services → Selectors
+              url: https://kubernetes.io/docs/concepts/services-networking/service/
+              section: Services → Selectors
+            - title: Troubleshooting
+              url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/
+              section: Troubleshooting
+            - title: Troubleshooting
+              url: https://kubernetes.io/docs/tasks/debug/debug-cluster/
+              section: Troubleshooting
+            - title: Troubleshooting
+              url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/
+              section: Troubleshooting
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+              section: Services & Networking
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+              section: Workloads & Scheduling
+        evidence:
+            - domain: Troubleshooting
+              weight: 30
+              confidence: 100
+              matched_terms:
+                - troubleshooting
+                - kubernetes
+                - pods
+                - cluster
+                - service
+              sources:
+                - title: Troubleshooting
+                  url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/
+                  section: Troubleshooting
+                - title: Troubleshooting
+                  url: https://kubernetes.io/docs/tasks/debug/debug-cluster/
+                  section: Troubleshooting
+                - title: Troubleshooting
+                  url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/
+                  section: Troubleshooting
+            - domain: Services & Networking
+              weight: 20
+              confidence: 100
+              matched_terms:
+                - services & networking
+                - services
+                - networking
+                - doc_url
+                - kubernetes
+                - service
+                - network
+                - pod
+              sources:
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/service/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+                  section: Services & Networking
+            - domain: Workloads & Scheduling
+              weight: 15
+              confidence: 100
+              matched_terms:
+                - workloads & scheduling
+                - kubernetes
+                - deployment
+                - pod
+              sources:
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+                  section: Workloads & Scheduling
+        evidence_score: 100
+        chunks:
+            - id: 8ff02bd06bf6
+              domain: Services & Networking
+              title: kubernetes.io / service
+              url: https://kubernetes.io/docs/concepts/services-networking/service/
+              excerpt: '``` apiVersion: v1 kind: Service metadata: name: my-service spec: selector: app.kubernetes.io/name: MyApp ports: - protocol: TCP port: 80 targetPort: 9376 ```'
+              relevance: 52
+            - id: 46985b3bd33d
+              domain: Troubleshooting
+              title: kubernetes.io / debug pods
+              url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/
+              excerpt: '``` kubectl get endpointslices -l kubernetes.io/service-name=${SERVICE_NAME} ``` Make sure that the endpoints in the EndpointSlices match up with the number of pods that you expec...'
+              relevance: 51
+            - id: df4c22c8f4b2
+              domain: Services & Networking
+              title: kubernetes.io / service
+              url: https://kubernetes.io/docs/concepts/services-networking/service/
+              excerpt: '``` apiVersion: v1 kind: Service metadata: name: nginx-service spec: selector: app.kubernetes.io/name: proxy ports: - name: name-of-service-port protocol: TCP port: 80 targetPort:...'
+              relevance: 48
+        plan:
+            - 'Preparar: Provisionando a aplicação...'
+            - "Preparar: \U0001F4A5 Injetando a falha..."
+            - "Validar: \U0001F310 Service **ember-store-svc** com **endpoints ativos** (tráfego restaurado)"
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - "\U0001F310 Service **ember-store-svc** com **endpoints ativos** (tráfego restaurado)"
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 100
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - chunks RAG associados
+                - evidencia curricular forte
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+                - setup automatizado
+            warnings: []
+    - id: custom-d34918e2
+      cert: CKA
+      topic: Troubleshooting
+      difficulty: hard
+      type: lab
+      question: "\U0001F6A8 **INCIDENTE** — o serviço **lunar-batch-svc** não entrega tráfego: usuários reportam timeout.\n\nOs pods estão saudáveis. Encontre a desconexão e restaure os **endpoints** do Service.\n\nFoco do treino: **Troubleshooting**.\n\nResolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION."
+      options: []
+      answer: 0
+      explanation: 'Endpoints vazios com pods saudáveis = selector não casa com as labels. É um dos incidentes mais comuns de prova e de produção. Diagnóstico: describe svc (Selector) vs get pods --show-labels; correção via kubectl patch/edit.'
+      doc_url: https://kubernetes.io/docs/concepts/services-networking/service/
+      doc_section: Services → Selectors
+      hint: Compare o selector do Service com as labels reais dos pods (describe svc vs get pods --show-labels).
+      answer_command: kubectl patch svc lunar-batch-svc -p '{"spec":{"selector":{"app":"lunar-cache"}}}'
+      validation: null
+      goals:
+        - description: "\U0001F310 Service **lunar-batch-svc** com **endpoints ativos** (tráfego restaurado)"
+          hint: ""
+          validation:
+            command: kubectl get endpoints lunar-batch-svc -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -qE '[0-9]' && echo RECOVERED || echo DOWN
+            expected_contains: RECOVERED
+            expected_output: ""
+      setup:
+        - description: Provisionando a aplicação...
+          command: kubectl create deployment lunar-cache --image=nginx:1.21 --replicas=2 2>/dev/null || true; kubectl rollout status deployment/lunar-cache --timeout=90s 2>/dev/null || true
+        - description: "\U0001F4A5 Injetando a falha..."
+          command: kubectl create service clusterip lunar-batch-svc --tcp=80:80 2>/dev/null || true; kubectl set selector service lunar-batch-svc 'app=lunar-cache-QUEBRADO' 2>/dev/null || true
+      teardown:
+        - kubectl delete svc lunar-batch-svc --ignore-not-found=true
+        - kubectl delete deployment lunar-cache --ignore-not-found=true
+      lab_spec:
+        objective: Praticar Troubleshooting com comandos reais e validacao automatica
+        scenario: Cenario hands-on para CKA em Troubleshooting.
+        skills:
+            - CKA
+            - Troubleshooting
+            - service discovery
+        estimated_minutes: 19
+        dependencies:
+            - name: cluster ativo
+              kind: kubernetes
+              install_action: preflight
+              status_command: kubectl cluster-info
+              required: true
+        sources:
+            - title: Services → Selectors
+              url: https://kubernetes.io/docs/concepts/services-networking/service/
+              section: Services → Selectors
+            - title: Troubleshooting
+              url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/
+              section: Troubleshooting
+            - title: Troubleshooting
+              url: https://kubernetes.io/docs/tasks/debug/debug-cluster/
+              section: Troubleshooting
+            - title: Troubleshooting
+              url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/
+              section: Troubleshooting
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+              section: Services & Networking
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+              section: Workloads & Scheduling
+        evidence:
+            - domain: Troubleshooting
+              weight: 30
+              confidence: 100
+              matched_terms:
+                - troubleshooting
+                - kubernetes
+                - pods
+                - cluster
+                - service
+              sources:
+                - title: Troubleshooting
+                  url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/
+                  section: Troubleshooting
+                - title: Troubleshooting
+                  url: https://kubernetes.io/docs/tasks/debug/debug-cluster/
+                  section: Troubleshooting
+                - title: Troubleshooting
+                  url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/
+                  section: Troubleshooting
+            - domain: Services & Networking
+              weight: 20
+              confidence: 100
+              matched_terms:
+                - services & networking
+                - services
+                - networking
+                - doc_url
+                - kubernetes
+                - service
+                - network
+                - pod
+              sources:
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/service/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+                  section: Services & Networking
+            - domain: Workloads & Scheduling
+              weight: 15
+              confidence: 100
+              matched_terms:
+                - workloads & scheduling
+                - kubernetes
+                - deployment
+                - pod
+              sources:
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+                  section: Workloads & Scheduling
+        evidence_score: 100
+        chunks:
+            - id: 46985b3bd33d
+              domain: Troubleshooting
+              title: kubernetes.io / debug pods
+              url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/
+              excerpt: '``` kubectl get endpointslices -l kubernetes.io/service-name=${SERVICE_NAME} ``` Make sure that the endpoints in the EndpointSlices match up with the number of pods that you expec...'
+              relevance: 56
+            - id: 8ff02bd06bf6
+              domain: Services & Networking
+              title: kubernetes.io / service
+              url: https://kubernetes.io/docs/concepts/services-networking/service/
+              excerpt: '``` apiVersion: v1 kind: Service metadata: name: my-service spec: selector: app.kubernetes.io/name: MyApp ports: - protocol: TCP port: 80 targetPort: 9376 ```'
+              relevance: 52
+            - id: df4c22c8f4b2
+              domain: Services & Networking
+              title: kubernetes.io / service
+              url: https://kubernetes.io/docs/concepts/services-networking/service/
+              excerpt: '``` apiVersion: v1 kind: Service metadata: name: nginx-service spec: selector: app.kubernetes.io/name: proxy ports: - name: name-of-service-port protocol: TCP port: 80 targetPort:...'
+              relevance: 51
+        plan:
+            - 'Preparar: Provisionando a aplicação...'
+            - "Preparar: \U0001F4A5 Injetando a falha..."
+            - "Validar: \U0001F310 Service **lunar-batch-svc** com **endpoints ativos** (tráfego restaurado)"
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - "\U0001F310 Service **lunar-batch-svc** com **endpoints ativos** (tráfego restaurado)"
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 100
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - chunks RAG associados
+                - evidencia curricular forte
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+                - setup automatizado
+            warnings: []

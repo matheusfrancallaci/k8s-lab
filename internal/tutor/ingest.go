@@ -237,6 +237,7 @@ func Ingest(text, cert, topic string, level, wantLabs, wantQuiz int) ([]models.Q
 	if len(qs) == 0 {
 		return nil, rep, fmt.Errorf("nenhum conteúdo utilizável detectado — cole uma URL (kubernetes.io ou GitHub), um trecho com comandos/manifests, ou descreva o tema (ex.: \"init containers\")")
 	}
+	qs = FinalizeLabs(qs, text)
 	if err := persist(qs); err != nil {
 		return nil, rep, err
 	}

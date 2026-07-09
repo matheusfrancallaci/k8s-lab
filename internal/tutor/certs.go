@@ -14,7 +14,7 @@ import (
 // ao tutor cadastra o botão de verdade (persistido em data/certs.json).
 // ─────────────────────────────────────────────────────────────────────────────
 
-var builtinCerts = []string{"CKA", "CKAD", "CKS", "ArgoCD", "Terraform", "Ansible"}
+var builtinCerts = []string{"CKA", "CKAD", "CKS", "ArgoCD", "CAPA", "AWS", "Terraform", "Ansible", "Linux", "Bash", "Java"}
 
 var (
 	certsMu    sync.Mutex
@@ -65,4 +65,17 @@ func AllCerts() []string {
 	out := append([]string{}, builtinCerts...)
 	out = append(out, registered...)
 	return out
+}
+
+func CanonicalCert(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	for _, c := range AllCerts() {
+		if strings.EqualFold(c, name) {
+			return c
+		}
+	}
+	return name
 }

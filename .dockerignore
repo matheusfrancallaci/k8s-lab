@@ -9,3 +9,6 @@ estudo-app
 k8s-study-lab
 *.log
 scratchpad
+node_modules
+playwright-report
+test-results

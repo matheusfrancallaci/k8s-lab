@@ -37,13 +37,45 @@ func (h *TutorHandler) Page(w http.ResponseWriter, r *http.Request) {
 func (h *TutorHandler) Status(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	llmOK, llmModel := tutor.LLMStatus()
+	cert := r.URL.Query().Get("cert")
+	if cert == "" {
+		cert = "CKA"
+	}
 	json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
 		"recommendations": tutor.Advise(userID(r)),
 		"stats":           tutor.Stats(userID(r)),
+		"domain_map":      tutor.DomainMap(userID(r), cert),
+		"review":          tutor.ReviewQueue(userID(r)),
+		"rag":             tutor.RAGStatus(),
+		"observability":   tutor.LabObservability(),
 		"gen_topics":      tutor.Topics(),
 		"certs":           tutor.AllCerts(),
 		"llm":             map[string]any{"available": llmOK, "model": llmModel},
 	})
+}
+
+// Eval roda golden prompts determinísticos contra o roteador/gerador de labs.
+func (h *TutorHandler) Eval(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tutor.RunGoldenEval()) //nolint:errcheck
+}
+
+// Quality mostra o ranking dos prompts reais capturados para regressao continua.
+func (h *TutorHandler) Quality(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tutor.PromptQualityReport()) //nolint:errcheck
+}
+
+// AdminQuality agrega sinais de qualidade para operacao/admin.
+func (h *TutorHandler) AdminQuality(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tutor.BuildAdminQualityReport()) //nolint:errcheck
+}
+
+// DeployGate retorna os gates que devem estar verdes antes de publicar imagem.
+func (h *TutorHandler) DeployGate(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tutor.RunDeployGate()) //nolint:errcheck
 }
 
 // Explain usa o LLM local para explicar por que um goal falhou (tutoria real).
@@ -200,7 +232,8 @@ func (h *TutorHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := tutor.Chat(body.Message, body.Cert, func(ids []string) (string, string, int) {
+	uid := userID(r)
+	res := tutor.Chat(uid, body.Message, body.Cert, func(ids []string) (string, string, int) {
 		sess := h.labSessions.Create(ids)
 		return sess.ID, ids[0], len(ids)
 	})
@@ -208,6 +241,7 @@ func (h *TutorHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		h.repo.Add(res.Questions)
 		PrewarmLabImages(res.Questions)
 	}
+	tutor.RecordPromptQuality(uid, body.Message, body.Cert, res)
 	reply := res.Reply
 	if res.NeedsLLM { // conversa livre: resolve o LLM síncrono (fallback = res.Reply)
 		if r, err := tutor.FreeChatReply(body.Message); err == nil && r != "" {
@@ -235,7 +269,8 @@ func (h *TutorHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := tutor.Chat(body.Message, body.Cert, func(ids []string) (string, string, int) {
+	uid := userID(r)
+	res := tutor.Chat(uid, body.Message, body.Cert, func(ids []string) (string, string, int) {
 		sess := h.labSessions.Create(ids)
 		return sess.ID, ids[0], len(ids)
 	})
@@ -243,6 +278,7 @@ func (h *TutorHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 		h.repo.Add(res.Questions)
 		PrewarmLabImages(res.Questions)
 	}
+	tutor.RecordPromptQuality(uid, body.Message, body.Cert, res)
 
 	flusher, _ := w.(http.Flusher)
 

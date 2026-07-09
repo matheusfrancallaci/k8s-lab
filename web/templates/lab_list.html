@@ -164,7 +164,7 @@
                 <div class="cfg-sec">
                     <p class="section-label"><span data-i18n="labs.cert">certificação</span> <span class="lbl-hint">// vazio = todas</span></p>
                     <div class="cert-checks">
-                        {{range slice "CKA" "CKAD" "CKS" "ArgoCD"}}
+                        {{range slice "CKA" "CKAD" "CKS" "ArgoCD" "CAPA" "AWS" "Terraform" "Ansible"}}
                         <label class="cert-check">
                             <input type="checkbox" name="sess-cert" value="{{.}}">
                             <span class="cc-btn">{{.}}</span>
@@ -173,7 +173,7 @@
                         {{range .ExtraCerts}}
                         <label class="cert-check">
                             <input type="checkbox" name="sess-cert" value="{{.}}">
-                            <span class="cc-btn">✦ {{.}}</span>
+                            <span class="cc-btn">{{.}}</span>
                         </label>
                         {{end}}
                     </div>

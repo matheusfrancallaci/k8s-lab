@@ -11,7 +11,7 @@
             <span class="sep">/</span>
             <span class="current">{{.Question.Topic}}</span>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;">
+        <div class="lab-top-actions" style="display:flex;align-items:center;gap:10px;">
             {{if eq .Question.Cert "ArgoCD"}}
             <a href="/argocd" target="_blank" rel="noopener" class="badge badge-orange" style="text-decoration:none;">
                 <img src="/static/vendor/argo.png" style="width:11px;height:11px;border-radius:2px;" alt="">
@@ -216,6 +216,78 @@
                     <p class="task-label">Tarefa</p>
                     <div class="task-body" id="task-body-text">{{.Question.Question}}</div>
 
+                    {{with .Question.LabSpec}}
+                    <div class="lab-agent-panel">
+                        <div class="lab-agent-head">
+                            <div>
+                                <p class="task-label" style="margin-bottom:3px;">Objetivo</p>
+                                <h2>{{.Objective}}</h2>
+                            </div>
+                            <div class="lab-score">
+                                <span>{{.Quality.Score}}</span>
+                                <small>score</small>
+                            </div>
+                        </div>
+                        <div class="lab-agent-grid">
+                            <div class="lab-agent-block">
+                                <span>Plano</span>
+                                {{range .Plan}}
+                                <p>{{.}}</p>
+                                {{end}}
+                            </div>
+                            <div class="lab-agent-block">
+                                <span>Dependencias</span>
+                                {{range .Dependencies}}
+                                <p class="lab-agent-item">
+                                    <img class="official-icon" src="{{techIcon .Name .Kind .InstallAction}}" alt="">
+                                    <span><strong>{{.Name}}</strong> <small>{{.InstallAction}}</small></span>
+                                </p>
+                                {{end}}
+                            </div>
+                            {{if .Evidence}}
+                            <div class="lab-agent-block lab-agent-evidence">
+                                <span>Evidencia</span>
+                                {{range .Evidence}}
+                                <p class="lab-agent-item">
+                                    <img class="official-icon" src="{{techIcon .Domain}}" alt="">
+                                    <span><strong>{{.Domain}}</strong> <small>{{.Confidence}} confianca</small></span>
+                                </p>
+                                {{end}}
+                            </div>
+                            {{end}}
+                            {{if .Chunks}}
+                            <div class="lab-agent-block lab-agent-chunks">
+                                <span>RAG usado</span>
+                                {{range .Chunks}}
+                                <p class="lab-agent-item">
+                                    <img class="official-icon" src="{{sourceIcon .Title .URL .Domain}}" alt="">
+                                    <span><strong>{{.Domain}}</strong> <small>{{.Relevance}} relevancia</small><br>{{.Excerpt}}</span>
+                                </p>
+                                {{end}}
+                            </div>
+                            {{end}}
+                        </div>
+                        <div class="lab-agent-strip">
+                            {{range .Skills}}<span>{{.}}</span>{{end}}
+                            <span>{{.EstimatedMinutes}} min</span>
+                            {{if .Namespace}}<span>namespace {{.Namespace}}</span>{{end}}
+                            {{if .ValidationMode}}<span>{{.ValidationMode}}</span>{{end}}
+                            {{with .LabPlan}}{{if .SourceVersion}}<span>{{.SourceVersion}}</span>{{end}}{{end}}
+                            {{if .EvidenceScore}}<span>evidencia {{.EvidenceScore}}</span>{{end}}
+                        </div>
+                        {{if .Sources}}
+                        <div class="lab-agent-sources">
+                            {{range .Sources}}
+                            <a href="{{.URL}}" target="_blank" rel="noopener">
+                                <img class="official-icon" src="{{sourceIcon .Title .URL .Section}}" alt="">
+                                <span>{{.Title}}</span>
+                            </a>
+                            {{end}}
+                        </div>
+                        {{end}}
+                    </div>
+                    {{end}}
+
                     <!-- GOALS CHECKLIST -->
                     {{if .Goals}}
                     <div class="goals-header">
@@ -359,6 +431,12 @@
             .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
             .replace(/`([^`]+)`/g, '<code style="font-family:var(--mono);font-size:11px;background:var(--surface-4);color:var(--violet);padding:1px 4px;border-radius:3px;">$1</code>');
     });
+
+    document.querySelectorAll('.lab-agent-block p').forEach(d => {
+        d.innerHTML = d.innerHTML
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/`([^`]+)`/g, '<code style="font-family:var(--mono);font-size:10px;background:var(--surface-4);color:var(--violet);padding:1px 4px;border-radius:3px;">$1</code>');
+    });
 })();
 
 // ─────────────────────────────────────────────────────────────
@@ -436,7 +514,7 @@ function checkGoal(idx, questionId) {
                 // IA local: oferece explicação do erro em tempo real
                 if (LLM_OK && !EXAM) {
                     retryEl.innerHTML = 'Não foi dessa vez! Verifique seu comando e tente novamente. ' +
-                        `<button class="term-btn" style="color:var(--violet);padding:0 4px;" onclick="tutorExplain(${idx}, this)">✦ explicar este erro</button>`;
+                        `<button class="term-btn" style="color:var(--violet);padding:0 4px;" onclick="tutorExplain(${idx}, this)">explicar este erro</button>`;
                 }
                 // Tutor: uma falha pode disparar recomendação em tempo real
                 setTimeout(checkTutorSuggestion, 600);
@@ -573,7 +651,7 @@ fetch('/api/tutor/status').then(r => r.json())
 async function tutorExplain(idx, btnEl) {
     const explEl = document.getElementById('goal-expl-' + idx);
     const resultEl = document.getElementById('goal-result-' + idx);
-    if (btnEl) { btnEl.disabled = true; btnEl.textContent = '✦ pensando...'; }
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'pensando...'; }
     explEl.style.display = 'block';
     explEl.textContent = 'analisando seu erro com a IA local...';
     try {
@@ -590,7 +668,7 @@ async function tutorExplain(idx, btnEl) {
     } catch(e) {
         explEl.textContent = 'IA local indisponível no momento.';
     }
-    if (btnEl) { btnEl.disabled = false; btnEl.textContent = '✦ explicar este erro'; }
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'explicar este erro'; }
 }
 
 async function checkTutorSuggestion() {
@@ -613,10 +691,10 @@ function renderTutorCard(rec) {
     el.className = 'tutor-card';
     el.id = 'tutor-suggest';
     el.innerHTML =
-        `<div class="t-head"><svg width="14" height="14" viewBox="0 0 64 64" fill="none" style="vertical-align:-2px;flex-shrink:0;"><rect x="10" y="12" width="44" height="39" rx="12" stroke="#818cf8" stroke-width="4" fill="rgba(129,140,248,.1)"/><circle cx="23.5" cy="29" r="5" fill="#818cf8"/><circle cx="40.5" cy="29" r="5" fill="#38bdf8"/><path d="M24 40c2.6 3.2 13.4 3.2 16 0" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/></svg> tutor</div>` +
+        `<div class="t-head"><img class="official-icon" src="/static/vendor/kubernetes.svg" alt=""> tutor</div>` +
         `<div class="t-body">${escT(rec.reason)}<br>Posso gerar um <strong>lab novo, só seu</strong>, com nível ${rec.level} de ajuda${rec.level === 3 ? ' (passo a passo completo)' : ''}.</div>` +
         `<div class="t-actions">
-            <button class="btn btn-primary btn-sm" onclick="tutorGenerate('${escT(rec.topic)}', ${rec.level})">✦ Gerar lab personalizado</button>
+            <button class="btn btn-primary btn-sm" onclick="tutorGenerate('${escT(rec.topic)}', ${rec.level})">Gerar lab personalizado</button>
             <button class="btn btn-outline btn-sm" onclick="tutorDismiss('${escT(rec.topic)}')">Agora não</button>
          </div>`;
     host.appendChild(el);
@@ -989,7 +1067,7 @@ function showTermToast(tipHtml) {
     el.id = 'term-toast';
     el.className = 'term-toast';
     el.innerHTML =
-        '<svg width="18" height="18" viewBox="0 0 64 64" fill="none" style="flex-shrink:0;"><rect x="10" y="12" width="44" height="39" rx="12" stroke="#818cf8" stroke-width="4" fill="rgba(129,140,248,.15)"/><circle cx="23.5" cy="29" r="5" fill="#818cf8"/><circle cx="40.5" cy="29" r="5" fill="#38bdf8"/><path d="M24 40c2.6 3.2 13.4 3.2 16 0" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/></svg>' +
+        '<img class="official-icon" src="/static/vendor/kubernetes.svg" alt="">' +
         '<span>' + tipHtml + '</span>' +
         '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--text-4);cursor:pointer;font-size:13px;padding:0 2px;">×</button>';
     document.querySelector('.term-panel').appendChild(el);

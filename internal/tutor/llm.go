@@ -34,6 +34,7 @@ func ollamaURL() string {
 
 // modelos preferidos, em ordem, quando OLLAMA_MODEL não é definido
 var preferredModels = []string{"llama3.2", "qwen2.5", "gemma2", "mistral", "phi3"}
+var preferredEmbedModels = []string{"nomic-embed-text", "mxbai-embed-large", "bge-m3", "all-minilm"}
 
 var (
 	llmMu        sync.Mutex
@@ -81,6 +82,83 @@ func probeOllama() (bool, string) {
 		}
 	}
 	return true, body.Models[0].Name
+}
+
+func ollamaEmbeddingModel() (string, bool) {
+	if m := envOr("OLLAMA_EMBED_MODEL", ""); m != "" {
+		return m, true
+	}
+	client := &http.Client{Timeout: 1200 * time.Millisecond}
+	resp, err := client.Get(ollamaURL() + "/api/tags")
+	if err != nil {
+		return "", false
+	}
+	defer resp.Body.Close()
+	var body struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&body) != nil {
+		return "", false
+	}
+	for _, pref := range preferredEmbedModels {
+		for _, m := range body.Models {
+			if strings.HasPrefix(m.Name, pref) {
+				return m.Name, true
+			}
+		}
+	}
+	return "", false
+}
+
+func ollamaEmbedding(input string) ([]float64, string, error) {
+	model, ok := ollamaEmbeddingModel()
+	if !ok {
+		return nil, "", fmt.Errorf("modelo de embedding nao encontrado no Ollama")
+	}
+	emb, err := ollamaEmbeddingForModel(input, model)
+	return emb, model, err
+}
+
+func ollamaEmbeddingForModel(input, model string) ([]float64, error) {
+	if strings.TrimSpace(model) == "" {
+		return nil, fmt.Errorf("modelo de embedding vazio")
+	}
+	if len(input) > 4000 {
+		input = input[:4000]
+	}
+	client := &http.Client{Timeout: 8 * time.Second}
+	payload := map[string]any{"model": model, "prompt": input}
+	b, _ := json.Marshal(payload)
+	resp, err := client.Post(ollamaURL()+"/api/embeddings", "application/json", bytes.NewReader(b))
+	if err == nil {
+		defer resp.Body.Close()
+		var out struct {
+			Embedding []float64 `json:"embedding"`
+		}
+		if json.NewDecoder(resp.Body).Decode(&out) == nil && len(out.Embedding) > 0 {
+			return out.Embedding, nil
+		}
+	}
+
+	payload = map[string]any{"model": model, "input": input}
+	b, _ = json.Marshal(payload)
+	resp, err = client.Post(ollamaURL()+"/api/embed", "application/json", bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Embeddings [][]float64 `json:"embeddings"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	if len(out.Embeddings) == 0 || len(out.Embeddings[0]) == 0 {
+		return nil, fmt.Errorf("embedding vazio")
+	}
+	return out.Embeddings[0], nil
 }
 
 // Orçamento de tokens por tipo de uso. Em CPU o tempo de resposta é ~linear no
@@ -214,15 +292,19 @@ func llmStreamGenerate(prompt string, wantJSON bool, timeout time.Duration, maxT
 
 // StreamLLMReply responde conversa livre com streaming incremental para a UI.
 func StreamLLMReply(msg string, onChunk func(string)) error {
-	if len(msg) > 1500 {
-		msg = msg[:1500]
+	prompt, report := BuildGroundedChatPrompt(msg)
+	if technicalQuestion(msg) && !report.Answerable {
+		if onChunk != nil {
+			onChunk(report.Refusal())
+		}
+		return nil
 	}
-	prompt := fmt.Sprintf(`Você é o Tutor do k8s-lab: um mentor especialista em infraestrutura, cloud, IaC e programação. Responda em português do Brasil, direto e didático, em NO MÁXIMO 6 frases.
-
-ESCOPO (tudo isto é válido, responda normalmente): Kubernetes, containers, cloud (Azure/AWS/GCP), Terraform e Infraestrutura como Código, Linux, redes, DevOps, CI/CD, GitOps/ArgoCD, Helm e programação. Terraform/IaC SÃO tópicos centrais — ajude com HCL, providers, state, módulos, plan/apply. Só recuse se a pergunta fugir TOTALMENTE de tecnologia (ex.: culinária, política); aí recuse em 1 frase.
-
-Pergunta do aluno: %s`, strings.TrimSpace(msg))
 	return llmStreamGenerate(prompt, false, 60*time.Second, tokensChat, onChunk)
+}
+
+func buildChatPrompt(msg string) string {
+	prompt, _ := BuildGroundedChatPrompt(msg)
+	return prompt
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -339,7 +421,7 @@ Em português do Brasil, explique em NO MÁXIMO 4 frases:
 2. Qual é a causa mais provável.
 3. Um empurrão na direção certa (SEM dar o comando completo da resposta).
 
-Seja direto e encorajador. Sem markdown, sem listas.`,
+Priorize diagnosticar namespace errado, nome divergente, selector/label sem casar, Pod nao Ready, Deployment nao Available, permissao RBAC/Forbidden ou recurso criado no escopo errado. Seja direto e encorajador. Sem markdown, sem listas.`,
 		strings.TrimSpace(questionText), goalDesc, valCmd, strings.TrimSpace(output))
 
 	return llmGenerate(prompt, false, 45*time.Second, tokensChat, "")

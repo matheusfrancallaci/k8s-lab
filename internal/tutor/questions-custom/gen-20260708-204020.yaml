@@ -1,0 +1,168 @@
+questions:
+    - id: custom-ad552d78
+      cert: CKA
+      topic: ReplicaSet
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie um ReplicaSet chamado **delta-gateway-rs** que mantenha **3 pods** com a label **app=delta-gateway** usando a imagem **busybox:1.35**.
+
+        Resolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION.
+      options: []
+      answer: 0
+      explanation: ReplicaSet garante que um conjunto de pods com labels compatíveis exista na quantidade desejada. Na prática, Deployments normalmente criam e gerenciam ReplicaSets, mas praticar o recurso diretamente ajuda a entender selectors e reconciliação.
+      doc_url: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
+      doc_section: Concepts -> Workloads -> ReplicaSet
+      hint: ReplicaSet usa `spec.replicas`, `spec.selector.matchLabels` e `spec.template.metadata.labels`; selector e template precisam casar.
+      answer_command: |-
+        cat <<'EOF' | kubectl apply -f -
+        apiVersion: apps/v1
+        kind: ReplicaSet
+        metadata:
+          name: delta-gateway-rs
+        spec:
+          replicas: 3
+          selector:
+            matchLabels:
+              app: delta-gateway
+          template:
+            metadata:
+              labels:
+                app: delta-gateway
+            spec:
+              containers:
+              - name: app
+                image: busybox:1.35
+        EOF
+      validation: null
+      goals:
+        - description: ReplicaSet **delta-gateway-rs** existe com selector `app=delta-gateway`
+          hint: Confira se `spec.selector.matchLabels.app` e `spec.template.metadata.labels.app` possuem o mesmo valor.
+          validation:
+            command: kubectl get rs delta-gateway-rs -o jsonpath='{.spec.selector.matchLabels.app}:{.spec.template.metadata.labels.app}' 2>/dev/null
+            expected_contains: delta-gateway:delta-gateway
+            expected_output: ""
+        - description: ReplicaSet mantém **3 pods prontos**
+          hint: A quantidade desejada fica em `spec.replicas`; aguarde os pods ficarem Ready antes de validar.
+          validation:
+            command: kubectl get rs delta-gateway-rs -o jsonpath='{.status.readyReplicas}' 2>/dev/null
+            expected_contains: "3"
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete rs delta-gateway-rs --ignore-not-found=true
+      lab_spec:
+        objective: Praticar ReplicaSet com comandos reais e validacao automatica
+        scenario: Cenario hands-on para CKA em ReplicaSet.
+        skills:
+            - CKA
+            - ReplicaSet
+        estimated_minutes: 14
+        dependencies:
+            - name: cluster ativo
+              kind: kubernetes
+              install_action: preflight
+              status_command: kubectl cluster-info
+              required: true
+        sources:
+            - title: Concepts -> Workloads -> ReplicaSet
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
+              section: Concepts -> Workloads -> ReplicaSet
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+              section: Workloads & Scheduling
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/service/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+              section: Services & Networking
+        evidence:
+            - domain: Workloads & Scheduling
+              weight: 15
+              confidence: 100
+              matched_terms:
+                - workloads & scheduling
+                - workloads
+                - kubernetes
+                - pod
+              sources:
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+                  section: Workloads & Scheduling
+            - domain: Services & Networking
+              weight: 20
+              confidence: 40
+              matched_terms:
+                - kubernetes
+                - pod
+              sources:
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/service/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+                  section: Services & Networking
+        evidence_score: 100
+        chunks:
+            - id: f3f7709c243d
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` apiVersion: apps/v1 kind: Deployment metadata: name: nginx-deployment labels: app: nginx spec: replicas: 3 selector: matchLabels: app: nginx template: metadata: labels: app: n...'
+              relevance: 46
+            - id: 2a6b5a483775
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: 'Note: Kubernetes doesn''t count terminating Pods when calculating the number of availableReplicas, which must be between replicas - maxUnavailable and replicas + maxSurge. As a res...'
+              relevance: 42
+            - id: 74d1fabf5ecc
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` NAME READY STATUS RESTARTS AGE LABELS nginx-deployment-75675f5897-7ci7o 1/1 Running 0 18s app=nginx,pod-template-hash=75675f5897 nginx-deployment-75675f5897-kzszj 1/1 Running...'
+              relevance: 42
+        plan:
+            - Confirmar o cluster ativo e o contexto correto
+            - 'Validar: ReplicaSet **delta-gateway-rs** existe com selector `app=delta-gateway`'
+            - 'Validar: ReplicaSet mantém **3 pods prontos**'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - ReplicaSet **delta-gateway-rs** existe com selector `app=delta-gateway`
+            - ReplicaSet mantém **3 pods prontos**
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 100
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - chunks RAG associados
+                - evidencia curricular forte
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+            warnings: []

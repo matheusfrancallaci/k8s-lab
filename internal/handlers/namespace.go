@@ -28,8 +28,20 @@ var (
 	userKubeconfigs = map[string]string{}
 )
 
-// userKubeconfig devolve o caminho de um kubeconfig cujo namespace default é
-// lab-<user> (criando o namespace se preciso). "" = sem isolamento (padrão).
+const labCommandNamespace = "default"
+
+func userLabNamespace(userID string) string {
+	id := tutor.SanitizeID(userID)
+	if id == "default" {
+		return ""
+	}
+	return "lab-" + id
+}
+
+// userKubeconfig devolve o caminho de um kubeconfig multi-user (criando
+// lab-<user> se preciso). O namespace atual fica em "default" para preservar o
+// comportamento esperado dos labs de certificação; o namespace privado é exposto
+// via LAB_NAMESPACE para labs que precisem de isolamento explícito.
 func userKubeconfig(userID string) string {
 	if appPassword() == "" || !k8sAvailable() {
 		return ""
@@ -43,7 +55,7 @@ func userKubeconfig(userID string) string {
 	if p, ok := userKubeconfigs[id]; ok {
 		return p
 	}
-	ns := "lab-" + id
+	ns := userLabNamespace(userID)
 	if err := ensureNamespace(ns); err != nil {
 		return "" // sem namespace -> sem isolamento (cai no padrão)
 	}
@@ -52,12 +64,15 @@ func userKubeconfig(userID string) string {
 		base = "/etc/rancher/k3s/k3s.yaml"
 	}
 	path := filepath.Join(os.TempDir(), "kc-"+id+".yaml")
-	// Copia o kubeconfig base e seta o namespace default = lab-<user>.
+	// Copia o kubeconfig base e seta o namespace atual como default. Muitos labs
+	// oficiais de CKA/CKAD dizem "namespace default" e usam comandos sem -n; se
+	// apontarmos silenciosamente para lab-<user>, o aluno cria em um namespace e
+	// o validador procura em outro.
 	// Usa a env KUBECONFIG (não o flag --kubeconfig) porque a base pode ser
 	// mesclada (k3s local : AKS) com ':', que só a env aceita.
 	script := fmt.Sprintf(
 		"KUBECONFIG=%s kubectl config view --raw > %s && KUBECONFIG=%s kubectl config set-context --current --namespace=%s",
-		base, path, path, ns)
+		base, path, path, labCommandNamespace)
 	if err := wslShell(script).Run(); err != nil {
 		return ""
 	}

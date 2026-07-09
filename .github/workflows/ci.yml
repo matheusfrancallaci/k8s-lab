@@ -9,20 +9,23 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
+      E2E_INVITE_CODE: ${{ secrets.E2E_INVITE_CODE }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.26"
+          go-version-file: go.mod
           cache: true
 
-      - name: gofmt (formatação)
+      - name: gofmt
         run: |
           unformatted=$(gofmt -l internal/ main.go)
           if [ -n "$unformatted" ]; then
-            echo "Arquivos fora do padrão gofmt:"
+            echo "Arquivos fora do padrao gofmt:"
             echo "$unformatted"
             echo "Rode: gofmt -w internal/ main.go"
             exit 1
@@ -36,3 +39,40 @@ jobs:
 
       - name: Testes
         run: go test ./...
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      - name: npm audit
+        run: npm audit --audit-level=moderate
+
+      - name: Playwright specs
+        run: npm run test:e2e -- --list
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Terraform fmt
+        run: terraform -chdir=deploy/azure fmt -check
+
+      - name: Terraform init
+        run: terraform -chdir=deploy/azure init -backend=false
+
+      - name: Terraform validate
+        run: terraform -chdir=deploy/azure validate
+
+      - name: Install Playwright browser
+        if: ${{ env.E2E_BASE_URL != '' && env.E2E_INVITE_CODE != '' }}
+        run: npx playwright install --with-deps chromium
+
+      - name: Production E2E
+        if: ${{ env.E2E_BASE_URL != '' && env.E2E_INVITE_CODE != '' }}
+        run: npm run test:e2e

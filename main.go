@@ -177,6 +177,10 @@ func main() {
 	mux.HandleFunc("POST /api/tutor/generate", tutorH.Generate)
 	mux.HandleFunc("POST /api/tutor/ingest", tutorH.Ingest)
 	mux.HandleFunc("POST /api/tutor/explain", tutorH.Explain)
+	mux.HandleFunc("GET /api/tutor/eval", tutorH.Eval)
+	mux.HandleFunc("GET /api/tutor/quality", tutorH.Quality)
+	mux.HandleFunc("GET /api/tutor/admin-quality", tutorH.AdminQuality)
+	mux.HandleFunc("GET /api/tutor/deploy-gate", tutorH.DeployGate)
 	mux.HandleFunc("POST /api/tutor/chat", tutorH.Chat)
 	mux.HandleFunc("POST /api/tutor/chat/stream", tutorH.ChatStream)
 

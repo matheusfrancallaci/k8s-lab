@@ -15,3 +15,7 @@ app_password = "troque-esta-senha"
 # Opcional: região e tamanho
 # location = "brazilsouth"
 # vm_size  = "Standard_B2s"
+
+# Opcional: IA local e embeddings do RAG
+# ollama_model = "llama3.2:1b"
+# ollama_embed_model = "nomic-embed-text"

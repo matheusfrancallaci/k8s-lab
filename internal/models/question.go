@@ -35,6 +35,75 @@ type Goal struct {
 	Validation  *Validation `yaml:"validation"`
 }
 
+type LabDependency struct {
+	Name          string `yaml:"name"`
+	Kind          string `yaml:"kind"`
+	InstallAction string `yaml:"install_action"`
+	StatusCommand string `yaml:"status_command"`
+	Required      bool   `yaml:"required"`
+}
+
+type LabSource struct {
+	Title   string `yaml:"title"`
+	URL     string `yaml:"url"`
+	Section string `yaml:"section"`
+}
+
+type LabQuality struct {
+	Score    int      `yaml:"score"`
+	Checks   []string `yaml:"checks"`
+	Warnings []string `yaml:"warnings"`
+}
+
+type LabPlan struct {
+	ExactTopic      string      `yaml:"exact_topic"`
+	Cert            string      `yaml:"cert"`
+	CheckedAt       string      `yaml:"checked_at"`
+	SourceVersion   string      `yaml:"source_version"`
+	Namespace       string      `yaml:"namespace"`
+	Resources       []string    `yaml:"resources"`
+	Validations     []string    `yaml:"validations"`
+	Risks           []string    `yaml:"risks"`
+	PreflightChecks []string    `yaml:"preflight_checks"`
+	Sources         []LabSource `yaml:"sources"`
+}
+
+type LabEvidence struct {
+	Domain       string      `yaml:"domain"`
+	Weight       int         `yaml:"weight"`
+	Confidence   int         `yaml:"confidence"`
+	MatchedTerms []string    `yaml:"matched_terms"`
+	Sources      []LabSource `yaml:"sources"`
+}
+
+type LabChunk struct {
+	ID        string `yaml:"id"`
+	Domain    string `yaml:"domain"`
+	Title     string `yaml:"title"`
+	URL       string `yaml:"url"`
+	Excerpt   string `yaml:"excerpt"`
+	Relevance int    `yaml:"relevance"`
+}
+
+type LabSpec struct {
+	Objective        string          `yaml:"objective"`
+	Scenario         string          `yaml:"scenario"`
+	Namespace        string          `yaml:"namespace,omitempty"`
+	ValidationMode   string          `yaml:"validation_mode,omitempty"`
+	Skills           []string        `yaml:"skills"`
+	EstimatedMinutes int             `yaml:"estimated_minutes"`
+	Dependencies     []LabDependency `yaml:"dependencies"`
+	Sources          []LabSource     `yaml:"sources"`
+	Evidence         []LabEvidence   `yaml:"evidence"`
+	EvidenceScore    int             `yaml:"evidence_score"`
+	Chunks           []LabChunk      `yaml:"chunks"`
+	Plan             []string        `yaml:"plan"`
+	SuccessCriteria  []string        `yaml:"success_criteria"`
+	Safety           []string        `yaml:"safety"`
+	LabPlan          *LabPlan        `yaml:"lab_plan,omitempty"`
+	Quality          LabQuality      `yaml:"quality"`
+}
+
 type Question struct {
 	ID            string       `yaml:"id"`
 	Cert          Cert         `yaml:"cert"`
@@ -53,6 +122,7 @@ type Question struct {
 	Goals         []Goal       `yaml:"goals"`
 	Setup         []SetupStep  `yaml:"setup"`
 	Teardown      []string     `yaml:"teardown"`
+	LabSpec       *LabSpec     `yaml:"lab_spec,omitempty"`
 }
 
 type QuestionFile struct {

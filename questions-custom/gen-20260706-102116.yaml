@@ -1,0 +1,47 @@
+questions:
+    - id: custom-3a22f946
+      cert: CKA
+      topic: X
+      difficulty: mid
+      type: lab
+      question: |-
+        Da documentação: execute a operação abaixo e confira o resultado.
+
+        `kubectl apply -f https://k8s.io/examples/controllers/nginx-deployment.yaml`
+
+        Dica: leia cada flag antes de rodar.
+      options: []
+      answer: 0
+      explanation: "Exercício gerado da sua documentação. Pratique até reproduzir sem olhar a dica.\n\n\U0001F4CD Onde a fonte diz isso (https://kubernetes.io/docs/concepts/workloads/controllers/deployment/):\n“kubectl apply -f https://k8s.io/examples/controllers/nginx-deployment.yaml”"
+      doc_url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+      doc_section: Fonte lida pelo tutor
+      hint: kubectl apply -f https://k8s.io/examples/controllers/nginx-deployment.yaml
+      answer_command: kubectl apply -f https://k8s.io/examples/controllers/nginx-deployment.yaml
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-87d5acdb
+      cert: CKA
+      topic: X
+      difficulty: mid
+      type: multiple_choice
+      question: Qual componente decide em qual nó um pod novo será executado?
+      options:
+        - kube-scheduler
+        - kubelet
+        - kube-proxy
+        - etcd
+      answer: 0
+      explanation: |-
+        O kube-scheduler avalia os nós elegíveis e faz o bind do pod ao nó escolhido. O kubelet apenas executa o que já foi agendado.
+
+        (gerada pela IA local a partir da sua documentação)
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []

@@ -39,6 +39,7 @@ single-user; os defaults cobrem esse caso.
 |---|---|---|
 | `OLLAMA_URL` | `http://localhost:11434` | Endpoint do Ollama. Sem Ollama, o tutor cai nas heurísticas. |
 | `OLLAMA_MODEL` | *(auto)* | Modelo fixo. Sem isso, escolhe o 1º instalado da lista de preferência (`llama3.2`, `qwen2.5`, ...). Modelo **menor** = respostas mais rápidas em CPU. |
+| `OLLAMA_EMBED_MODEL` | *(auto/local fallback)* | Modelo dedicado aos embeddings persistidos do RAG, ex.: `nomic-embed-text`. Sem ele, o RAG usa fallback local determinístico. |
 | `OLLAMA_NUM_PREDICT` | `1200` | Teto de tokens da geração. Conversa de chat já usa `400` fixo (menor = mais rápido). |
 
 ## Deploy hospedado (Azure)

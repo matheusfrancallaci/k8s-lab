@@ -9,7 +9,7 @@ terraform {
   required_version = ">= 1.5"
   required_providers {
     azurerm = {
-      source  = "hashicorp/azurerm"
+      source = "hashicorp/azurerm"
       # 3.x maduro: a linha 4.x recente estava dando "inconsistent result after
       # apply" em recursos de rede (vnet/nsg/ip) — bug de leitura pos-criacao.
       version = ">= 3.110, < 4.0"
@@ -177,6 +177,7 @@ resource "azurerm_linux_virtual_machine" "lab" {
     vm_name                = "${var.prefix}-vm"
     idle_threshold_seconds = var.idle_minutes * 60
     ollama_model           = var.ollama_model
+    ollama_embed_model     = var.ollama_embed_model
   }))
 }
 

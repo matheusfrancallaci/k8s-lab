@@ -1,0 +1,901 @@
+questions:
+    - id: custom-053bae87
+      cert: CKA
+      topic: Configuration
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie um ConfigMap **vega-feed-config** com **REGION=brazil-south** e injete-o como variável de ambiente no Deployment **vega-feed**.
+
+        Foco do treino: **Configuration**.
+
+        Resolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION.
+      options: []
+      answer: 0
+      explanation: ConfigMaps guardam config não-sensível. kubectl set env --from=configmap injeta cada chave como env var e dispara um rollout.
+      doc_url: https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/
+      doc_section: Tasks → ConfigMaps
+      hint: kubectl create configmap vega-feed-config --from-literal=REGION=brazil-south && kubectl set env deployment/vega-feed --from=configmap/vega-feed-config
+      answer_command: kubectl create configmap vega-feed-config --from-literal=REGION=brazil-south; kubectl set env deployment/vega-feed --from=configmap/vega-feed-config
+      validation: null
+      goals:
+        - description: ConfigMap **vega-feed-config** tem **REGION=brazil-south**
+          hint: kubectl create configmap --from-literal=CHAVE=valor
+          validation:
+            command: kubectl get configmap vega-feed-config -o jsonpath='{.data.REGION}' 2>/dev/null
+            expected_contains: brazil-south
+            expected_output: ""
+        - description: Deployment referencia o ConfigMap via **env**
+          hint: kubectl set env --from=configmap/...
+          validation:
+            command: kubectl get deploy vega-feed -o jsonpath='{.spec.template.spec.containers[0].env[*].valueFrom.configMapKeyRef.name}' 2>/dev/null
+            expected_contains: vega-feed-config
+            expected_output: ""
+      setup:
+        - description: Criando o Deployment vega-feed...
+          command: kubectl create deployment vega-feed --image=nginx:1.21 --replicas=1 2>/dev/null || true
+      teardown:
+        - kubectl delete deployment vega-feed --ignore-not-found=true
+        - kubectl delete configmap vega-feed-config --ignore-not-found=true
+      lab_spec:
+        objective: Praticar Configuration com comandos reais e validacao automatica
+        scenario: Cenario hands-on para CKA em Configuration.
+        skills:
+            - CKA
+            - Configuration
+        estimated_minutes: 17
+        dependencies:
+            - name: cluster ativo
+              kind: kubernetes
+              install_action: preflight
+              status_command: kubectl cluster-info
+              required: true
+        sources:
+            - title: Tasks → ConfigMaps
+              url: https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/
+              section: Tasks → ConfigMaps
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+              section: Workloads & Scheduling
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/service/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+              section: Services & Networking
+        evidence:
+            - domain: Workloads & Scheduling
+              weight: 15
+              confidence: 100
+              matched_terms:
+                - workloads & scheduling
+                - kubernetes
+                - deployment
+                - pod
+              sources:
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+                  section: Workloads & Scheduling
+            - domain: Cluster Architecture, Installation & Configuration
+              weight: 25
+              confidence: 50
+              matched_terms:
+                - configuration
+                - kubernetes
+                - configure
+              sources:
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+                  section: Cluster Architecture, Installation & Configuration
+            - domain: Services & Networking
+              weight: 20
+              confidence: 40
+              matched_terms:
+                - kubernetes
+                - pod
+              sources:
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/service/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+                  section: Services & Networking
+        evidence_score: 100
+        chunks:
+            - id: 09faff71705c
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` kubectl set image deployment.v1.apps/nginx-deployment nginx=nginx:1.16.1 ``` or use the following command: ``` kubectl set image deployment/nginx-deployment nginx=nginx:1.16.1...'
+              relevance: 43
+            - id: cd1ecb02aa38
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: Deployments A Deployment manages a set of Pods to run an application workload, usually one that doesn't maintain state. A Deployment provides declarative updates for Pods and Repl...
+              relevance: 41
+            - id: 00fe97b8cb53
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: 'Pod-template-hash label Caution: Do not change this label. The pod-template-hash label is added by the Deployment controller to every ReplicaSet that a Deployment creates or adopt...'
+              relevance: 37
+        plan:
+            - 'Preparar: Criando o Deployment vega-feed...'
+            - 'Validar: ConfigMap **vega-feed-config** tem **REGION=brazil-south**'
+            - 'Validar: Deployment referencia o ConfigMap via **env**'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - ConfigMap **vega-feed-config** tem **REGION=brazil-south**
+            - Deployment referencia o ConfigMap via **env**
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 100
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - chunks RAG associados
+                - evidencia curricular forte
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+                - setup automatizado
+            warnings: []
+    - id: custom-8ec5160b
+      cert: CKA
+      topic: Configuration
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie um ConfigMap **nova-api-config** com **APP_MODE=production** e injete-o como variável de ambiente no Deployment **nova-api**.
+
+        Foco do treino: **Configuration**.
+
+        Resolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION.
+      options: []
+      answer: 0
+      explanation: ConfigMaps guardam config não-sensível. kubectl set env --from=configmap injeta cada chave como env var e dispara um rollout.
+      doc_url: https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/
+      doc_section: Tasks → ConfigMaps
+      hint: kubectl create configmap nova-api-config --from-literal=APP_MODE=production && kubectl set env deployment/nova-api --from=configmap/nova-api-config
+      answer_command: kubectl create configmap nova-api-config --from-literal=APP_MODE=production; kubectl set env deployment/nova-api --from=configmap/nova-api-config
+      validation: null
+      goals:
+        - description: ConfigMap **nova-api-config** tem **APP_MODE=production**
+          hint: kubectl create configmap --from-literal=CHAVE=valor
+          validation:
+            command: kubectl get configmap nova-api-config -o jsonpath='{.data.APP_MODE}' 2>/dev/null
+            expected_contains: production
+            expected_output: ""
+        - description: Deployment referencia o ConfigMap via **env**
+          hint: kubectl set env --from=configmap/...
+          validation:
+            command: kubectl get deploy nova-api -o jsonpath='{.spec.template.spec.containers[0].env[*].valueFrom.configMapKeyRef.name}' 2>/dev/null
+            expected_contains: nova-api-config
+            expected_output: ""
+      setup:
+        - description: Criando o Deployment nova-api...
+          command: kubectl create deployment nova-api --image=nginx:1.21 --replicas=1 2>/dev/null || true
+      teardown:
+        - kubectl delete deployment nova-api --ignore-not-found=true
+        - kubectl delete configmap nova-api-config --ignore-not-found=true
+      lab_spec:
+        objective: Praticar Configuration com comandos reais e validacao automatica
+        scenario: Cenario hands-on para CKA em Configuration.
+        skills:
+            - CKA
+            - Configuration
+        estimated_minutes: 17
+        dependencies:
+            - name: cluster ativo
+              kind: kubernetes
+              install_action: preflight
+              status_command: kubectl cluster-info
+              required: true
+        sources:
+            - title: Tasks → ConfigMaps
+              url: https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/
+              section: Tasks → ConfigMaps
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+              section: Workloads & Scheduling
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/service/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+              section: Services & Networking
+        evidence:
+            - domain: Workloads & Scheduling
+              weight: 15
+              confidence: 100
+              matched_terms:
+                - workloads & scheduling
+                - kubernetes
+                - deployment
+                - pod
+              sources:
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+                  section: Workloads & Scheduling
+            - domain: Cluster Architecture, Installation & Configuration
+              weight: 25
+              confidence: 50
+              matched_terms:
+                - configuration
+                - kubernetes
+                - configure
+              sources:
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+                  section: Cluster Architecture, Installation & Configuration
+            - domain: Services & Networking
+              weight: 20
+              confidence: 40
+              matched_terms:
+                - kubernetes
+                - pod
+              sources:
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/service/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+                  section: Services & Networking
+        evidence_score: 100
+        chunks:
+            - id: 51d8e6fdcf49
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: 'The .spec.template field contains the following sub-fields: The Pods are labeled app: nginxusing the .metadata.labels field. The Pod template''s specification, or .spec field, indi...'
+              relevance: 40
+            - id: 74d1fabf5ecc
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` NAME READY STATUS RESTARTS AGE LABELS nginx-deployment-75675f5897-7ci7o 1/1 Running 0 18s app=nginx,pod-template-hash=75675f5897 nginx-deployment-75675f5897-kzszj 1/1 Running...'
+              relevance: 39
+            - id: 09faff71705c
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` kubectl set image deployment.v1.apps/nginx-deployment nginx=nginx:1.16.1 ``` or use the following command: ``` kubectl set image deployment/nginx-deployment nginx=nginx:1.16.1...'
+              relevance: 38
+        plan:
+            - 'Preparar: Criando o Deployment nova-api...'
+            - 'Validar: ConfigMap **nova-api-config** tem **APP_MODE=production**'
+            - 'Validar: Deployment referencia o ConfigMap via **env**'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - ConfigMap **nova-api-config** tem **APP_MODE=production**
+            - Deployment referencia o ConfigMap via **env**
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 100
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - chunks RAG associados
+                - evidencia curricular forte
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+                - setup automatizado
+            warnings: []
+    - id: custom-eb5c4ce2
+      cert: CKA
+      topic: Configuration
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie um ConfigMap **delta-api-config** com **REGION=brazil-south** e injete-o como variável de ambiente no Deployment **delta-api**.
+
+        Foco do treino: **Configuration**.
+
+        Resolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION.
+      options: []
+      answer: 0
+      explanation: ConfigMaps guardam config não-sensível. kubectl set env --from=configmap injeta cada chave como env var e dispara um rollout.
+      doc_url: https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/
+      doc_section: Tasks → ConfigMaps
+      hint: kubectl create configmap delta-api-config --from-literal=REGION=brazil-south && kubectl set env deployment/delta-api --from=configmap/delta-api-config
+      answer_command: kubectl create configmap delta-api-config --from-literal=REGION=brazil-south; kubectl set env deployment/delta-api --from=configmap/delta-api-config
+      validation: null
+      goals:
+        - description: ConfigMap **delta-api-config** tem **REGION=brazil-south**
+          hint: kubectl create configmap --from-literal=CHAVE=valor
+          validation:
+            command: kubectl get configmap delta-api-config -o jsonpath='{.data.REGION}' 2>/dev/null
+            expected_contains: brazil-south
+            expected_output: ""
+        - description: Deployment referencia o ConfigMap via **env**
+          hint: kubectl set env --from=configmap/...
+          validation:
+            command: kubectl get deploy delta-api -o jsonpath='{.spec.template.spec.containers[0].env[*].valueFrom.configMapKeyRef.name}' 2>/dev/null
+            expected_contains: delta-api-config
+            expected_output: ""
+      setup:
+        - description: Criando o Deployment delta-api...
+          command: kubectl create deployment delta-api --image=nginx:1.21 --replicas=1 2>/dev/null || true
+      teardown:
+        - kubectl delete deployment delta-api --ignore-not-found=true
+        - kubectl delete configmap delta-api-config --ignore-not-found=true
+      lab_spec:
+        objective: Praticar Configuration com comandos reais e validacao automatica
+        scenario: Cenario hands-on para CKA em Configuration.
+        skills:
+            - CKA
+            - Configuration
+        estimated_minutes: 17
+        dependencies:
+            - name: cluster ativo
+              kind: kubernetes
+              install_action: preflight
+              status_command: kubectl cluster-info
+              required: true
+        sources:
+            - title: Tasks → ConfigMaps
+              url: https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/
+              section: Tasks → ConfigMaps
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+              section: Workloads & Scheduling
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/service/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+              section: Services & Networking
+        evidence:
+            - domain: Workloads & Scheduling
+              weight: 15
+              confidence: 100
+              matched_terms:
+                - workloads & scheduling
+                - kubernetes
+                - deployment
+                - pod
+              sources:
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+                  section: Workloads & Scheduling
+            - domain: Cluster Architecture, Installation & Configuration
+              weight: 25
+              confidence: 50
+              matched_terms:
+                - configuration
+                - kubernetes
+                - configure
+              sources:
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+                  section: Cluster Architecture, Installation & Configuration
+            - domain: Services & Networking
+              weight: 20
+              confidence: 40
+              matched_terms:
+                - kubernetes
+                - pod
+              sources:
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/service/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+                  section: Services & Networking
+        evidence_score: 100
+        chunks:
+            - id: 09faff71705c
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` kubectl set image deployment.v1.apps/nginx-deployment nginx=nginx:1.16.1 ``` or use the following command: ``` kubectl set image deployment/nginx-deployment nginx=nginx:1.16.1...'
+              relevance: 41
+            - id: 00fe97b8cb53
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: 'Pod-template-hash label Caution: Do not change this label. The pod-template-hash label is added by the Deployment controller to every ReplicaSet that a Deployment creates or adopt...'
+              relevance: 39
+            - id: 51d8e6fdcf49
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: 'The .spec.template field contains the following sub-fields: The Pods are labeled app: nginxusing the .metadata.labels field. The Pod template''s specification, or .spec field, indi...'
+              relevance: 39
+        plan:
+            - 'Preparar: Criando o Deployment delta-api...'
+            - 'Validar: ConfigMap **delta-api-config** tem **REGION=brazil-south**'
+            - 'Validar: Deployment referencia o ConfigMap via **env**'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - ConfigMap **delta-api-config** tem **REGION=brazil-south**
+            - Deployment referencia o ConfigMap via **env**
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 100
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - chunks RAG associados
+                - evidencia curricular forte
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+                - setup automatizado
+            warnings: []
+    - id: custom-6780b80a
+      cert: CKA
+      topic: Configuration
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie um ConfigMap **delta-gateway-config** com **APP_MODE=production** e injete-o como variável de ambiente no Deployment **delta-gateway**.
+
+        Foco do treino: **Configuration**.
+
+        Resolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION.
+      options: []
+      answer: 0
+      explanation: ConfigMaps guardam config não-sensível. kubectl set env --from=configmap injeta cada chave como env var e dispara um rollout.
+      doc_url: https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/
+      doc_section: Tasks → ConfigMaps
+      hint: kubectl create configmap delta-gateway-config --from-literal=APP_MODE=production && kubectl set env deployment/delta-gateway --from=configmap/delta-gateway-config
+      answer_command: kubectl create configmap delta-gateway-config --from-literal=APP_MODE=production; kubectl set env deployment/delta-gateway --from=configmap/delta-gateway-config
+      validation: null
+      goals:
+        - description: ConfigMap **delta-gateway-config** tem **APP_MODE=production**
+          hint: kubectl create configmap --from-literal=CHAVE=valor
+          validation:
+            command: kubectl get configmap delta-gateway-config -o jsonpath='{.data.APP_MODE}' 2>/dev/null
+            expected_contains: production
+            expected_output: ""
+        - description: Deployment referencia o ConfigMap via **env**
+          hint: kubectl set env --from=configmap/...
+          validation:
+            command: kubectl get deploy delta-gateway -o jsonpath='{.spec.template.spec.containers[0].env[*].valueFrom.configMapKeyRef.name}' 2>/dev/null
+            expected_contains: delta-gateway-config
+            expected_output: ""
+      setup:
+        - description: Criando o Deployment delta-gateway...
+          command: kubectl create deployment delta-gateway --image=nginx:1.21 --replicas=1 2>/dev/null || true
+      teardown:
+        - kubectl delete deployment delta-gateway --ignore-not-found=true
+        - kubectl delete configmap delta-gateway-config --ignore-not-found=true
+      lab_spec:
+        objective: Praticar Configuration com comandos reais e validacao automatica
+        scenario: Cenario hands-on para CKA em Configuration.
+        skills:
+            - CKA
+            - Configuration
+        estimated_minutes: 17
+        dependencies:
+            - name: cluster ativo
+              kind: kubernetes
+              install_action: preflight
+              status_command: kubectl cluster-info
+              required: true
+        sources:
+            - title: Tasks → ConfigMaps
+              url: https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/
+              section: Tasks → ConfigMaps
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+              section: Workloads & Scheduling
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/service/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+              section: Services & Networking
+        evidence:
+            - domain: Workloads & Scheduling
+              weight: 15
+              confidence: 100
+              matched_terms:
+                - workloads & scheduling
+                - kubernetes
+                - deployment
+                - pod
+              sources:
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+                  section: Workloads & Scheduling
+            - domain: Cluster Architecture, Installation & Configuration
+              weight: 25
+              confidence: 50
+              matched_terms:
+                - configuration
+                - kubernetes
+                - configure
+              sources:
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+                  section: Cluster Architecture, Installation & Configuration
+            - domain: Services & Networking
+              weight: 20
+              confidence: 40
+              matched_terms:
+                - kubernetes
+                - pod
+              sources:
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/service/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+                  section: Services & Networking
+        evidence_score: 100
+        chunks:
+            - id: 74d1fabf5ecc
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` NAME READY STATUS RESTARTS AGE LABELS nginx-deployment-75675f5897-7ci7o 1/1 Running 0 18s app=nginx,pod-template-hash=75675f5897 nginx-deployment-75675f5897-kzszj 1/1 Running...'
+              relevance: 42
+            - id: 09faff71705c
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` kubectl set image deployment.v1.apps/nginx-deployment nginx=nginx:1.16.1 ``` or use the following command: ``` kubectl set image deployment/nginx-deployment nginx=nginx:1.16.1...'
+              relevance: 41
+            - id: 00fe97b8cb53
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: 'Pod-template-hash label Caution: Do not change this label. The pod-template-hash label is added by the Deployment controller to every ReplicaSet that a Deployment creates or adopt...'
+              relevance: 39
+        plan:
+            - 'Preparar: Criando o Deployment delta-gateway...'
+            - 'Validar: ConfigMap **delta-gateway-config** tem **APP_MODE=production**'
+            - 'Validar: Deployment referencia o ConfigMap via **env**'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - ConfigMap **delta-gateway-config** tem **APP_MODE=production**
+            - Deployment referencia o ConfigMap via **env**
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 100
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - chunks RAG associados
+                - evidencia curricular forte
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+                - setup automatizado
+            warnings: []
+    - id: custom-78f961be
+      cert: CKA
+      topic: Configuration
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie um ConfigMap **titan-feed-config** com **APP_MODE=production** e injete-o como variável de ambiente no Deployment **titan-feed**.
+
+        Foco do treino: **Configuration**.
+
+        Resolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION.
+      options: []
+      answer: 0
+      explanation: ConfigMaps guardam config não-sensível. kubectl set env --from=configmap injeta cada chave como env var e dispara um rollout.
+      doc_url: https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/
+      doc_section: Tasks → ConfigMaps
+      hint: kubectl create configmap titan-feed-config --from-literal=APP_MODE=production && kubectl set env deployment/titan-feed --from=configmap/titan-feed-config
+      answer_command: kubectl create configmap titan-feed-config --from-literal=APP_MODE=production; kubectl set env deployment/titan-feed --from=configmap/titan-feed-config
+      validation: null
+      goals:
+        - description: ConfigMap **titan-feed-config** tem **APP_MODE=production**
+          hint: kubectl create configmap --from-literal=CHAVE=valor
+          validation:
+            command: kubectl get configmap titan-feed-config -o jsonpath='{.data.APP_MODE}' 2>/dev/null
+            expected_contains: production
+            expected_output: ""
+        - description: Deployment referencia o ConfigMap via **env**
+          hint: kubectl set env --from=configmap/...
+          validation:
+            command: kubectl get deploy titan-feed -o jsonpath='{.spec.template.spec.containers[0].env[*].valueFrom.configMapKeyRef.name}' 2>/dev/null
+            expected_contains: titan-feed-config
+            expected_output: ""
+      setup:
+        - description: Criando o Deployment titan-feed...
+          command: kubectl create deployment titan-feed --image=nginx:1.21 --replicas=1 2>/dev/null || true
+      teardown:
+        - kubectl delete deployment titan-feed --ignore-not-found=true
+        - kubectl delete configmap titan-feed-config --ignore-not-found=true
+      lab_spec:
+        objective: Praticar Configuration com comandos reais e validacao automatica
+        scenario: Cenario hands-on para CKA em Configuration.
+        skills:
+            - CKA
+            - Configuration
+        estimated_minutes: 17
+        dependencies:
+            - name: cluster ativo
+              kind: kubernetes
+              install_action: preflight
+              status_command: kubectl cluster-info
+              required: true
+        sources:
+            - title: Tasks → ConfigMaps
+              url: https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/
+              section: Tasks → ConfigMaps
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+              section: Workloads & Scheduling
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/service/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+              section: Services & Networking
+        evidence:
+            - domain: Workloads & Scheduling
+              weight: 15
+              confidence: 100
+              matched_terms:
+                - workloads & scheduling
+                - kubernetes
+                - deployment
+                - pod
+              sources:
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+                  section: Workloads & Scheduling
+            - domain: Cluster Architecture, Installation & Configuration
+              weight: 25
+              confidence: 50
+              matched_terms:
+                - configuration
+                - kubernetes
+                - configure
+              sources:
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+                  section: Cluster Architecture, Installation & Configuration
+            - domain: Services & Networking
+              weight: 20
+              confidence: 40
+              matched_terms:
+                - kubernetes
+                - pod
+              sources:
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/service/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+                  section: Services & Networking
+        evidence_score: 100
+        chunks:
+            - id: 09faff71705c
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` kubectl set image deployment.v1.apps/nginx-deployment nginx=nginx:1.16.1 ``` or use the following command: ``` kubectl set image deployment/nginx-deployment nginx=nginx:1.16.1...'
+              relevance: 40
+            - id: 089c7d17663d
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` Name: nginx-deployment Namespace: default CreationTimestamp: Thu, 30 Nov 2017 10:56:25 +0000 Labels: app=nginx Annotations: deployment.kubernetes.io/revision=2 Selector: app=n...'
+              relevance: 36
+            - id: f3f7709c243d
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` apiVersion: apps/v1 kind: Deployment metadata: name: nginx-deployment labels: app: nginx spec: replicas: 3 selector: matchLabels: app: nginx template: metadata: labels: app: n...'
+              relevance: 35
+        plan:
+            - 'Preparar: Criando o Deployment titan-feed...'
+            - 'Validar: ConfigMap **titan-feed-config** tem **APP_MODE=production**'
+            - 'Validar: Deployment referencia o ConfigMap via **env**'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - ConfigMap **titan-feed-config** tem **APP_MODE=production**
+            - Deployment referencia o ConfigMap via **env**
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 100
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - chunks RAG associados
+                - evidencia curricular forte
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+                - setup automatizado
+            warnings: []

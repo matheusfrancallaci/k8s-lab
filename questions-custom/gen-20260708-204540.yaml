@@ -1,0 +1,555 @@
+questions:
+    - id: custom-d54be4f9
+      cert: kcna
+      topic: Custom
+      difficulty: mid
+      type: multiple_choice
+      question: Qual componente de Kubernetes é responsável por agendar o tempo de execução para os pods?
+      options:
+        - kube-scheduler
+        - kubelet
+        - kube-proxy
+        - etcd
+      answer: 0
+      explanation: |-
+        O kube-scheduler é o componente que avalia os nós disponíveis e faz o bind do pod ao nó escolhido. O kubelet apenas executa o que já foi agendado.
+
+        (gerada pela IA local a partir da sua documentação)
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-b03ff27d
+      cert: kcna
+      topic: Custom
+      difficulty: mid
+      type: multiple_choice
+      question: Qual é a principal diferença entre o Kubernetes Core Concepts e o Kubernetes Fundamentals?
+      options:
+        - Kubernetes Core Concepts aborda a segurança, enquanto Kubernetes Fundamentals aborda a administração
+        - Kubernetes Core Concepts aborda a administração, enquanto Kubernetes Fundamentals aborda a segurança
+        - Kubernetes Core Concepts é mais focado em aplicativos cloud-native, enquanto Kubernetes Fundamentals é mais focado em sistemas de produção
+        - Kubernetes Core Concepts é mais focado em sistemas de produção, enquanto Kubernetes Fundamentals é mais focado em aplicativos cloud-native
+      answer: 2
+      explanation: |-
+        O Kubernetes Core Concepts aborda conceitos como segurança, networking e observabilidade, enquanto o Kubernetes Fundamentals aborda conceitos como administração, containerização e orçamento.
+
+        (gerada pela IA local a partir da sua documentação)
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-bedb789d
+      cert: kcna
+      topic: Custom
+      difficulty: mid
+      type: multiple_choice
+      question: Qual é a principal função do etcd no Kubernetes?
+      options:
+        - Armazenar dados de configuração
+        - Manter a integridade da rede
+        - Gerenciar os pods
+        - Armazenar informações de estado dos pods
+      answer: 3
+      explanation: |-
+        O etcd é um banco de dados centralizado que armazena informações de estado dos pods, como o seu ID, IP e status.
+
+        (gerada pela IA local a partir da sua documentação)
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-26bc4cb7
+      cert: kcna
+      topic: Custom
+      difficulty: mid
+      type: multiple_choice
+      question: Qual é a principal diferença entre o Kubernetes Administration e o Kubernetes Fundamentals?
+      options:
+        - Kubernetes Administration aborda a configuração do cluster, enquanto Kubernetes Fundamentals aborda a criação de aplicativos
+        - Kubernetes Administration é mais focado em sistemas de produção, enquanto Kubernetes Fundamentals é mais focado em aplicativos cloud-native
+        - Kubernetes Administration aborda a segurança, enquanto Kubernetes Fundamentals aborda a administração
+        - Kubernetes Administration é mais focado em aplicativos cloud-native, enquanto Kubernetes Fundamentals é mais focado em sistemas de produção
+      answer: 1
+      explanation: |-
+        O Kubernetes Administration aborda conceitos como configuração do cluster, segurança e orçamento, enquanto o Kubernetes Fundamentals aborda conceitos como criação de aplicativos cloud-native.
+
+        (gerada pela IA local a partir da sua documentação)
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: ""
+      validation: null
+      goals: []
+      setup: []
+      teardown: []
+    - id: custom-6a2e737a
+      cert: kcna
+      topic: Storage
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie um PVC **pixel-cache-pvc** de **1Gi** (ReadWriteOnce) e um Pod **pixel-cache** montando-o em **/data**.
+
+        Foco do treino: **Storage**.
+
+        Resolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION.
+      options: []
+      answer: 0
+      explanation: O PVC é o pedido de storage do usuário; um PV satisfaz o pedido (binding). O pod referencia o claim, não o volume físico.
+      doc_url: https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+      doc_section: Concepts → Storage → Persistent Volumes
+      hint: 'PVC: accessModes [ReadWriteOnce], storage 1Gi. Pod: volumes.persistentVolumeClaim.claimName=pixel-cache-pvc + volumeMounts mountPath=/data'
+      answer_command: 'kubectl apply -f pvc.yaml && kubectl apply -f pod.yaml  # PVC pixel-cache-pvc 1Gi RWO + pod pixel-cache montando em /data'
+      validation: null
+      goals:
+        - description: PVC **pixel-cache-pvc** está **Bound**
+          hint: kubectl apply do PVC; storageclass default do minikube provisiona sozinha.
+          validation:
+            command: kubectl get pvc pixel-cache-pvc -o jsonpath='{.status.phase}' 2>/dev/null
+            expected_contains: Bound
+            expected_output: ""
+        - description: Pod **pixel-cache** monta o PVC em **/data** e está Running
+          hint: volumes + volumeMounts no spec do pod.
+          validation:
+            command: kubectl get pod pixel-cache -o jsonpath='{.spec.volumes[*].persistentVolumeClaim.claimName}:{.status.phase}' 2>/dev/null
+            expected_contains: pixel-cache-pvc:Running
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete pod pixel-cache --ignore-not-found=true
+        - kubectl delete pvc pixel-cache-pvc --ignore-not-found=true
+      lab_spec:
+        objective: Praticar Storage com comandos reais e validacao automatica
+        scenario: Cenario hands-on para kcna em Storage.
+        skills:
+            - kcna
+            - Storage
+        estimated_minutes: 14
+        dependencies:
+            - name: cluster ativo
+              kind: kubernetes
+              install_action: preflight
+              status_command: kubectl cluster-info
+              required: true
+        sources:
+            - title: Concepts → Storage → Persistent Volumes
+              url: https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+              section: Concepts → Storage → Persistent Volumes
+        evidence:
+            - domain: Storage
+              weight: 0
+              confidence: 65
+              matched_terms:
+                - storage
+                - kcna
+              sources:
+                - title: kubernetes.io / persistent volumes
+                  url: https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+                  section: Storage
+        evidence_score: 65
+        chunks: []
+        plan:
+            - Confirmar o cluster ativo e o contexto correto
+            - 'Validar: PVC **pixel-cache-pvc** está **Bound**'
+            - 'Validar: Pod **pixel-cache** monta o PVC em **/data** e está Running'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - PVC **pixel-cache-pvc** está **Bound**
+            - Pod **pixel-cache** monta o PVC em **/data** e está Running
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 90
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - evidencia curricular parcial
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+            warnings:
+                - sem chunks RAG
+                - evidencia curricular abaixo do ideal
+    - id: custom-9c7a38a4
+      cert: kcna
+      topic: Storage
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie um PVC **delta-gateway-pvc** de **1Gi** (ReadWriteOnce) e um Pod **delta-gateway** montando-o em **/data**.
+
+        Foco do treino: **Storage**.
+
+        Resolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION.
+      options: []
+      answer: 0
+      explanation: O PVC é o pedido de storage do usuário; um PV satisfaz o pedido (binding). O pod referencia o claim, não o volume físico.
+      doc_url: https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+      doc_section: Concepts → Storage → Persistent Volumes
+      hint: 'PVC: accessModes [ReadWriteOnce], storage 1Gi. Pod: volumes.persistentVolumeClaim.claimName=delta-gateway-pvc + volumeMounts mountPath=/data'
+      answer_command: 'kubectl apply -f pvc.yaml && kubectl apply -f pod.yaml  # PVC delta-gateway-pvc 1Gi RWO + pod delta-gateway montando em /data'
+      validation: null
+      goals:
+        - description: PVC **delta-gateway-pvc** está **Bound**
+          hint: kubectl apply do PVC; storageclass default do minikube provisiona sozinha.
+          validation:
+            command: kubectl get pvc delta-gateway-pvc -o jsonpath='{.status.phase}' 2>/dev/null
+            expected_contains: Bound
+            expected_output: ""
+        - description: Pod **delta-gateway** monta o PVC em **/data** e está Running
+          hint: volumes + volumeMounts no spec do pod.
+          validation:
+            command: kubectl get pod delta-gateway -o jsonpath='{.spec.volumes[*].persistentVolumeClaim.claimName}:{.status.phase}' 2>/dev/null
+            expected_contains: delta-gateway-pvc:Running
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete pod delta-gateway --ignore-not-found=true
+        - kubectl delete pvc delta-gateway-pvc --ignore-not-found=true
+      lab_spec:
+        objective: Praticar Storage com comandos reais e validacao automatica
+        scenario: Cenario hands-on para kcna em Storage.
+        skills:
+            - kcna
+            - Storage
+        estimated_minutes: 14
+        dependencies:
+            - name: cluster ativo
+              kind: kubernetes
+              install_action: preflight
+              status_command: kubectl cluster-info
+              required: true
+        sources:
+            - title: Concepts → Storage → Persistent Volumes
+              url: https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+              section: Concepts → Storage → Persistent Volumes
+        evidence:
+            - domain: Storage
+              weight: 0
+              confidence: 65
+              matched_terms:
+                - storage
+                - kcna
+              sources:
+                - title: kubernetes.io / persistent volumes
+                  url: https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+                  section: Storage
+        evidence_score: 65
+        chunks: []
+        plan:
+            - Confirmar o cluster ativo e o contexto correto
+            - 'Validar: PVC **delta-gateway-pvc** está **Bound**'
+            - 'Validar: Pod **delta-gateway** monta o PVC em **/data** e está Running'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - PVC **delta-gateway-pvc** está **Bound**
+            - Pod **delta-gateway** monta o PVC em **/data** e está Running
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 90
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - evidencia curricular parcial
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+            warnings:
+                - sem chunks RAG
+                - evidencia curricular abaixo do ideal
+    - id: custom-7cdfb563
+      cert: kcna
+      topic: Core Concepts
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie um Pod chamado **quartz-batch** com a imagem **nginx:1.21** e a label **app=quartz-batch**.
+
+        Foco do treino: **Core Concepts**.
+
+        Resolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION.
+      options: []
+      answer: 0
+      explanation: kubectl run cria um Pod único (sem controller). Labels permitem que Services e selectors encontrem o pod.
+      doc_url: https://kubernetes.io/docs/concepts/workloads/pods/
+      doc_section: Concepts → Workloads → Pods
+      hint: 'Quebre a tarefa em passos pequenos: criar recurso, ajustar configuracao e validar os goals.'
+      answer_command: kubectl run quartz-batch --image=nginx:1.21 --labels=app=quartz-batch
+      validation: null
+      goals:
+        - description: Pod **quartz-batch** está **Running**
+          hint: kubectl run cria o pod; aguarde ficar Ready.
+          validation:
+            command: kubectl get pod quartz-batch -o jsonpath='{.status.phase}' 2>/dev/null
+            expected_contains: Running
+            expected_output: ""
+        - description: Pod tem a label **app=quartz-batch**
+          hint: --labels no run, ou kubectl label depois.
+          validation:
+            command: kubectl get pod quartz-batch -o jsonpath='{.metadata.labels.app}' 2>/dev/null
+            expected_contains: quartz-batch
+            expected_output: ""
+      setup: []
+      teardown:
+        - kubectl delete pod quartz-batch --ignore-not-found=true
+      lab_spec:
+        objective: Praticar Core Concepts com comandos reais e validacao automatica
+        scenario: Cenario hands-on para kcna em Core Concepts.
+        skills:
+            - kcna
+            - Core Concepts
+        estimated_minutes: 14
+        dependencies:
+            - name: cluster ativo
+              kind: kubernetes
+              install_action: preflight
+              status_command: kubectl cluster-info
+              required: true
+        sources:
+            - title: Concepts → Workloads → Pods
+              url: https://kubernetes.io/docs/concepts/workloads/pods/
+              section: Concepts → Workloads → Pods
+        evidence:
+            - domain: Core Concepts
+              weight: 0
+              confidence: 65
+              matched_terms:
+                - core concepts
+                - kcna
+              sources:
+                - title: kubernetes.io / pods
+                  url: https://kubernetes.io/docs/concepts/workloads/pods/
+                  section: Core Concepts
+        evidence_score: 65
+        chunks: []
+        plan:
+            - Confirmar o cluster ativo e o contexto correto
+            - 'Validar: Pod **quartz-batch** está **Running**'
+            - 'Validar: Pod tem a label **app=quartz-batch**'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - Pod **quartz-batch** está **Running**
+            - Pod tem a label **app=quartz-batch**
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 90
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - evidencia curricular parcial
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+            warnings:
+                - sem chunks RAG
+                - evidencia curricular abaixo do ideal
+    - id: custom-9bdbd3a7
+      cert: kcna
+      topic: Autoscaling
+      difficulty: mid
+      type: lab
+      question: |-
+        Crie um HPA para o Deployment **pixel-worker**: **min=2**, **max=5**, **CPU 50%**.
+
+        Foco do treino: **Autoscaling**.
+
+        Resolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION.
+      options: []
+      answer: 0
+      explanation: O HorizontalPodAutoscaler observa metricas do Metrics Server e altera o numero desejado de replicas do Deployment dentro dos limites min/max.
+      doc_url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+      doc_section: Tasks -> Horizontal Pod Autoscaling
+      hint: 'Quebre a tarefa em passos pequenos: criar recurso, ajustar configuracao e validar os goals.'
+      answer_command: kubectl autoscale deployment pixel-worker --name=pixel-worker-hpa --cpu-percent=50 --min=2 --max=5
+      validation: null
+      goals:
+        - description: HPA **pixel-worker-hpa** aponta para o Deployment **pixel-worker**
+          hint: kubectl autoscale deployment ... --name ...
+          validation:
+            command: kubectl get hpa pixel-worker-hpa -o jsonpath='{.spec.scaleTargetRef.name}:{.spec.minReplicas}:{.spec.maxReplicas}' 2>/dev/null
+            expected_contains: pixel-worker:2:5
+            expected_output: ""
+        - description: HPA usa alvo de **50% CPU**
+          hint: Confira o campo averageUtilization.
+          validation:
+            command: kubectl get hpa pixel-worker-hpa -o jsonpath='{.spec.metrics[0].resource.target.averageUtilization}' 2>/dev/null
+            expected_contains: "50"
+            expected_output: ""
+      setup:
+        - description: Instalando Metrics Server se necessario...
+          command: kubectl get deploy metrics-server -n kube-system >/dev/null 2>&1 || kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml 2>&1 | tail -3; kubectl get deploy metrics-server -n kube-system -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null | grep -q -- '--kubelet-insecure-tls' || kubectl patch deployment metrics-server -n kube-system --type=json -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]' 2>/dev/null || true; kubectl rollout status deployment/metrics-server -n kube-system --timeout=180s 2>/dev/null || true
+        - description: Criando workload alvo pixel-worker com requests de CPU...
+          command: kubectl create deployment pixel-worker --image=registry.k8s.io/hpa-example --port=80 2>/dev/null || true; kubectl set resources deployment/pixel-worker --requests=cpu=100m --limits=cpu=200m 2>/dev/null || true; kubectl rollout status deployment/pixel-worker --timeout=120s 2>/dev/null || true
+      teardown:
+        - kubectl delete hpa pixel-worker-hpa --ignore-not-found=true
+        - kubectl delete deployment pixel-worker --ignore-not-found=true
+      lab_spec:
+        objective: Criar e validar autoscaling com HorizontalPodAutoscaler
+        scenario: Cenario hands-on para kcna em Autoscaling.
+        skills:
+            - kcna
+            - Autoscaling
+            - metrics-server
+        estimated_minutes: 17
+        dependencies:
+            - name: metrics-server
+              kind: kubernetes addon
+              install_action: auto setup
+              status_command: kubectl get deploy metrics-server -n kube-system
+              required: true
+        sources:
+            - title: Tasks -> Horizontal Pod Autoscaling
+              url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+              section: Tasks -> Horizontal Pod Autoscaling
+        evidence:
+            - domain: Autoscaling
+              weight: 0
+              confidence: 65
+              matched_terms:
+                - autoscaling
+                - kcna
+              sources:
+                - title: kubernetes.io / horizontal pod autoscale
+                  url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+                  section: Autoscaling
+        evidence_score: 65
+        chunks: []
+        plan:
+            - 'Preparar: Instalando Metrics Server se necessario...'
+            - 'Preparar: Criando workload alvo pixel-worker com requests de CPU...'
+            - 'Validar: HPA **pixel-worker-hpa** aponta para o Deployment **pixel-worker**'
+            - 'Validar: HPA usa alvo de **50% CPU**'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - HPA **pixel-worker-hpa** aponta para o Deployment **pixel-worker**
+            - HPA usa alvo de **50% CPU**
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 90
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - evidencia curricular parcial
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+                - setup automatizado
+            warnings:
+                - sem chunks RAG
+                - evidencia curricular abaixo do ideal
+    - id: custom-d0dcf5d9
+      cert: kcna
+      topic: Troubleshooting
+      difficulty: mid
+      type: lab
+      question: "\U0001F6A8 **INCIDENTE** — monitoramento alerta: **0 réplicas** respondendo para **lunar-auth**. Um deploy de sexta-feira deixou o serviço zerado.\n\nInvestigue e restaure **pelo menos 2 réplicas** saudáveis.\n\nFoco do treino: **Troubleshooting**.\n\nResolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION."
+      options: []
+      answer: 0
+      explanation: Réplicas zeradas não geram pods com erro — o app simplesmente some. Por isso o diagnóstico começa em kubectl get deploy (READY 0/0), não em get pods. kubectl scale restaura; em produção, procure o autor no rollout history/auditoria.
+      doc_url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#scaling-a-deployment
+      doc_section: Deployments → Scaling
+      hint: kubectl get deploy — repare na coluna READY. Alguém mexeu no replicas...
+      answer_command: kubectl scale deployment lunar-auth --replicas=2
+      validation: null
+      goals:
+        - description: '**lunar-auth** com **2+ réplicas prontas** (serviço restaurado)'
+          hint: ""
+          validation:
+            command: R=$(kubectl get deploy lunar-auth -o jsonpath='{.status.readyReplicas}' 2>/dev/null); [ "${R:-0}" -ge 2 ] && echo RECOVERED-$R || echo DOWN
+            expected_contains: RECOVERED
+            expected_output: ""
+      setup:
+        - description: Provisionando a aplicação...
+          command: kubectl create deployment lunar-auth --image=nginx:1.21 --replicas=2 2>/dev/null || true
+        - description: "\U0001F4A5 Injetando a falha..."
+          command: kubectl scale deployment lunar-auth --replicas=0 2>/dev/null || true
+      teardown:
+        - kubectl delete deployment lunar-auth --ignore-not-found=true
+      lab_spec:
+        objective: Praticar Troubleshooting com comandos reais e validacao automatica
+        scenario: Cenario hands-on para kcna em Troubleshooting.
+        skills:
+            - kcna
+            - Troubleshooting
+        estimated_minutes: 14
+        dependencies:
+            - name: cluster ativo
+              kind: kubernetes
+              install_action: preflight
+              status_command: kubectl cluster-info
+              required: true
+        sources:
+            - title: Deployments → Scaling
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#scaling-a-deployment
+              section: Deployments → Scaling
+        evidence:
+            - domain: Troubleshooting
+              weight: 0
+              confidence: 65
+              matched_terms:
+                - troubleshooting
+                - kcna
+              sources:
+                - title: kubernetes.io / deployment
+                  url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#scaling-a-deployment
+                  section: Troubleshooting
+        evidence_score: 65
+        chunks: []
+        plan:
+            - 'Preparar: Provisionando a aplicação...'
+            - "Preparar: \U0001F4A5 Injetando a falha..."
+            - 'Validar: **lunar-auth** com **2+ réplicas prontas** (serviço restaurado)'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - '**lunar-auth** com **2+ réplicas prontas** (serviço restaurado)'
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        quality:
+            score: 90
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - teardown definido
+                - fonte oficial associada
+                - evidencia curricular parcial
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+                - setup automatizado
+            warnings:
+                - sem chunks RAG
+                - evidencia curricular abaixo do ideal

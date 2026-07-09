@@ -30,12 +30,13 @@
 .chat-hero .t-sub { font-size:13px; color:var(--text-3); margin-bottom:30px; }
 .sugg-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:var(--content-narrow); margin:0 auto; }
 .sugg {
-    text-align:left; padding:14px 16px; border-radius:14px;
+    text-align:left; padding:13px 14px; border-radius:8px;
     border:1px solid var(--border-2); background:var(--surface-2);
     cursor:pointer; transition:border-color .16s, transform .16s, box-shadow .2s;
 }
 .sugg:hover { border-color:var(--violet-b); transform:translateY(-2px); box-shadow:0 10px 30px -12px rgba(91,95,239,.35); }
 .sugg .s-ico { font-size:16px; margin-bottom:6px; }
+.sugg .official-icon { display:block; }
 .sugg .s-t { font-size:12.5px; font-weight:700; color:var(--text); margin-bottom:2px; }
 .sugg .s-d { font-size:11px; color:var(--text-3); line-height:1.45; }
 @media (max-width:600px){ .sugg-grid { grid-template-columns:1fr; } }
@@ -50,6 +51,7 @@
     font-size:13.5px; color:var(--text); line-height:1.55; white-space:pre-wrap; word-break:break-word;
 }
 .msg.tutor .t-ava { flex-shrink:0; margin-top:2px; }
+.msg.tutor .t-ava img { display:block; }
 .msg.tutor .t-content { max-width:85%; font-size:13.5px; color:var(--text-2); line-height:1.65; }
 .msg.tutor .t-content strong { color:var(--text); }
 .msg.tutor .t-content code {
@@ -63,16 +65,67 @@
 
 /* cards dentro do chat */
 .chat-card {
-    margin-top:10px; border-radius:14px; border:1px solid var(--border-2);
+    margin-top:10px; border-radius:8px; border:1px solid var(--border-2);
     background:var(--surface-2); padding:14px 16px;
 }
 .chat-card .cc-title { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--text-4); margin-bottom:10px; font-family:var(--mono); }
+.agent-card {
+    background:linear-gradient(135deg,rgba(129,140,248,.10),rgba(56,189,248,.05)),var(--surface-2);
+}
+.agent-card-head { display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px; }
+.agent-card-kicker { font-family:var(--mono);font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--violet);margin-bottom:3px; }
+.agent-card-title { font-size:13px;font-weight:800;color:var(--text);line-height:1.35; }
+.agent-score { min-width:48px;height:48px;border-radius:8px;border:1px solid var(--green-glow);background:var(--green-dim);display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--green); }
+.agent-score b { font-family:var(--mono);font-size:17px;line-height:1; }
+.agent-score span { font-family:var(--mono);font-size:8px;text-transform:uppercase;color:var(--text-3);margin-top:3px; }
+.agent-meta { display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px; }
+.agent-meta span { display:inline-flex;align-items:center;gap:5px;padding:3px 7px;border-radius:4px;border:1px solid var(--border);background:var(--surface-3);font-family:var(--mono);font-size:10px;color:var(--text-3); }
+.agent-meta img { width:12px;height:12px;object-fit:contain;flex:0 0 12px; }
+.agent-evidence span { border-color:rgba(56,189,248,.24);background:rgba(56,189,248,.08);color:#93c5fd; }
+.agent-rag span { border-color:rgba(52,211,153,.24);background:rgba(52,211,153,.07);color:var(--green); }
+.agent-card-foot { display:flex;align-items:center;justify-content:space-between;gap:12px; }
+.agent-card-foot small { color:var(--text-3);font-size:11px;line-height:1.45; }
+.coach-grid { display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px; }
+.domain-row { display:grid;grid-template-columns:minmax(0,1fr) 48px 90px;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border); }
+.domain-row:last-child { border-bottom:none; }
+.domain-name { min-width:0;font-size:12px;font-weight:700;color:var(--text);line-height:1.35; }
+.domain-sub { display:block;margin-top:2px;font-family:var(--mono);font-size:9px;color:var(--text-4); }
+.review-list { display:flex;flex-direction:column;gap:7px;margin-top:8px; }
+.review-item { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:rgba(8,8,26,.35); }
+.review-item strong { font-size:12px;color:var(--text); }
+.review-item span { font-family:var(--mono);font-size:9px;color:var(--text-4); }
+.rag-status { display:flex;flex-wrap:wrap;gap:6px;margin-top:10px; }
+.rag-status span { padding:3px 7px;border-radius:4px;border:1px solid rgba(52,211,153,.22);background:rgba(52,211,153,.07);font-family:var(--mono);font-size:10px;color:var(--green); }
+.obs-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px; }
+.obs-kpi { min-width:0;padding:8px 9px;border-radius:6px;border:1px solid var(--border);background:rgba(8,8,26,.35); }
+.obs-kpi b { display:block;font-family:var(--mono);font-size:15px;color:var(--text);line-height:1.1; }
+.obs-kpi span { display:block;margin-top:3px;font-family:var(--mono);font-size:9px;color:var(--text-4);text-transform:uppercase; }
+.obs-list { display:flex;flex-direction:column;gap:6px;margin-top:8px; }
+.obs-item { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;font-size:11px;color:var(--text-3); }
+.obs-item strong { color:var(--text);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.obs-item code { font-family:var(--mono);font-size:10px;color:#93c5fd;background:transparent;padding:0; }
+.eval-card { background:linear-gradient(135deg,rgba(52,211,153,.07),rgba(129,140,248,.06)),var(--surface-2); }
+.eval-head { display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px; }
+.eval-score { min-width:56px;height:40px;border-radius:8px;border:1px solid var(--green-glow);background:var(--green-dim);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:16px;font-weight:800;color:var(--green); }
+.eval-sub { font-family:var(--mono);font-size:10px;color:var(--text-4);margin-top:3px; }
+.eval-list { display:flex;flex-direction:column;gap:6px;margin-top:8px; }
+.eval-case { display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;border:1px solid var(--border);background:rgba(8,8,26,.34); }
+.eval-case i { width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 0 3px var(--red-dim); }
+.eval-case.pass i { background:var(--green);box-shadow:0 0 0 3px var(--green-dim); }
+.eval-case strong { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text); }
+.eval-case code { font-family:var(--mono);font-size:10px;color:var(--text-3);background:transparent;padding:0; }
+.quality-card { background:linear-gradient(135deg,rgba(56,189,248,.07),rgba(251,191,36,.05)),var(--surface-2); }
+.quality-row { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 8px;border-radius:6px;border:1px solid var(--border);background:rgba(8,8,26,.34);margin-top:6px; }
+.quality-row strong { display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text); }
+.quality-row span { display:block;margin-top:2px;font-family:var(--mono);font-size:9px;color:var(--text-4); }
+.quality-row code { font-family:var(--mono);font-size:11px;color:var(--text-3);background:transparent;padding:0; }
+@media (max-width:520px){ .obs-grid { grid-template-columns:1fr; } }
 
 /* ── barra de entrada (estilo Gemini) ── */
 .chat-input-zone { flex-shrink:0; padding:8px 0 18px; }
-.cert-row { display:flex; align-items:center; gap:6px; margin-bottom:8px; padding:0 4px; }
+.cert-row { display:flex; align-items:center; gap:6px; margin-bottom:8px; padding:0 4px; flex-wrap:wrap; max-height:74px; overflow:auto; }
 .cert-chip {
-    padding:3px 11px; border-radius:999px; font-family:var(--mono); font-size:10px; font-weight:600;
+    padding:3px 10px; border-radius:999px; font-family:var(--mono); font-size:10px; font-weight:600;
     color:var(--text-4); border:1px solid transparent; background:transparent; cursor:pointer;
     transition:all .14s;
 }
@@ -121,47 +174,29 @@
         <!-- Saudação -->
         <div class="chat-hero" id="chat-hero">
             <div style="display:flex;justify-content:center;">
-                <svg class="tutor-avatar" width="84" height="84" viewBox="0 0 64 64" fill="none" aria-label="Tutor">
-                    <defs>
-                        <linearGradient id="tgrad" x1="0" y1="0" x2="64" y2="64">
-                            <stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#38bdf8"/>
-                        </linearGradient>
-                    </defs>
-                    <line x1="32" y1="7" x2="32" y2="12" stroke="url(#tgrad)" stroke-width="2.5" stroke-linecap="round"/>
-                    <circle cx="32" cy="5.5" r="2.6" fill="#38bdf8"/>
-                    <rect x="4.5" y="26" width="4" height="11" rx="2" fill="#818cf8" opacity=".55"/>
-                    <rect x="55.5" y="26" width="4" height="11" rx="2" fill="#38bdf8" opacity=".55"/>
-                    <rect x="10" y="12" width="44" height="39" rx="12" stroke="url(#tgrad)" stroke-width="2.5" fill="rgba(129,140,248,.08)"/>
-                    <g class="ta-eye">
-                        <circle cx="23.5" cy="29" r="4.2" fill="#818cf8"/>
-                        <circle cx="40.5" cy="29" r="4.2" fill="#38bdf8"/>
-                        <circle cx="24.9" cy="27.6" r="1.4" fill="#fff" opacity=".95"/>
-                        <circle cx="41.9" cy="27.6" r="1.4" fill="#fff" opacity=".95"/>
-                    </g>
-                    <path d="M24 40c2.6 3.2 13.4 3.2 16 0" stroke="url(#tgrad)" stroke-width="2.6" stroke-linecap="round"/>
-                </svg>
+                <img class="tutor-avatar official-avatar" src="/static/vendor/kubernetes.svg" alt="Kubernetes">
             </div>
             <h1 class="t-greet" id="greet-text">Como posso te ajudar hoje?</h1>
             <p class="t-sub">Peça um lab, cole uma URL de documentação, ou só converse sobre Kubernetes.</p>
 
             <div class="sugg-grid">
                 <button class="sugg" onclick="sendSuggestion('crie um lab de storage nível 3 passo a passo')">
-                    <div class="s-ico">✦</div>
+                    <div class="s-ico"><img class="official-icon official-icon-lg" src="/static/vendor/kubernetes.svg" alt=""></div>
                     <div class="s-t">Lab sob medida</div>
                     <div class="s-d">"crie um lab de storage nível 3 passo a passo"</div>
                 </button>
                 <button class="sugg" onclick="sendSuggestion('modo incidente: quebre o cluster para eu consertar')">
-                    <div class="s-ico" style="color:var(--red);"><svg class="lic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18v-6a5 5 0 1 1 10 0v6"/><path d="M5 21a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1z"/><path d="M21 12h1"/><path d="M18.5 4.5 18 5"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="M5.5 4.5 6 5"/></svg></div>
+                    <div class="s-ico"><img class="official-icon official-icon-lg" src="/static/vendor/kubernetes.svg" alt=""></div>
                     <div class="s-t">Modo Incidente</div>
                     <div class="s-d">o cluster chega quebrado — diagnostique e conserte</div>
                 </button>
                 <button class="sugg" onclick="sendSuggestion('quero fazer um simulado completo')">
-                    <div class="s-ico" style="color:var(--amber);"><svg class="lic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg></div>
+                    <div class="s-ico"><img class="official-icon official-icon-lg" src="/static/vendor/docs.svg" alt=""></div>
                     <div class="s-t">Simulado de prova</div>
                     <div class="s-d">16 questões · 2 horas · sem dicas · score report</div>
                 </button>
                 <button class="sugg" onclick="sendSuggestion('como está meu desempenho?')">
-                    <div class="s-ico"><svg class="lic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg></div>
+                    <div class="s-ico"><img class="official-icon official-icon-lg" src="/static/vendor/docs.svg" alt=""></div>
                     <div class="s-t">Meu desempenho</div>
                     <div class="s-d">pontos fortes, fracos e recomendações</div>
                 </button>
@@ -189,9 +224,47 @@
 </div>
 
 <script>
-const TUTOR_MINI = '<svg width="26" height="26" viewBox="0 0 64 64" fill="none"><rect x="10" y="12" width="44" height="39" rx="12" stroke="#818cf8" stroke-width="4" fill="rgba(129,140,248,.1)"/><circle cx="23.5" cy="29" r="5" fill="#818cf8"/><circle cx="40.5" cy="29" r="5" fill="#38bdf8"/><path d="M24 40c2.6 3.2 13.4 3.2 16 0" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/></svg>';
+const TUTOR_MINI = '<img class="tutor-mini" src="/static/vendor/kubernetes.svg" alt="">';
 let chatCert = 'CKA';
 let chatBusy = false;
+
+function officialIconSrc(text) {
+    const l = String(text || '').toLowerCase();
+    if (l.includes('localstack')) return '/static/vendor/localstack.svg';
+    if (/(argocd|argo cd|argo-cd|argoproj|gitops|capa)/.test(l)) return '/static/vendor/argo.png';
+    if (/(terraform|hcl|hashicorp)/.test(l)) return '/static/vendor/terraform.svg';
+    if (/(ansible|playbook)/.test(l)) return '/static/vendor/ansible.svg';
+    if (/(azure|aks|microsoft)/.test(l)) return '/static/vendor/azure.svg';
+    if (/(aws|amazon|iam|s3|sqs|vpc|ec2|eks|cloudfront|lambda|dynamodb)/.test(l)) return '/static/vendor/aws.svg';
+    if (/(kubernetes|k8s|kubectl|kube|cka|ckad|cks|hpa|metrics|pod|deployment|service)/.test(l)) return '/static/vendor/kubernetes.svg';
+    return '/static/vendor/docs.svg';
+}
+function officialIcon(text, cls = 'official-icon') {
+    return `<img class="${cls}" src="${officialIconSrc(text)}" alt="">`;
+}
+
+const SUGGESTIONS = [
+    { q: 'criar questao da CKA de HPA nivel 3', icon: officialIcon('cka hpa', 'official-icon official-icon-lg'), title: 'CKA por tópico exato', desc: '"criar questão da CKA de HPA nível 3"' },
+    { q: 'crie um lab de AWS para SQS', icon: officialIcon('aws sqs', 'official-icon official-icon-lg'), title: 'AWS sem credenciais', desc: 'S3, IAM e SQS via LocalStack no cluster' },
+    { q: 'crie um lab da CAPA sobre ArgoCD sync', icon: officialIcon('argocd capa', 'official-icon official-icon-lg'), title: 'CAPA / ArgoCD', desc: 'GitOps, sync policy e Applications' },
+    { q: 'modo incidente: quebre o cluster para eu consertar', icon: '<svg class="lic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18v-6a5 5 0 1 1 10 0v6"/><path d="M5 21a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1z"/><path d="M21 12h1"/><path d="M18.5 4.5 18 5"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="M5.5 4.5 6 5"/></svg>', title: 'Modo Incidente', desc: 'diagnostique e conserte falhas reais' },
+];
+
+function refreshSuggestions() {
+    const sub = document.querySelector('.chat-hero .t-sub');
+    if (sub) sub.textContent = 'Peça labs por certificação, tópico exato ou URL oficial da documentação.';
+    const grid = document.querySelector('.sugg-grid');
+    if (!grid) return;
+    grid.innerHTML = SUGGESTIONS.map(s => `
+        <button class="sugg" data-q="${escH(s.q)}">
+            <div class="s-ico">${s.icon}</div>
+            <div class="s-t">${escH(s.title)}</div>
+            <div class="s-d">${escH(s.desc)}</div>
+        </button>`).join('');
+    grid.querySelectorAll('.sugg').forEach(btn => {
+        btn.onclick = () => sendSuggestion(btn.dataset.q);
+    });
+}
 
 // ── util ────────────────────────────────────────────────────
 function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -246,7 +319,15 @@ function pickCert(btn) {
 function renderCertChips(certs) {
     const row = document.getElementById('cert-row');
     row.querySelectorAll('.cert-chip').forEach(c => c.remove());
+    const seen = new Set();
+    const ordered = [];
     (certs || ['CKA', 'CKAD', 'CKS', 'ArgoCD']).forEach(c => {
+        const key = String(c).trim().toLowerCase();
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        ordered.push(c);
+    });
+    ordered.forEach(c => {
         const b = document.createElement('button');
         b.className = 'cert-chip' + (c === chatCert ? ' active' : '');
         b.dataset.cert = c;
@@ -267,12 +348,17 @@ function renderCertChips(certs) {
 }
 async function refreshCerts() {
     try {
-        const r = await fetch('/api/tutor/status');
+        const r = await fetch('/api/tutor/status?cert=' + encodeURIComponent(chatCert));
         const d = await r.json();
         renderCertChips(d.certs);
     } catch (e) { renderCertChips(null); }
 }
 function autoGrow(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 130) + 'px'; }
+function tunePlaceholder() {
+    const ta = document.getElementById('chat-text');
+    if (!ta) return;
+    ta.placeholder = window.innerWidth < 520 ? 'Peça um lab ou cole uma URL...' : 'Pergunte, peça um lab, ou cole uma URL de documentação...';
+}
 function chatKey(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
 }
@@ -334,8 +420,39 @@ async function sendChat() {
 }
 
 // ── ações do tutor ──────────────────────────────────────────
+function metaChips(items) {
+    return (items || []).slice(0, 5).map(x => `<span>${officialIcon(x)}${escH(x)}</span>`).join('');
+}
+
 function renderAction(slot, a) {
     if (a.type === 'session') {
+        const topic = a.topic ? escH(a.topic) : 'lab hands-on';
+        const cert = a.cert ? escH(a.cert) : escH(chatCert);
+        const quality = a.quality || 0;
+        const deps = metaChips(a.dependencies);
+        const evs = metaChips(a.evidence);
+        const rag = metaChips(a.chunks);
+        const srcs = metaChips(a.sources);
+        slot.insertAdjacentHTML('beforeend',
+            `<div class="chat-card agent-card">
+                <div class="agent-card-head">
+                    <div>
+                        <div class="agent-card-kicker">Sessao pratica - ${cert}</div>
+                        <div class="agent-card-title">${a.total} lab(s) de ${topic} prontos</div>
+                    </div>
+                    ${quality ? `<div class="agent-score"><b>${quality}</b><span>score</span></div>` : ''}
+                </div>
+                ${evs ? `<div class="agent-meta agent-evidence"><span>evidencia</span>${evs}</div>` : ''}
+                ${rag ? `<div class="agent-meta agent-rag"><span>rag</span>${rag}</div>` : ''}
+                ${deps ? `<div class="agent-meta">${deps}</div>` : ''}
+                ${srcs ? `<div class="agent-meta">${srcs}</div>` : ''}
+                <div class="agent-card-foot">
+                    <small>setup, validadores e limpeza foram montados antes da sessao.</small>
+                    <a class="btn btn-primary btn-sm" href="/lab/${escH(a.first)}?session=${escH(a.id)}">Comecar</a>
+                </div>
+             </div>`);
+        scrollBottom();
+        return;
         slot.insertAdjacentHTML('beforeend',
             `<div class="chat-card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
                 <span style="font-size:12px;color:var(--text-3);">${a.total} exercício(s) prontos, ambiente preparando</span>
@@ -368,12 +485,182 @@ async function startExam() {
 
 function scoreColor(s) { return s >= .7 ? 'var(--green)' : s >= .5 ? 'var(--amber)' : 'var(--red)'; }
 
+function coachCards(d) {
+    let html = '';
+    const domains = d.domain_map || [];
+    if (domains.length) {
+        const rows = domains.map(x => {
+            const pct = Math.round((x.score || 0) * 100);
+            const label = x.attempts ? pct + '%' : 'novo';
+            const due = x.due_reviews ? ` - ${x.due_reviews} revisao` : '';
+            return `<div class="domain-row">
+                <div class="domain-name">${escH(x.domain)}<span class="domain-sub">peso ${x.weight}%${due}</span></div>
+                <span class="skill-meta">${label}</span>
+                <div class="skill-bar"><div style="width:${pct}%;background:${scoreColor(x.score || 0)};"></div></div>
+            </div>`;
+        }).join('');
+        html += `<div class="chat-card"><div class="cc-title">mapa oficial ${escH(chatCert)}</div>${rows}</div>`;
+    }
+    const review = (d.review || []).filter(x => !chatCert || !x.cert || String(x.cert).toLowerCase() === String(chatCert).toLowerCase()).slice(0, 5);
+    if (review.length) {
+        const items = review.map(x => `<div class="review-item">
+            <div><strong>${escH(x.topic || 'Revisao')}</strong><span>${escH(x.reason || 'revisao espacada')}</span></div>
+            <button class="btn btn-outline btn-sm" onclick="sendSuggestion('revisar meus erros de ${escH(x.topic || chatCert)}')">Treinar</button>
+        </div>`).join('');
+        html += `<div class="chat-card"><div class="cc-title">caderno de erros</div><div class="review-list">${items}</div></div>`;
+    }
+    const obs = d.observability || {};
+    if ((obs.attempts || 0) > 0 || (obs.top_failures || []).length || (obs.stuck_topics || []).length) {
+        const rate = Math.round((obs.success_rate || 0) * 100);
+        const failures = (obs.top_failures || []).slice(0, 3).map(x => `<div class="obs-item">
+            <strong>${escH(x.topic || x.cert || 'Lab')}</strong><code>${escH(x.command || 'falha')}</code>
+        </div>`).join('');
+        const stuck = (obs.stuck_topics || []).slice(0, 3).map(x => `<div class="obs-item">
+            <strong>${escH(x.topic || 'Topico')}</strong><code>${(x.failures || 0) + (x.setup_warnings || 0) + (x.term_errors || 0)} sinais</code>
+        </div>`).join('');
+        html += `<div class="chat-card"><div class="cc-title">observabilidade hands-on</div>
+            <div class="obs-grid">
+                <div class="obs-kpi"><b>${rate}%</b><span>sucesso</span></div>
+                <div class="obs-kpi"><b>${obs.attempts || 0}</b><span>validacoes</span></div>
+                <div class="obs-kpi"><b>${obs.labs || 0}</b><span>labs vistos</span></div>
+            </div>
+            ${stuck ? `<div class="obs-list">${stuck}</div>` : ''}
+            ${failures ? `<div class="obs-list">${failures}</div>` : ''}
+        </div>`;
+    }
+    const rag = d.rag || {};
+    html += `<div class="chat-card"><div class="cc-title">rag vetorial</div><div class="rag-status">
+        <span>${escH(rag.mode || 'persistent-embeddings+chunks')}</span>
+        <span>${rag.certs || 0} certs</span>
+        <span>${rag.chunks || 0} chunks rastreados</span>
+        <span>${rag.embeddings || 0} embeddings</span>
+        ${rag.embedding_model ? `<span>${escH(rag.embedding_model)}</span>` : ''}
+    </div></div>`;
+    return html;
+}
+
+function renderEvalReport(d) {
+    const total = d.total || 0;
+    const passed = d.passed || 0;
+    const score = d.score || 0;
+    const cases = (d.cases || []).slice(0, 6).map(c => {
+        const cls = c.passed ? 'pass' : 'fail';
+        const meta = [c.cert, c.topic, c.quality ? c.quality + 'q' : ''].filter(Boolean).join(' · ');
+        return `<div class="eval-case ${cls}">
+            <i></i>
+            <strong>${escH(c.name || c.prompt || 'golden prompt')}</strong>
+            <code>${escH(meta || (c.score || 0) + '%')}</code>
+        </div>`;
+    }).join('');
+    const color = score >= 90 ? 'var(--green)' : score >= 75 ? 'var(--amber)' : 'var(--red)';
+    return `<div class="eval-head">
+        <div>
+            <div class="cc-title">golden eval IA</div>
+            <div class="domain-name">prompts criticos de labs hands-on</div>
+            <div class="eval-sub">${passed}/${total} casos aprovados</div>
+        </div>
+        <div class="eval-score" style="color:${color};border-color:${color};">${score}%</div>
+    </div>
+    <div class="eval-list">${cases}</div>`;
+}
+
+async function renderEvalCard(slot) {
+    const card = document.createElement('div');
+    card.className = 'chat-card eval-card';
+    card.innerHTML = '<div class="cc-title">golden eval IA</div><div class="eval-sub">validando roteamento, qualidade e dependencias...</div>';
+    slot.appendChild(card);
+    scrollBottom();
+    try {
+        const r = await fetch('/api/tutor/eval');
+        const d = await r.json();
+        card.innerHTML = renderEvalReport(d);
+    } catch (e) {
+        card.innerHTML = '<div class="cc-title">golden eval IA</div><div class="eval-sub">nao consegui rodar a avaliacao agora</div>';
+    }
+    scrollBottom();
+}
+
+function renderQualityReport(d) {
+    const total = d.total || 0;
+    const avg = d.avg_regression || d.avg_quality || 0;
+    const color = avg >= 90 ? 'var(--green)' : avg >= 75 ? 'var(--amber)' : 'var(--red)';
+    const rows = (d.weakest || []).slice(0, 5).map(c => {
+        const meta = [c.cert, c.topic, (c.count || 0) + 'x'].filter(Boolean).join(' · ');
+        const risk = (c.risks || []).slice(0, 2).join(' · ');
+        return `<div class="quality-row">
+            <div>
+                <strong>${escH(c.prompt || 'prompt real')}</strong>
+                <span>${escH(meta)}${risk ? ' · ' + escH(risk) : ''}</span>
+            </div>
+            <code>${c.regression_score || 0}%</code>
+        </div>`;
+    }).join('');
+    const empty = '<div class="quality-row"><div><strong>Sem prompts reais ainda</strong><span>os proximos labs gerados vao alimentar o dataset</span></div><code>novo</code></div>';
+    return `<div class="eval-head">
+        <div>
+            <div class="cc-title">dataset real de prompts</div>
+            <div class="domain-name">${total} prompt(s) ranqueado(s)</div>
+            <div class="eval-sub">${d.needs_attention || 0} precisam de atencao · ${d.low_quality || 0} abaixo do gate</div>
+        </div>
+        <div class="eval-score" style="color:${color};border-color:${color};">${avg}%</div>
+    </div>
+    ${rows || empty}`;
+}
+
+async function renderQualityCard(slot) {
+    const card = document.createElement('div');
+    card.className = 'chat-card quality-card';
+    card.innerHTML = '<div class="cc-title">dataset real de prompts</div><div class="eval-sub">ranqueando historico...</div>';
+    slot.appendChild(card);
+    scrollBottom();
+    try {
+        const r = await fetch('/api/tutor/quality');
+        const d = await r.json();
+        card.innerHTML = renderQualityReport(d);
+    } catch (e) {
+        card.innerHTML = '<div class="cc-title">dataset real de prompts</div><div class="eval-sub">nao consegui ler o ranking agora</div>';
+    }
+    scrollBottom();
+}
+
+function renderAdminQualityReport(d) {
+    const blockers = (d.deployment_blockers || []).map(x => `<div class="quality-row"><div><strong>${escH(x)}</strong><span>bloqueador de deploy</span></div><code>gate</code></div>`).join('');
+    const recs = (d.recommendations || []).slice(0, 4).map(x => `<div class="quality-row"><div><strong>${escH(x)}</strong><span>recomendacao operacional</span></div><code>ok</code></div>`).join('');
+    const score = d.golden_score || 0;
+    const color = score >= 90 ? 'var(--green)' : score >= 80 ? 'var(--amber)' : 'var(--red)';
+    return `<div class="eval-head">
+        <div>
+            <div class="cc-title">painel admin</div>
+            <div class="domain-name">golden ${d.golden_passed || 0}/${d.golden_total || 0} · rag ${(d.rag && d.rag.chunks) || 0} chunks</div>
+            <div class="eval-sub">${(d.topics || []).length} topicos · ${(d.lab_observability && d.lab_observability.attempts) || 0} validacoes reais</div>
+        </div>
+        <div class="eval-score" style="color:${color};border-color:${color};">${score}%</div>
+    </div>${blockers || recs}`;
+}
+
+async function renderAdminQualityCard(slot) {
+    const card = document.createElement('div');
+    card.className = 'chat-card quality-card';
+    card.innerHTML = '<div class="cc-title">painel admin</div><div class="eval-sub">checando qualidade operacional...</div>';
+    slot.appendChild(card);
+    scrollBottom();
+    try {
+        const r = await fetch('/api/tutor/admin-quality');
+        const d = await r.json();
+        card.innerHTML = renderAdminQualityReport(d);
+    } catch (e) {
+        card.innerHTML = '<div class="cc-title">painel admin</div><div class="eval-sub">nao consegui ler o painel agora</div>';
+    }
+    scrollBottom();
+}
+
 async function renderStatsCard(slot) {
     try {
-        const r = await fetch('/api/tutor/status');
+        const r = await fetch('/api/tutor/status?cert=' + encodeURIComponent(chatCert));
         const d = await r.json();
+        const extra = coachCards(d);
         const stats = (d.stats || []).filter(s => s.attempts > 0).sort((a, b) => a.score - b.score);
-        if (!stats.length) {
+        if (false && !stats.length) {
             slot.insertAdjacentHTML('beforeend', '<div class="chat-card">ainda não tenho dados seus — resolve uns labs que eu começo a te conhecer 😉</div>');
             return;
         }
@@ -385,18 +672,26 @@ async function renderStatsCard(slot) {
                 <div class="skill-bar"><div style="width:${Math.round(s.score*100)}%;background:${scoreColor(s.score)};"></div></div>
                 <span class="skill-meta">${Math.round(s.score*100)}%</span></div>`;
         });
+        if (!rows) rows = '<div class="review-item"><div><strong>Sem tentativas ainda</strong><span>faca um lab para calibrar o coach</span></div></div>';
         const weakest = stats[0];
         let cta = '';
         if (weakest && weakest.score < .65) {
-            cta = `<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="sendSuggestion('crie um lab de ${escH(weakest.topic.toLowerCase())} nível 3')">✦ Treinar ${escH(weakest.topic)} agora</button></div>`;
+            cta = `<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="sendSuggestion('crie um lab de ${escH(weakest.topic.toLowerCase())} nível 3')">Treinar ${escH(weakest.topic)} agora</button></div>`;
         }
         slot.insertAdjacentHTML('beforeend', `<div class="chat-card"><div class="cc-title">desempenho por tópico</div>${rows}${cta}</div>`);
+        slot.insertAdjacentHTML('beforeend', extra);
+        await renderEvalCard(slot);
+        await renderQualityCard(slot);
+        await renderAdminQualityCard(slot);
         scrollBottom();
     } catch (e) {}
 }
 
 // ── boot: LLM pill + saudação proativa ──────────────────────
 (async function init() {
+    refreshSuggestions();
+    tunePlaceholder();
+    window.addEventListener('resize', tunePlaceholder);
     try {
         const r = await fetch('/api/tutor/status');
         const d = await r.json();
@@ -416,7 +711,7 @@ async function renderStatsCard(slot) {
             slot.insertAdjacentHTML('beforeend',
                 `<div class="chat-card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
                     <span style="font-size:12px;color:var(--text-3);">lab nível ${rec.level} de ${escH(rec.topic)}</span>
-                    <button class="btn btn-primary btn-sm" onclick="sendSuggestion('crie um lab de ${escH(rec.topic.toLowerCase())} nível ${rec.level}')">✦ Bora treinar</button>
+                    <button class="btn btn-primary btn-sm" onclick="sendSuggestion('crie um lab de ${escH(rec.topic.toLowerCase())} nível ${rec.level}')">Bora treinar</button>
                  </div>`);
         }
         // saudação por hora do dia
