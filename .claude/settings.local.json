@@ -247,7 +247,13 @@
       "Bash(git commit -m 'docs: tese do game change — loop fechado, decisoes e metricas *)",
       "Bash(git checkout *)",
       "Bash(git rm *)",
-      "Bash(git commit -m 'chore: ignora estado runtime de teste e cache .tmp; permissoes locais *)"
+      "Bash(git commit -m 'chore: ignora estado runtime de teste e cache .tmp; permissoes locais *)",
+      "Bash(PORT=8094 go run .)",
+      "Bash(curl -s http://localhost:8094/lab/cka-easy-001 -o /tmp/lab-curado.html -w \"%{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost:8094/metrics)",
+      "Bash(git commit -m 'feat\\(content\\): proveniencia curado-vs-gerado com selo visivel no lab *)",
+      "Bash(git commit -m 'feat\\(metrics\\): retencao medida em reapresentacao + taxa do quality gate *)",
+      "Bash(git commit -m 'chore\\(claude\\): permissoes locais da sessao *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\mathe\\.claude\\projects\\c--desenv-estudo-app\\memory"
