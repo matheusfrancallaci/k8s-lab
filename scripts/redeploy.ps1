@@ -63,8 +63,13 @@ if ($power -ne "VM running") {
 Say "Reiniciando o app na VM e conferindo a imagem"
 $remote = @"
 set -e
-az acr login --name $Acr >/dev/null
-docker pull $Acr.azurecr.io/${Image}:latest >/dev/null
+# Cada deploy empilha ~2GB de imagem; com o disco cheio o pull falha MUDO e o
+# boot fica na imagem cacheada (visto em 2026-07-09: az login sem tmp, pull
+# 'no space left'). Prune mantém as imagens dos containers rodando e NUNCA
+# toca em volumes (lab-data = progresso dos usuários).
+docker image prune -af >/dev/null 2>&1 || true
+timeout 60 az acr login --name $Acr >/dev/null
+timeout 240 docker pull $Acr.azurecr.io/${Image}:latest >/dev/null
 systemctl restart estudo-app.service
 sleep 10
 want=`$(docker inspect --format '{{.Id}}' $Acr.azurecr.io/${Image}:latest)
