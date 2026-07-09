@@ -102,7 +102,7 @@ func (h *TutorHandler) Explain(w http.ResponseWriter, r *http.Request) {
 			valCmd = q.Goals[body.Goal].Validation.Command
 		}
 	}
-	text, err := tutor.LLMExplainFailure(q.Question, goalDesc, valCmd, body.Output)
+	text, err := tutor.LLMExplainFailure(q.Question, goalDesc, valCmd, q.AnswerCommand, body.Output)
 	if err != nil {
 		json.NewEncoder(w).Encode(map[string]any{"error": "IA local indisponível — instale o Ollama para ter explicações em tempo real"}) //nolint:errcheck
 		return

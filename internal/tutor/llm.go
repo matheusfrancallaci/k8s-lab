@@ -405,7 +405,9 @@ MATERIAL:
 // ─────────────────────────────────────────────────────────────────────────────
 
 // LLMExplainFailure gera uma explicação curta e didática do erro do usuário.
-func LLMExplainFailure(questionText, goalDesc, valCmd, output string) (string, error) {
+// answerCmd é o gabarito do lab: nunca é enviado ao modelo, serve só para
+// redigir a resposta caso o modelo o reconstrua por conta própria.
+func LLMExplainFailure(questionText, goalDesc, valCmd, answerCmd, output string) (string, error) {
 	if len(output) > 800 {
 		output = output[:800]
 	}
@@ -424,5 +426,9 @@ Em português do Brasil, explique em NO MÁXIMO 4 frases:
 Priorize diagnosticar namespace errado, nome divergente, selector/label sem casar, Pod nao Ready, Deployment nao Available, permissao RBAC/Forbidden ou recurso criado no escopo errado. Seja direto e encorajador. Sem markdown, sem listas.`,
 		strings.TrimSpace(questionText), goalDesc, valCmd, strings.TrimSpace(output))
 
-	return llmGenerate(prompt, false, 45*time.Second, tokensChat, "")
+	raw, err := llmGenerate(prompt, false, 45*time.Second, tokensChat, "")
+	if err != nil {
+		return "", err
+	}
+	return RedactSolutionCommands(raw, answerCmd), nil
 }
