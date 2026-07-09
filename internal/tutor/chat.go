@@ -220,14 +220,13 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 	}
 
 	if regexp.MustCompile(`(?i)\b(trilha|plano de estudo|roadmap|sequ[eê]ncia|curriculo pratico|curr[ií]culo pr[aá]tico)\b`).MatchString(l) {
-		qs, path, err := GenerateLearningPath(msg, cert, detectLevel(msg))
+		qs, path, err := GenerateGatedLearningPath(userID, msg, cert, detectLevel(msg))
 		if err != nil {
 			return ChatResult{Reply: "Nao consegui montar uma trilha segura agora: " + err.Error()}
 		}
 		sid, first, total := createSession(questionIDs(qs))
 		return ChatResult{
-			Reply: fmt.Sprintf("Montei a trilha **%s** com **%d lab(s)** em sequencia: %s. Ela cobre fundamento, pratica, validacao e troubleshooting.",
-				path.Name, total, strings.Join(path.Topics, " -> ")),
+			Reply:     learningPathReply(path, total),
 			Action:    sessionAction(sid, first, total, qs),
 			Questions: qs,
 		}

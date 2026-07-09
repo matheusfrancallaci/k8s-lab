@@ -8,13 +8,14 @@ import (
 )
 
 type LearningPath struct {
-	Name        string   `json:"name"`
-	Cert        string   `json:"cert"`
-	Topic       string   `json:"topic"`
-	Description string   `json:"description"`
-	Topics      []string `json:"topics"`
-	ExamCount   int      `json:"exam_count"`
-	Minutes     int      `json:"minutes"`
+	Name        string         `json:"name"`
+	Cert        string         `json:"cert"`
+	Topic       string         `json:"topic"`
+	Description string         `json:"description"`
+	Topics      []string       `json:"topics"`
+	ExamCount   int            `json:"exam_count"`
+	Minutes     int            `json:"minutes"`
+	Gated       []TopicMastery `json:"gated,omitempty"` // veredito de mastery por tópico (cadeados na UI)
 }
 
 func BuildLearningPath(request, activeCert string) LearningPath {
@@ -42,12 +43,25 @@ func BuildLearningPath(request, activeCert string) LearningPath {
 }
 
 func GenerateLearningPath(request, activeCert string, level int) ([]models.Question, LearningPath, error) {
+	return GenerateGatedLearningPath("", request, activeCert, level)
+}
+
+// GenerateGatedLearningPath monta a trilha aplicando o mastery gate do usuário:
+// só gera labs dos tópicos liberados (dominados + a fronteira atual); os
+// travados vão no path.Gated para a UI mostrar o cadeado, mas não viram lab.
+// userID vazio desliga o gate (libera tudo) — usado por chamadas sem perfil.
+func GenerateGatedLearningPath(userID, request, activeCert string, level int) ([]models.Question, LearningPath, error) {
 	path := BuildLearningPath(request, activeCert)
 	if level < 1 || level > 3 {
 		level = 2
 	}
+	gen := path.Topics
+	if userID != "" {
+		path.Gated = MasteryPath(userID, path.Cert, path.Topics)
+		gen = unlockedTopics(path.Gated)
+	}
 	var qs []models.Question
-	for _, topic := range path.Topics {
+	for _, topic := range gen {
 		if _, ok := templates[topic]; !ok {
 			continue
 		}
@@ -66,6 +80,36 @@ func GenerateLearningPath(request, activeCert string, level int) ([]models.Quest
 		return nil, path, err
 	}
 	return qs, path, nil
+}
+
+// learningPathReply descreve a trilha ao aluno mostrando o roadmap completo com
+// cadeados: os travados ficam visíveis (motivação) mas só os liberados viraram
+// lab — é o mastery gate explicado, não escondido.
+func learningPathReply(path LearningPath, generated int) string {
+	if len(path.Gated) == 0 {
+		return fmt.Sprintf("Montei a trilha **%s** com **%d lab(s)** em sequencia: %s. Ela cobre fundamento, pratica, validacao e troubleshooting.",
+			path.Name, generated, strings.Join(path.Topics, " -> "))
+	}
+	var roadmap []string
+	locked := 0
+	for _, tm := range path.Gated {
+		switch tm.Status {
+		case Mastered:
+			roadmap = append(roadmap, "✓ "+tm.Topic)
+		case CurrentGap:
+			roadmap = append(roadmap, "▶ "+tm.Topic)
+		default:
+			roadmap = append(roadmap, "🔒 "+tm.Topic)
+			locked++
+		}
+	}
+	msg := fmt.Sprintf("Trilha **%s** — %s.", path.Name, strings.Join(roadmap, "  "))
+	if locked > 0 {
+		msg += fmt.Sprintf(" Liberei **%d lab(s)** no ponto onde voce esta; os **%d** travados abrem quando voce dominar os anteriores (acerto consistente e sem revisao vencida).", generated, locked)
+	} else {
+		msg += fmt.Sprintf(" Tudo dominado — os **%d lab(s)** agora sao reforco de memoria.", generated)
+	}
+	return msg
 }
 
 func pathTopics(cert, topic, request string) []string {

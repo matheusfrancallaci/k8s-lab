@@ -18,6 +18,11 @@ const adviseCooldown = 10 * time.Minute
 
 // Advise avalia o modelo de habilidade do usuário e devolve recomendações
 // ativas, da mais urgente para a menos. Determinístico, sem LLM.
+//
+// Revisões vencidas (spaced repetition) vêm PRIMEIRO: são a seta "reforçar no
+// momento certo" do loop, e o dado já existe no caderno — antes o Advise era
+// cego a ele e o aluno só via revisão se pedisse. Um tópico com revisão vencida
+// não recebe também o nudge de skill (evita cobrar o mesmo tópico duas vezes).
 func Advise(userID string) []Recommendation {
 	p := profileFor(userID)
 	p.mu.Lock()
@@ -26,8 +31,13 @@ func Advise(userID string) []Recommendation {
 	var recs []Recommendation
 	now := time.Now()
 
+	reviewRecs, reviewed := p.dueReviewRecsLocked(now)
+
 	for key, s := range p.Skills {
 		if t, ok := p.lastAdvised[key]; ok && now.Sub(t) < adviseCooldown {
+			continue
+		}
+		if reviewed[s.Cert+"|"+s.Topic] {
 			continue
 		}
 
@@ -73,7 +83,62 @@ func Advise(userID string) []Recommendation {
 		sj := p.Skills[recs[j].Cert+"|"+recs[j].Topic]
 		return si.Score < sj.Score
 	})
-	return recs
+	// Revisões vencidas na frente de tudo (o sort acima é só entre nudges de skill).
+	return append(reviewRecs, recs...)
+}
+
+// dueReviewRecsLocked transforma revisões vencidas em recomendações (caller
+// segura p.mu). Uma por tópico, mais vencida primeiro, no máx. 3 — o replay vem
+// "sem mão na roda" (Level 1) para valer como recuperação de memória de prova.
+func (p *Profile) dueReviewRecsLocked(now time.Time) ([]Recommendation, map[string]bool) {
+	type due struct {
+		cert, topic string
+		overdue     time.Duration
+		failures    int
+	}
+	worst := map[string]due{}
+	for _, item := range p.Review {
+		if item == nil || item.Due.After(now) {
+			continue
+		}
+		key := item.Cert + "|" + item.Topic
+		d := due{cert: item.Cert, topic: item.Topic, overdue: now.Sub(item.Due), failures: item.Failures}
+		if cur, ok := worst[key]; !ok || d.overdue > cur.overdue {
+			worst[key] = d
+		}
+	}
+	if len(worst) == 0 {
+		return nil, nil
+	}
+	ordered := make([]due, 0, len(worst))
+	for _, d := range worst {
+		ordered = append(ordered, d)
+	}
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].overdue > ordered[j].overdue })
+	if len(ordered) > 3 {
+		ordered = ordered[:3]
+	}
+	reviewed := map[string]bool{}
+	recs := make([]Recommendation, 0, len(ordered))
+	for _, d := range ordered {
+		reviewed[d.cert+"|"+d.topic] = true
+		recs = append(recs, Recommendation{
+			Cert: d.cert, Topic: d.topic, Level: 1,
+			Reason: reviewReason(d.topic, d.overdue, d.failures),
+		})
+	}
+	return recs, reviewed
+}
+
+func reviewReason(topic string, overdue time.Duration, failures int) string {
+	when := "hoje"
+	if days := int(overdue.Hours() / 24); days >= 1 {
+		when = fmt.Sprintf("ha %d dia(s)", days)
+	}
+	if failures > 0 {
+		return fmt.Sprintf("revisao de %s venceu %s — voce ja tropecou aqui; refaz sem dica para fixar", topic, when)
+	}
+	return fmt.Sprintf("revisao de %s venceu %s — reforco espacado para nao esquecer antes da prova", topic, when)
 }
 
 // MarkAdvised inicia o cooldown de uma recomendação (aceita ou dispensada).

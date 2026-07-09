@@ -46,6 +46,7 @@ func (h *TutorHandler) Status(w http.ResponseWriter, r *http.Request) {
 		"stats":           tutor.Stats(userID(r)),
 		"domain_map":      tutor.DomainMap(userID(r), cert),
 		"review":          tutor.ReviewQueue(userID(r)),
+		"mastery":         tutor.MasteryPathForCert(userID(r), cert),
 		"rag":             tutor.RAGStatus(),
 		"observability":   tutor.LabObservability(),
 		"gen_topics":      tutor.Topics(),
