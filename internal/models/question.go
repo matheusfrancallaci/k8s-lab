@@ -104,12 +104,22 @@ type LabSpec struct {
 	Quality          LabQuality      `yaml:"quality"`
 }
 
+// Proveniência do conteúdo: quem responde pela qualidade desta questão.
+// Curado = escrito/verificado por humano (banco embutido); gerado = produzido
+// por IA local em runtime. O aluno vê a diferença (selo no lab) — confiança
+// de conteúdo é o maior risco do produto e não pode ser implícita.
+const (
+	SourceCurated   = "curated"
+	SourceGenerated = "generated"
+)
+
 type Question struct {
 	ID            string       `yaml:"id"`
 	Cert          Cert         `yaml:"cert"`
 	Topic         string       `yaml:"topic"`
 	Difficulty    Difficulty   `yaml:"difficulty"`
 	Type          QuestionType `yaml:"type"`
+	Source        string       `yaml:"source,omitempty"`
 	Question      string       `yaml:"question"`
 	Options       []string     `yaml:"options"`
 	Answer        int          `yaml:"answer"`

@@ -264,6 +264,8 @@
                             {{end}}
                         </div>
                         <div class="lab-agent-strip">
+                            {{if eq $.Question.Source "curated"}}<span class="prov-curated" title="Escrito e verificado por humano">✓ conteudo curado</span>
+                            {{else if eq $.Question.Source "generated"}}<span class="prov-gen" title="Gerado pela IA local e aprovado no quality gate">⚡ gerado por IA · passou no gate</span>{{end}}
                             {{range .Skills}}<span>{{.}}</span>{{end}}
                             <span>{{.EstimatedMinutes}} min</span>
                             {{if .Namespace}}<span>namespace {{.Namespace}}</span>{{end}}

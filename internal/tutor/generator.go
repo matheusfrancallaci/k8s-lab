@@ -224,6 +224,13 @@ func persist(qs []models.Question) error {
 		return err
 	}
 	qs = FinalizeLabs(qs, "")
+	// Tudo que passa por persist foi gerado — o YAML carrega a proveniência
+	// para o selo sobreviver a restart e à inspeção manual do arquivo.
+	for i := range qs {
+		if qs[i].Source == "" {
+			qs[i].Source = models.SourceGenerated
+		}
+	}
 	b, err := yaml.Marshal(models.QuestionFile{Questions: qs})
 	if err != nil {
 		return err

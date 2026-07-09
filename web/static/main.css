@@ -1320,6 +1320,17 @@ body {
   font-family: var(--mono);
   font-size: 10px;
 }
+/* Selo de proveniência: o aluno vê quem responde pelo conteúdo. */
+.lab-agent-strip .prov-curated {
+  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(52, 211, 153, 0.09);
+  color: var(--green);
+}
+.lab-agent-strip .prov-gen {
+  border-color: rgba(251, 191, 36, 0.32);
+  background: rgba(251, 191, 36, 0.08);
+  color: var(--amber, #fbbf24);
+}
 .lab-agent-sources {
   display: flex;
   flex-wrap: wrap;

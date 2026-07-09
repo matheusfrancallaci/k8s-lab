@@ -41,6 +41,10 @@ func qKey(q models.Question) string {
 // Add insere questões em runtime (labs/quizzes gerados pelo tutor), pulando
 // duplicatas por ID E por conteúdo. Cobre também o carregamento do disco
 // (LoadDir chama Add), então arquivos gen-*.yaml repetidos não duplicam.
+//
+// Invariante de proveniência: o repo NASCE com o banco curado (embed); tudo
+// que entra depois veio de geração. Add marca Source nos itens sem marca —
+// nenhum gerador novo consegue esquecer o selo.
 func (r *QuestionRepository) Add(qs []models.Question) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -52,6 +56,9 @@ func (r *QuestionRepository) Add(qs []models.Question) {
 	for _, q := range qs {
 		if seen["id:"+q.ID] || seen[qKey(q)] {
 			continue
+		}
+		if q.Source == "" {
+			q.Source = models.SourceGenerated
 		}
 		seen["id:"+q.ID] = true
 		seen[qKey(q)] = true
@@ -121,6 +128,12 @@ func NewQuestionRepository(fs embed.FS) (*QuestionRepository, error) {
 				continue
 			}
 
+			// Banco embutido = escrito e verificado por humano.
+			for i := range qf.Questions {
+				if qf.Questions[i].Source == "" {
+					qf.Questions[i].Source = models.SourceCurated
+				}
+			}
 			all = append(all, qf.Questions...)
 		}
 	}
