@@ -47,7 +47,7 @@ func LabPreflight(q models.Question) LabPreflightReport {
 		fail("enunciado vazio")
 	} else if strings.Contains(strings.ToLower(q.Question), "lab maker") {
 		fail("label interno exposto no enunciado")
-	} else if commandLikeRe.MatchString(q.Question) && strings.Contains(q.Question, "`") {
+	} else if questionHasReadyCommand(q.Question) {
 		fail("enunciado principal contem comando pronto")
 	} else {
 		check("enunciado em modo desafio")
@@ -98,6 +98,20 @@ func LabPreflight(q models.Question) LabPreflightReport {
 		check("fonte/evidencia rastreavel")
 	}
 	return rep
+}
+
+// questionHasReadyCommand detecta um comando pronto DENTRO de crases no
+// enunciado (o que o modo desafio proíbe). Checa o conteúdo de cada span
+// `...` — e não "palavra-comando E crase soltas em qualquer lugar", que dava
+// falso positivo quando o tópico era um comando (bash/java/terraform/kubectl)
+// e a redação do HideLabSpoilers deixava uma crase de `comando apropriado`.
+func questionHasReadyCommand(text string) bool {
+	for _, m := range inlineCommandRe.FindAllStringSubmatch(text, -1) {
+		if len(m) == 2 && commandLikeRe.MatchString(m[1]) {
+			return true
+		}
+	}
+	return false
 }
 
 func LabDeliveryPreflight(q models.Question) error {

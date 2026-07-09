@@ -713,6 +713,12 @@ async function renderStatsCard(slot) {
                     <span style="font-size:12px;color:var(--text-3);">lab nível ${rec.level} de ${escH(rec.topic)}</span>
                     <button class="btn btn-primary btn-sm" onclick="sendSuggestion('crie um lab de ${escH(rec.topic.toLowerCase())} nível ${rec.level}')">Bora treinar</button>
                  </div>`);
+            // Arma o cooldown (10min server-side): a sugestão já foi surgida, não
+            // repetir a cada reload da página até o usuário engajar ou o tempo passar.
+            fetch('/api/tutor/event', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'dismiss', cert: rec.cert, topic: rec.topic })
+            }).catch(() => {});
         }
         // saudação por hora do dia
         const h = new Date().getHours();

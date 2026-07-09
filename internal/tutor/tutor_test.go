@@ -727,6 +727,44 @@ func TestLabCompilerAlignsExplicitNamespace(t *testing.T) {
 	}
 }
 
+func TestPreflightAllowsCommandWordTopic(t *testing.T) {
+	// Regressão: quando o TÓPICO é um comando (bash/java/terraform) a palavra
+	// aparece na prosa do enunciado, e o HideLabSpoilers deixa `comando
+	// apropriado` entre crases. O preflight NÃO pode confundir isso com um
+	// comando pronto — senão nenhum lab desses temas é entregue.
+	for _, topic := range []string{"bash", "java", "terraform"} {
+		q := FinalizeLab(models.Question{
+			Type:     models.Lab,
+			Topic:    topic,
+			Question: "Automatize a rotina de " + topic + " descrita nos goals.",
+			Goals: []models.Goal{{
+				Description: "Recurso criado e validado",
+				Validation:  &models.Validation{Command: "kubectl get pods -n lab-x"},
+			}},
+			AnswerCommand: "echo ok",
+			Teardown:      []string{"kubectl delete ns lab-x"},
+		}, "Crie um lab de "+topic)
+		if err := LabDeliveryPreflight(q); err != nil {
+			t.Fatalf("lab de %s deveria passar preflight apos sanitizacao: %v\nenunciado: %q", topic, err, q.Question)
+		}
+	}
+}
+
+func TestPreflightBlocksInlineCommandInStatement(t *testing.T) {
+	// Um comando REAL entre crases no enunciado continua barrado.
+	if !questionHasReadyCommand("Rode `kubectl apply -f pod.yaml` para criar o pod") {
+		t.Fatal("comando pronto entre crases deveria ser detectado")
+	}
+	// O placeholder redigido NÃO é um comando pronto.
+	if questionHasReadyCommand("Crie o recurso com o `comando apropriado` no terminal") {
+		t.Fatal("placeholder redigido nao deveria contar como comando pronto")
+	}
+	// Palavra-comando na prosa, sem crase ao redor, tambem nao conta.
+	if questionHasReadyCommand("Pratique bash e valide pelos goals") {
+		t.Fatal("palavra-comando solta na prosa nao deveria contar como comando pronto")
+	}
+}
+
 func TestLearningPathGeneratesProgressiveLabs(t *testing.T) {
 	path := BuildLearningPath("trilha de CKA para HPA", "CKA")
 	var qs []models.Question
