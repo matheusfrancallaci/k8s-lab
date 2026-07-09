@@ -1,0 +1,142 @@
+questions:
+  # ══════════════════════════════════════════════════════════════════
+  # TERRAFORM — fecha os domínios oficiais sem conteúdo curado:
+  # "IaC & Fluxo Terraform", "Módulos" e "Providers".
+  # Mesmo padrão dos tf-lab-01..04: workspace isolado $TFLAB/<lab>,
+  # providers local/random/null (zero credencial), validação pelo state.
+  # ══════════════════════════════════════════════════════════════════
+
+  # ── tf05 — O fluxo completo: plan -out → apply → destroy -target ──
+  - id: tf-lab-05
+    cert: Terraform
+    topic: Fluxo Terraform
+    difficulty: mid
+    type: lab
+    question: "Pratique o **fluxo completo** do Terraform: plan salvo em arquivo, apply do plano e destroy dirigido.\n\nNo terminal: **cd $TFLAB/tf05**\n\n1. Crie um **main.tf** com DOIS recursos **local_file**: um chamado **definitivo** (definitivo.txt) e um chamado **temporario** (temporario.txt), com qualquer conteúdo.\n2. Rode **terraform init**, depois salve o plano em arquivo: **terraform plan -out=tfplan**.\n3. Aplique EXATAMENTE o plano salvo: **terraform apply tfplan**.\n4. Por fim, destrua SÓ o recurso temporário (destroy dirigido com **-target**), mantendo o definitivo no state."
+    hint: "terraform plan -out=tfplan grava o plano; terraform apply tfplan aplica sem perguntar. Para destruir um recurso específico: terraform destroy -target=local_file.temporario -auto-approve"
+    answer_command: "cd $TFLAB/tf05 && terraform init && terraform plan -out=tfplan && terraform apply tfplan && terraform destroy -target=local_file.temporario -auto-approve"
+    setup:
+      - description: "Preparando o workspace isolado do lab..."
+        command: "mkdir -p $HOME/tflab/$LAB_USER/tf05"
+    goals:
+      - description: "O plano foi salvo em arquivo (**tfplan** existe no workspace)"
+        hint: "terraform plan -out=tfplan — o arquivo de plano garante que o apply executa exatamente o que foi revisado, sem surpresa entre o plan e o apply."
+        validation:
+          command: "test -f $HOME/tflab/$LAB_USER/tf05/tfplan && echo OK || echo FAIL"
+          expected_contains: "OK"
+      - description: "**local_file.definitivo** está no state (o apply do plano funcionou)"
+        hint: "terraform apply tfplan aplica o plano salvo. Confira com: terraform state list"
+        validation:
+          command: "terraform -chdir=$HOME/tflab/$LAB_USER/tf05 state list 2>/dev/null | grep -q local_file.definitivo && echo OK || echo FAIL"
+          expected_contains: "OK"
+      - description: "**local_file.temporario** foi removido do state pelo destroy dirigido (e o definitivo permanece)"
+        hint: "terraform destroy -target=local_file.temporario -auto-approve remove só ele. O -target existe para cirurgia pontual — no dia a dia, prefira remover o bloco da config e aplicar."
+        validation:
+          command: "L=$(terraform -chdir=$HOME/tflab/$LAB_USER/tf05 state list 2>/dev/null); echo \"$L\" | grep -q local_file.definitivo && ! echo \"$L\" | grep -q local_file.temporario && echo OK || echo FAIL"
+          expected_contains: "OK"
+    explanation: "O fluxo canônico é init → plan → apply → destroy. Salvar o plano (plan -out) e aplicá-lo (apply tfplan) garante que o que foi revisado é o que executa — essencial em pipeline de CI.\n\nSolução (main.tf):\n\nresource \"local_file\" \"definitivo\" {\n  filename = \"definitivo.txt\"\n  content  = \"fica\"\n}\n\nresource \"local_file\" \"temporario\" {\n  filename = \"temporario.txt\"\n  content  = \"sai\"\n}\n\nComandos:\nterraform init\nterraform plan -out=tfplan\nterraform apply tfplan\nterraform destroy -target=local_file.temporario -auto-approve\n\nO -target é para exceções (recuperação, cirurgia); o fluxo normal de remoção é apagar o bloco da config e rodar apply."
+    doc_url: "https://developer.hashicorp.com/terraform/cli/commands/plan"
+    doc_section: "CLI → plan / apply / destroy"
+
+  # ── tf06 — Módulo local ──────────────────────────────────────────
+  - id: tf-lab-06
+    cert: Terraform
+    topic: Módulos
+    difficulty: mid
+    type: lab
+    question: "Crie e consuma um **módulo local** — a unidade de reuso do Terraform.\n\nNo terminal: **cd $TFLAB/tf06**\n\n1. Crie o diretório **modules/saudacao** com um **main.tf** que declare:\n   - uma **variable** chamada **nome** (string),\n   - um **local_file** chamado **arquivo** que escreve **Olá, <nome>!** em **saudacao-<nome>.txt**,\n   - um **output** chamado **caminho** com o filename gerado.\n2. No **main.tf da raiz**, chame o módulo com **source = \"./modules/saudacao\"** e **nome = \"terraform\"**, e exponha um **output** da raiz chamado **arquivo_gerado** com o valor do output do módulo.\n3. Rode init e apply. O recurso deve aparecer no state DENTRO do módulo (**module.saudacao.local_file.arquivo**)."
+    hint: "Módulo local = qualquer diretório com .tf referenciado por source começando com ./ ou ../. Na raiz: module \"saudacao\" { source = \"./modules/saudacao\" nome = \"terraform\" } e output \"arquivo_gerado\" { value = module.saudacao.caminho }"
+    answer_command: "cd $TFLAB/tf06 && terraform init && terraform apply -auto-approve"
+    setup:
+      - description: "Preparando o workspace isolado do lab..."
+        command: "mkdir -p $HOME/tflab/$LAB_USER/tf06/modules/saudacao"
+    goals:
+      - description: "O recurso vive DENTRO do módulo no state: **module.saudacao.local_file.arquivo**"
+        hint: "Recursos de módulo aparecem no state com o prefixo module.<nome>. Confira com: terraform state list"
+        validation:
+          command: "terraform -chdir=$HOME/tflab/$LAB_USER/tf06 state list 2>/dev/null | grep -q 'module.saudacao.local_file.arquivo' && echo OK || echo FAIL"
+          expected_contains: "OK"
+      - description: "O output da raiz **arquivo_gerado** expõe o output do módulo (contém **saudacao-terraform**)"
+        hint: "Outputs de módulo só ficam visíveis se a raiz os reexportar: output \"arquivo_gerado\" { value = module.saudacao.caminho }. Confira com: terraform output -raw arquivo_gerado"
+        validation:
+          command: "terraform -chdir=$HOME/tflab/$LAB_USER/tf06 output -raw arquivo_gerado 2>/dev/null | grep -q 'saudacao-terraform' && echo OK || echo FAIL"
+          expected_contains: "OK"
+    explanation: "Módulo é um diretório com arquivos .tf; a raiz também é um módulo (root module). Valores entram por variables e saem por outputs — o módulo não enxerga nada além disso.\n\nSolução:\n\nmodules/saudacao/main.tf:\nvariable \"nome\" { type = string }\n\nresource \"local_file\" \"arquivo\" {\n  filename = \"saudacao-${var.nome}.txt\"\n  content  = \"Olá, ${var.nome}!\"\n}\n\noutput \"caminho\" { value = local_file.arquivo.filename }\n\nmain.tf (raiz):\nmodule \"saudacao\" {\n  source = \"./modules/saudacao\"\n  nome   = \"terraform\"\n}\n\noutput \"arquivo_gerado\" { value = module.saudacao.caminho }\n\nApós mudar blocos module, rode terraform init de novo (ou terraform get) para o Terraform instalar/atualizar a referência."
+    doc_url: "https://developer.hashicorp.com/terraform/language/modules"
+    doc_section: "Language → Modules"
+
+  # ── tf07 — Providers: required_providers, lock file e alias ──────
+  - id: tf-lab-07
+    cert: Terraform
+    topic: Providers
+    difficulty: mid
+    type: lab
+    question: "Configure **providers** explicitamente: required_providers, lock file e **alias**.\n\nNo terminal: **cd $TFLAB/tf07**\n\n1. Em **main.tf**, declare um bloco **terraform { required_providers { ... } }** exigindo **hashicorp/random** e **hashicorp/null**.\n2. Configure o provider random DUAS vezes: o default e um com **alias = \"secundario\"**.\n3. Crie dois **random_pet**: **primario** (provider default) e **secundario** usando **provider = random.secundario**, e um **null_resource** chamado **marcador**.\n4. Rode init e apply. O **.terraform.lock.hcl** deve registrar os dois providers e os três recursos devem estar no state."
+    hint: "terraform { required_providers { random = { source = \"hashicorp/random\" } null = { source = \"hashicorp/null\" } } } — depois provider \"random\" {} e provider \"random\" { alias = \"secundario\" }; no recurso: provider = random.secundario"
+    answer_command: "cd $TFLAB/tf07 && terraform init && terraform apply -auto-approve"
+    setup:
+      - description: "Preparando o workspace isolado do lab..."
+        command: "mkdir -p $HOME/tflab/$LAB_USER/tf07"
+    goals:
+      - description: "O **.terraform.lock.hcl** registra **hashicorp/random** E **hashicorp/null** (init com required_providers)"
+        hint: "O terraform init resolve os required_providers e grava as versões exatas no .terraform.lock.hcl — commite esse arquivo para builds reproduzíveis."
+        validation:
+          command: "F=$HOME/tflab/$LAB_USER/tf07/.terraform.lock.hcl; grep -q 'hashicorp/random' $F 2>/dev/null && grep -q 'hashicorp/null' $F && echo OK || echo FAIL"
+          expected_contains: "OK"
+      - description: "Os três recursos estão no state: **random_pet.primario**, **random_pet.secundario** (via alias) e **null_resource.marcador**"
+        hint: "O recurso escolhe a configuração do provider com o meta-argumento provider = random.secundario; sem ele, usa a default."
+        validation:
+          command: "L=$(terraform -chdir=$HOME/tflab/$LAB_USER/tf07 state list 2>/dev/null); echo \"$L\" | grep -q random_pet.primario && echo \"$L\" | grep -q random_pet.secundario && echo \"$L\" | grep -q null_resource.marcador && echo OK || echo FAIL"
+          expected_contains: "OK"
+    explanation: "required_providers fixa a FONTE (e opcionalmente a versão) de cada provider; o init materializa isso no .terraform.lock.hcl. Alias permite múltiplas configurações do MESMO provider (ex.: duas regiões de nuvem) — o recurso escolhe com o meta-argumento provider.\n\nSolução (main.tf):\n\nterraform {\n  required_providers {\n    random = { source = \"hashicorp/random\" }\n    null   = { source = \"hashicorp/null\" }\n  }\n}\n\nprovider \"random\" {}\n\nprovider \"random\" {\n  alias = \"secundario\"\n}\n\nresource \"random_pet\" \"primario\" {}\n\nresource \"random_pet\" \"secundario\" {\n  provider = random.secundario\n}\n\nresource \"null_resource\" \"marcador\" {}\n\nCom random o alias não muda comportamento (não há config), mas o mecanismo é idêntico ao de nuvem: provider \"aws\" { alias = \"us_east\" region = \"us-east-1\" }."
+    doc_url: "https://developer.hashicorp.com/terraform/language/providers/requirements"
+    doc_section: "Language → Providers → Requirements"
+
+  # ── quizzes de fixação dos domínios novos ────────────────────────
+  - id: tf-quiz-03
+    cert: Terraform
+    topic: Módulos
+    difficulty: easy
+    type: multiple_choice
+    question: "Como o Terraform reconhece que o source de um module aponta para um MÓDULO LOCAL em vez do Registry?"
+    options:
+      - "O caminho começa com ./ ou ../"
+      - "O caminho termina com .tfmod"
+      - "É obrigatório o prefixo local::"
+      - "Qualquer caminho sem https:// é tratado como local"
+    answer: 0
+    explanation: "Sources iniciados com ./ ou ../ são caminhos locais relativos ao módulo que os chama. Sem esse prefixo, o Terraform interpreta como endereço do Registry (namespace/nome/provider) ou outra fonte remota (git::, https). Por isso um módulo local no mesmo repositório SEMPRE leva ./ — até quando está em subdiretório direto."
+    doc_url: "https://developer.hashicorp.com/terraform/language/modules/sources"
+    doc_section: "Language → Module Sources"
+
+  - id: tf-quiz-04
+    cert: Terraform
+    topic: Providers
+    difficulty: mid
+    type: multiple_choice
+    question: "Qual arquivo registra as versões e checksums EXATOS dos providers instalados, e deve ser commitado para garantir builds reproduzíveis?"
+    options:
+      - ".terraform.lock.hcl"
+      - "terraform.tfstate"
+      - "versions.tf"
+      - ".terraform/providers.json"
+    answer: 0
+    explanation: "O .terraform.lock.hcl é gerado/atualizado pelo terraform init: registra versão selecionada e hashes de cada provider. Commitado, garante que todo mundo (e o CI) usa exatamente os mesmos binários. O versions.tf declara REQUISITOS (ranges); o lock file registra a RESOLUÇÃO. O state não guarda providers, e .terraform/ é cache local que não se versiona."
+    doc_url: "https://developer.hashicorp.com/terraform/language/files/dependency-lock"
+    doc_section: "Language → Dependency Lock File"
+
+  - id: tf-quiz-05
+    cert: Terraform
+    topic: Fluxo Terraform
+    difficulty: mid
+    type: multiple_choice
+    question: "Num pipeline de CI, qual é a vantagem de rodar terraform plan -out=tfplan e depois terraform apply tfplan (em vez de um apply direto)?"
+    options:
+      - "O apply executa exatamente o plano revisado — mudanças entre o plan e o apply não entram"
+      - "O apply fica mais rápido porque pula o refresh"
+      - "O plano em arquivo dispensa o terraform init no apply"
+      - "O tfplan pode ser commitado como backup do state"
+    answer: 0
+    explanation: "O arquivo de plano congela as ações calculadas: o apply dele executa aquilo e só aquilo. Se a infra ou a config mudou entre plan e apply, o apply falha em vez de aplicar algo não revisado — essencial quando um humano aprova o plan no CI. O tfplan pode conter dados sensíveis e não deve ser commitado."
+    doc_url: "https://developer.hashicorp.com/terraform/cli/commands/apply"
+    doc_section: "CLI → apply (saved plan)"

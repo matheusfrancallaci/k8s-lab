@@ -1,0 +1,107 @@
+questions:
+  # ══════════════════════════════════════════════════════════════════
+  # ARGOCD — "Sync e Rollback" (domínio oficial, peso 30).
+  # O banco já cobre estratégias de sync (mid/hard "Sync Strategies");
+  # aqui entra o que faltava: histórico, rollback e a interação
+  # rollback × auto-sync. Mesmo estilo dos argocd-lab-*.
+  # ══════════════════════════════════════════════════════════════════
+
+  - id: argocd-lab-sr-001
+    cert: ArgoCD
+    topic: Sync e Rollback
+    difficulty: easy
+    type: lab
+    question: "Liste o **histórico de deploys** (revisões sincronizadas) da Application **my-app** via CLI."
+    options:
+      - "argocd app history my-app"
+      - "argocd app revisions my-app"
+      - "kubectl rollout history application/my-app -n argocd"
+      - "argocd app get my-app --history"
+    answer: 0
+    answer_command: "argocd app history my-app"
+    explanation: "argocd app history lista as revisões que a Application já sincronizou, cada uma com um ID numérico, a revision do Git e a data. É esse ID que o rollback usa: argocd app rollback my-app <ID>. kubectl rollout history funciona para Deployments, não para Applications (CRD do ArgoCD)."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/commands/argocd_app_history/"
+    doc_section: "CLI Reference → argocd app history"
+
+  - id: argocd-lab-sr-002
+    cert: ArgoCD
+    topic: Sync e Rollback
+    difficulty: mid
+    type: lab
+    question: "A release atual da **my-app** quebrou em produção. Volte a aplicação para a revisão de **ID 2** do histórico."
+    options:
+      - "argocd app rollback my-app 2"
+      - "argocd app sync my-app --revision 2"
+      - "argocd app undo my-app --to 2"
+      - "kubectl rollout undo application/my-app --to-revision=2 -n argocd"
+    answer: 0
+    answer_command: "argocd app rollback my-app 2"
+    explanation: "argocd app rollback <app> <ID> re-sincroniza a aplicação para o estado da revisão registrada no histórico (o ID vem do argocd app history). Diferença importante: sync --revision aponta para uma revision do GIT (branch/tag/SHA), enquanto rollback usa o ID do histórico de deploys do próprio ArgoCD. Atenção: com auto-sync habilitado o rollback é bloqueado — desabilite antes."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/commands/argocd_app_rollback/"
+    doc_section: "CLI Reference → argocd app rollback"
+
+  - id: argocd-lab-sr-003
+    cert: ArgoCD
+    topic: Sync e Rollback
+    difficulty: mid
+    type: lab
+    question: "O rollback da **my-app** falhou com erro dizendo que **auto-sync está habilitado**. Desabilite a política de sync automático para permitir o rollback."
+    options:
+      - "argocd app set my-app --sync-policy none"
+      - "argocd app rollback my-app --force"
+      - "argocd app unset my-app --auto-sync"
+      - "kubectl patch application my-app -n argocd --type=json -p '[{\"op\":\"remove\",\"path\":\"/spec/project\"}]'"
+    answer: 0
+    answer_command: "argocd app set my-app --sync-policy none"
+    explanation: "Rollback e auto-sync são incompatíveis por design: se o auto-sync continuar ligado, o ArgoCD re-sincronizaria imediatamente para o HEAD do Git, desfazendo o rollback. Por isso o CLI bloqueia e pede: argocd app set <app> --sync-policy none. Depois do incidente resolvido (fix commitado no Git), reabilite com --sync-policy automated. Essa interação cai em prova e em produção."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/"
+    doc_section: "User Guide → Automated Sync Policy"
+
+  - id: argocd-lab-sr-004
+    cert: ArgoCD
+    topic: Sync e Rollback
+    difficulty: mid
+    type: lab
+    question: "Antes de sincronizar, veja **o que mudaria** no cluster: mostre o diff entre o estado atual (live) e o desejado (Git) da **my-app**."
+    options:
+      - "argocd app diff my-app"
+      - "argocd app sync my-app --dry-run"
+      - "argocd app plan my-app"
+      - "kubectl diff -f application.yaml"
+    answer: 0
+    answer_command: "argocd app diff my-app"
+    explanation: "argocd app diff compara o estado live no cluster com os manifests renderizados do Git e imprime as diferenças — o equivalente GitOps do 'plan antes do apply'. Exit code 1 indica que há diff (útil em script/CI). O sync --dry-run também existe, mas executa a lógica de sync sem aplicar; para inspecionar mudanças, o diff é a ferramenta direta."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/commands/argocd_app_diff/"
+    doc_section: "CLI Reference → argocd app diff"
+
+  - id: argocd-quiz-sr-001
+    cert: ArgoCD
+    topic: Sync e Rollback
+    difficulty: mid
+    type: multiple_choice
+    question: "Uma Application tem syncPolicy automated com selfHeal: true. Alguém edita um Deployment direto no cluster com kubectl. O que o ArgoCD faz?"
+    options:
+      - "Reverte a mudança manual, re-aplicando o estado do Git automaticamente"
+      - "Marca OutOfSync e espera um sync manual"
+      - "Aceita a mudança e atualiza o Git via commit automático"
+      - "Pausa o auto-sync até um humano aprovar"
+    answer: 0
+    explanation: "selfHeal faz o ArgoCD corrigir drift do CLUSTER: qualquer mudança manual que desvie do Git é revertida no próximo ciclo de reconciliação. Sem selfHeal, o auto-sync só reage a mudanças no GIT — drift manual fica OutOfSync até alguém sincronizar. O ArgoCD nunca escreve no Git: o fluxo é sempre Git → cluster."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/#automatic-self-healing"
+    doc_section: "User Guide → Automatic Self-Healing"
+
+  - id: argocd-quiz-sr-002
+    cert: ArgoCD
+    topic: Sync e Rollback
+    difficulty: hard
+    type: multiple_choice
+    question: "Você removeu um manifest do repositório Git, mas o recurso continua vivo no cluster após o sync. Qual opção faltou na syncPolicy?"
+    options:
+      - "prune: true — sem ele, o sync não deleta recursos que sumiram do Git"
+      - "selfHeal: true — sem ele, deleções não são propagadas"
+      - "replace: true — o sync padrão nunca remove nada"
+      - "cascade: true — necessário para deleção em cascata"
+    answer: 0
+    explanation: "Prune controla DELEÇÃO: recursos que existiam no Git e foram removidos só são apagados do cluster se prune estiver habilitado (spec.syncPolicy.automated.prune: true, ou --prune no sync manual). É desligado por padrão como proteção contra deleção acidental. selfHeal cuida de drift manual no cluster — outro eixo. Em prova, memorize: prune = Git removeu → cluster remove; selfHeal = cluster mudou → Git vence."
+    doc_url: "https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/#automatic-pruning"
+    doc_section: "User Guide → Automatic Pruning"

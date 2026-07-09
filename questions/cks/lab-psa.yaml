@@ -1,0 +1,89 @@
+questions:
+  # ══════════════════════════════════════════════════════════════════
+  # CKS — Pod Security Admission hands-on (domínio "Minimize
+  # Microservice Vulnerabilities", peso 20). Complementa os labs de
+  # securityContext existentes com o enforcement por NAMESPACE, que é
+  # o mecanismo cobrado na prova desde a remoção do PodSecurityPolicy.
+  # ══════════════════════════════════════════════════════════════════
+
+  - id: cks-lab-psa-01
+    cert: CKS
+    topic: Minimizing Microservice Vulnerabilities
+    difficulty: mid
+    type: lab
+    question: "Aplique o perfil **restricted** do Pod Security Standards a um namespace inteiro usando **Pod Security Admission** — e prove que um Pod conforme roda nele.\n\n1. Crie o namespace **lab-psa** com o label de enforcement **pod-security.kubernetes.io/enforce=restricted**.\n2. Crie nele um Pod **psa-ok** (imagem **busybox**, comando **sleep 3600**) que SATISFAÇA o perfil restricted: rodar como não-root (com UID explícito), **seccompProfile RuntimeDefault**, **allowPrivilegeEscalation=false** e **capabilities.drop=[ALL]**.\n\nSe o Pod for admitido e ficar Running, o admission controller provou a conformidade por você."
+    hint: |
+      O label vai no namespace, não no pod:
+        kubectl create ns lab-psa
+        kubectl label ns lab-psa pod-security.kubernetes.io/enforce=restricted
+      No Pod (YAML), o perfil restricted exige:
+        spec:
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: app
+              image: busybox
+              command: ["sleep", "3600"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+      Teste a rejeição: tente criar um pod sem isso e leia a mensagem do admission.
+    answer_command: |
+      kubectl create ns lab-psa && kubectl label ns lab-psa pod-security.kubernetes.io/enforce=restricted && kubectl -n lab-psa apply -f - <<'EOF'
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: psa-ok
+      spec:
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          seccompProfile:
+            type: RuntimeDefault
+        containers:
+          - name: app
+            image: busybox
+            command: ["sleep", "3600"]
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
+      EOF
+    goals:
+      - description: "Namespace **lab-psa** tem o label **enforce=restricted** do Pod Security Admission"
+        hint: "kubectl label ns lab-psa pod-security.kubernetes.io/enforce=restricted — o PSA age por namespace, via labels."
+        validation:
+          command: "kubectl get ns lab-psa -o jsonpath='{.metadata.labels.pod-security\\.kubernetes\\.io/enforce}' 2>/dev/null"
+          expected_contains: "restricted"
+      - description: "Pod **psa-ok** está **Running** sob o enforcement (o admission só admite pods conformes)"
+        hint: "Se o apply foi rejeitado, leia o erro: ele lista EXATAMENTE quais campos do perfil restricted faltam — é a melhor dica da prova."
+        validation:
+          command: "kubectl get pod psa-ok -n lab-psa -o jsonpath='{.status.phase}' 2>/dev/null"
+          expected_contains: "Running"
+      - description: "O Pod usa **seccompProfile RuntimeDefault** (exigência do restricted que mais cai em prova)"
+        validation:
+          command: "kubectl get pod psa-ok -n lab-psa -o jsonpath='{.spec.securityContext.seccompProfile.type}' 2>/dev/null"
+          expected_contains: "RuntimeDefault"
+    teardown:
+      - "kubectl delete ns lab-psa --ignore-not-found=true"
+    explanation: "Pod Security Admission é o substituto embutido do PodSecurityPolicy: perfis (privileged/baseline/restricted) aplicados por NAMESPACE via labels. enforce rejeita, audit registra, warn avisa — e podem coexistir (ex.: enforce=baseline + warn=restricted para migração gradual). O perfil restricted exige: runAsNonRoot, seccompProfile RuntimeDefault, allowPrivilegeEscalation=false e capabilities drop ALL. A mensagem de rejeição do admission lista os campos que faltam — em prova, crie o pod, leia o erro e corrija."
+    doc_url: "https://kubernetes.io/docs/concepts/security/pod-security-admission/"
+    doc_section: "Security → Pod Security Admission"
+
+  - id: cks-quiz-psa-01
+    cert: CKS
+    topic: Minimizing Microservice Vulnerabilities
+    difficulty: mid
+    type: multiple_choice
+    question: "Você quer MIGRAR um namespace para o perfil restricted sem quebrar os workloads atuais: bloquear já pelo baseline, mas ver avisos do que violaria o restricted. Quais labels de Pod Security Admission usar?"
+    options:
+      - "enforce=baseline + warn=restricted"
+      - "enforce=restricted + audit=baseline"
+      - "warn=baseline + audit=restricted"
+      - "enforce=privileged + warn=baseline"
+    answer: 0
+    explanation: "Os três modos são independentes e combináveis: enforce REJEITA, warn devolve aviso ao usuário no apply, audit registra no audit log. A migração canônica é exatamente enforce no nível atual (baseline) + warn no nível alvo (restricted): nada quebra, e cada apply mostra o que precisa mudar para subir o nível. Depois de limpar os avisos, promove-se o enforce."
+    doc_url: "https://kubernetes.io/docs/concepts/security/pod-security-admission/#pod-security-admission-labels-for-namespaces"
+    doc_section: "Security → PSA → Labels e modos"
