@@ -294,6 +294,7 @@ const T = {
         cobertura: 'confiança do conteúdo', peso_oficial: 'do peso oficial coberto por conteúdo curado',
         por_dominio: 'ver por domínio', sem_curado: 'sem núcleo curado:',
         caderno: 'caderno de erros', fraquezas: 'pontos fracos',
+        retencao: 'retenção real', retencao_sub: 'acerto em tópicos REAPRESENTADOS após o intervalo de revisão — a medida de reter de verdade',
         greet_m: 'Bom dia', greet_t: 'Boa tarde', greet_n: 'Boa noite', greet_q: 'Como posso te ajudar?',
         hero_sub: 'Peça labs por certificação, tópico exato ou URL oficial da documentação.',
         placeholder: 'Pergunte, peça um lab, ou cole uma URL de documentação...',
@@ -317,6 +318,7 @@ const T = {
         cobertura: 'content trust', peso_oficial: 'of official exam weight covered by curated content',
         por_dominio: 'view by domain', sem_curado: 'no curated core:',
         caderno: 'error notebook', fraquezas: 'weak spots',
+        retencao: 'real retention', retencao_sub: 'accuracy on topics RE-PRESENTED after the review interval — the true measure of retention',
         greet_m: 'Good morning', greet_t: 'Good afternoon', greet_n: 'Good evening', greet_q: 'How can I help?',
         hero_sub: 'Ask for labs by certification, exact topic, or an official docs URL.',
         placeholder: 'Ask something, request a lab, or paste a docs URL...',
@@ -509,6 +511,22 @@ function coberturaCard(d) {
     </div>`;
 }
 
+// A métrica central do game-change: acertou quando o tópico VOLTOU após o
+// intervalo? Só aparece quando existe reapresentação registrada.
+function retencaoCard(d) {
+    let hits = 0, total = 0;
+    (d.stats || []).filter(sameCert).forEach(s => {
+        hits += s.retention_hits || 0;
+        total += (s.retention_hits || 0) + (s.retention_misses || 0);
+    });
+    if (!total) return '';
+    const pct = Math.round(hits * 100 / total);
+    return `<div class="p-card">
+        <div class="cc-title">${t('retencao')}</div>
+        <div class="cov-line"><b style="color:${scoreColor(pct / 100)};">${pct}%</b><span>${hits}/${total} · ${t('retencao_sub')}</span></div>
+    </div>`;
+}
+
 function cadernoCard(d) {
     const review = (d.review || []).filter(sameCert).slice(0, 5);
     if (!review.length) return '';
@@ -532,7 +550,7 @@ function fraquezasCard(d) {
 function renderPainel(d) {
     statusCache = d;
     document.getElementById('painel-body').innerHTML =
-        acaoDoDia(d) + trilhaCard(d) + coberturaCard(d) + cadernoCard(d) + fraquezasCard(d);
+        acaoDoDia(d) + trilhaCard(d) + retencaoCard(d) + coberturaCard(d) + cadernoCard(d) + fraquezasCard(d);
 }
 
 async function refreshPainel() {
