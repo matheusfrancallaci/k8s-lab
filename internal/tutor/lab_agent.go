@@ -589,6 +589,13 @@ func domainMatchesTopic(domain, topic string) bool {
 		"gitops":          {"gitops", "argocd"},
 		"compute":         {"compute", "ec2", "eks"},
 		"messaging":       {"sqs", "messag", "queue"},
+		// Pontes que faltavam: conteúdo curado real ficava invisível para a
+		// cobertura E para o DomainMap do aluno por diferença de flexão/nome
+		// ("Minimizing..." vs domínio "Minimize...", "Sync Strategies" vs
+		// "Sync e Rollback", "Fundamentos" vs "IaC & Fluxo Terraform").
+		"microservice": {"microservice", "vulnerab"},
+		"sync":         {"sync", "rollback"},
+		"iac":          {"iac", "fluxo", "fundament", "workflow"},
 	}
 	for key, vals := range pairs {
 		if strings.Contains(domain, key) {
