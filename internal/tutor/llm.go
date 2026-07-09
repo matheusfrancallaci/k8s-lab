@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -384,20 +386,96 @@ MATERIAL:
 		// validação estrita por questão
 		if aerr != nil || len(opts) != 4 || ans64 < 0 || ans64 > 3 ||
 			len(strings.TrimSpace(q.Question)) < 15 {
+			quizRejected.Add(1)
 			log.Printf("[tutor/llm] questão descartada na validação (options=%d, answer=%s)", len(opts), q.Answer)
 			continue
 		}
+		// Anti-alucinação: a resposta correta precisa estar ancorada no material.
+		// O prompt já exige "EXCLUSIVAMENTE do material", mas prompt não é
+		// contrato — modelos 3B inventam comparações que soam plausíveis.
+		if !groundedInSource(q.Question, opts[ans64], text) {
+			quizRejected.Add(1)
+			log.Printf("[tutor/llm] questão descartada por grounding (resposta não ancorada no material): %.80q", q.Question)
+			continue
+		}
+		// Anti-viés de posição: o modelo tende a pôr a correta primeiro
+		// (answer=0 em série) e o aluno aprende a chutar A, não o conteúdo.
+		opts, answer := shuffleOptions(opts, int(ans64))
+		quizAccepted.Add(1)
 		out = append(out, models.Question{
 			ID:   newID(),
 			Cert: models.Cert(cert), Topic: topic,
 			Type: models.MultipleChoice, Difficulty: models.Mid,
 			Question:    strings.TrimSpace(q.Question),
 			Options:     opts,
-			Answer:      int(ans64),
+			Answer:      answer,
 			Explanation: strings.TrimSpace(q.Explanation) + "\n\n(gerada pela IA local a partir da sua documentação)",
 		})
 	}
 	return out
+}
+
+// shuffleOptions embaralha as alternativas preservando qual é a correta.
+func shuffleOptions(opts []string, answer int) ([]string, int) {
+	if answer < 0 || answer >= len(opts) {
+		return opts, answer
+	}
+	correct := opts[answer]
+	shuffled := append([]string(nil), opts...)
+	rand.Shuffle(len(shuffled), func(i, j int) {
+		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+	})
+	for i, o := range shuffled {
+		if o == correct {
+			return shuffled, i
+		}
+	}
+	return opts, answer // inalcançável (correct sempre presente); defensivo
+}
+
+var tokenSplitRe = regexp.MustCompile(`[^\p{L}\p{N}]+`)
+
+// contentTokens extrai os tokens com valor semântico (>=4 chars) de um texto.
+func contentTokens(s string) []string {
+	var out []string
+	for _, t := range tokenSplitRe.Split(strings.ToLower(s), -1) {
+		if len([]rune(t)) >= 4 {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// groundedInSource verifica que a questão gerada está ancorada no material:
+// a maioria dos tokens da RESPOSTA CORRETA precisa aparecer na fonte (a opção
+// certa de um quiz honesto é extraída do texto; frases inventadas pelo modelo
+// carregam vocabulário próprio que a fonte não tem), e o enunciado precisa
+// compartilhar pelo menos 2 tokens com ela. Heurística determinística, zero
+// API — primeira linha de defesa, não prova formal.
+func groundedInSource(question, correctOpt, source string) bool {
+	src := strings.ToLower(source)
+	optTokens := contentTokens(correctOpt)
+	if len(optTokens) == 0 {
+		return false
+	}
+	hit := 0
+	for _, t := range optTokens {
+		if strings.Contains(src, t) {
+			hit++
+		}
+	}
+	if hit*100 < len(optTokens)*60 {
+		return false
+	}
+	// Do enunciado basta 1 token compartilhado: pergunta é paráfrase por
+	// natureza ("Qual componente...?" não aparece literal na fonte); a âncora
+	// forte é a opção correta, já exigida acima.
+	for _, t := range contentTokens(question) {
+		if strings.Contains(src, t) {
+			return true
+		}
+	}
+	return false
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -430,5 +508,22 @@ Priorize diagnosticar namespace errado, nome divergente, selector/label sem casa
 	if err != nil {
 		return "", err
 	}
-	return RedactSolutionCommands(raw, answerCmd), nil
+	return finalizeExplanation(raw, answerCmd, goalDesc), nil
+}
+
+// finalizeExplanation aplica o guard e garante que SEMPRE sobra tutoria: se o
+// modelo respondeu só com o comando da resposta, a redação esvazia o texto e o
+// aluno receberia um balão em branco — cai num empurrão heurístico no goal.
+func finalizeExplanation(raw, answerCmd, goalDesc string) string {
+	out := RedactSolutionCommands(raw, answerCmd)
+	if len(strings.TrimSpace(out)) >= 40 {
+		return out
+	}
+	goal := strings.TrimSpace(goalDesc)
+	if goal == "" {
+		goal = "o objetivo que falhou"
+	}
+	return fmt.Sprintf("Compare o estado atual do cluster com o que o validador espera: %s. "+
+		"Confira namespace, nome exato do recurso e labels/selector — a maioria das falhas mora aí. "+
+		"Investigue com kubectl get/describe antes de mudar qualquer coisa.", goal)
 }

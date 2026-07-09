@@ -14,3 +14,14 @@ var (
 func GateStats() (passed, failed int64) {
 	return gatePassed.Load(), gateFailed.Load()
 }
+
+// Validação por questão do quiz gerado (formato + grounding no material).
+var (
+	quizAccepted atomic.Int64
+	quizRejected atomic.Int64
+)
+
+// QuizStats devolve aceitas/descartadas na validação do quiz gerado.
+func QuizStats() (accepted, rejected int64) {
+	return quizAccepted.Load(), quizRejected.Load()
+}

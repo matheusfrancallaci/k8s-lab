@@ -117,6 +117,11 @@ func MetricsHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "# TYPE app_tutor_gate_passed_total counter\napp_tutor_gate_passed_total %d\n", gatePassed)
 	fmt.Fprintf(w, "# HELP app_tutor_gate_failed_total Labs barrados no quality gate desde o boot.\n")
 	fmt.Fprintf(w, "# TYPE app_tutor_gate_failed_total counter\napp_tutor_gate_failed_total %d\n", gateFailed)
+	quizOK, quizNo := tutor.QuizStats()
+	fmt.Fprintf(w, "# HELP app_tutor_quiz_accepted_total Questoes de quiz geradas aceitas na validacao (formato+grounding).\n")
+	fmt.Fprintf(w, "# TYPE app_tutor_quiz_accepted_total counter\napp_tutor_quiz_accepted_total %d\n", quizOK)
+	fmt.Fprintf(w, "# HELP app_tutor_quiz_rejected_total Questoes de quiz geradas descartadas na validacao.\n")
+	fmt.Fprintf(w, "# TYPE app_tutor_quiz_rejected_total counter\napp_tutor_quiz_rejected_total %d\n", quizNo)
 }
 
 // statusRecorder captura o status code para métricas/logs (o ResponseWriter não
