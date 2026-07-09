@@ -41,6 +41,17 @@ if ($dirty -and -not $AllowDirty) {
 }
 Say "Deploy do commit $sha (tags: $sha + latest)"
 
+# ── 1.5 Lease anti-auto-stop: se a VM esta de pe, segura ela acordada ──
+# O build leva ~5 min sem nenhuma atividade na VM — o timer lab-autostop ja
+# desalocou no MEIO do deploy (2x em 2026-07-09). O lease /run/lab-busy faz o
+# autostop pular; o script remoto do passo 4 o remove ao final.
+$power = (az vm get-instance-view -g $ResourceGroup -n $VmName --query "instanceView.statuses[1].displayStatus" -o tsv).Trim()
+if ($power -eq "VM running") {
+  Say "VM de pe — colocando lease anti-auto-stop"
+  az vm run-command invoke -g $ResourceGroup -n $VmName --command-id RunShellScript --scripts "touch /run/lab-busy" --query "value[0].message" -o tsv | Out-Null
+  Ok "lease colocado"
+}
+
 # ── 2. Build na ACR (roda na Azure), versão injetada via ldflags ────
 Say "az acr build na '$Acr' (~3-5 min, roda na Azure)"
 az acr build --registry $Acr --image "${Image}:$sha" --image "${Image}:latest" --build-arg "VERSION=$sha" $repoRoot
@@ -63,6 +74,7 @@ if ($power -ne "VM running") {
 Say "Reiniciando o app na VM e conferindo a imagem"
 $remote = @"
 set -e
+touch /run/lab-busy
 # Cada deploy empilha ~2GB de imagem; com o disco cheio o pull falha MUDO e o
 # boot fica na imagem cacheada (visto em 2026-07-09: az login sem tmp, pull
 # 'no space left'). Prune mantém as imagens dos containers rodando e NUNCA
@@ -78,6 +90,7 @@ if [ "`$want" = "`$got" ]; then echo "MATCH `$got"; else echo "MISMATCH want=`$w
 # A imagem recem-substituida ficou orfa — limpa JA, nao no proximo deploy.
 # Rollback continua a um pull de distancia (a ACR guarda todas as tags por SHA).
 docker image prune -af >/dev/null 2>&1 || true
+rm -f /run/lab-busy
 "@
 $tmp = New-TemporaryFile
 Set-Content -Path $tmp -Value $remote -Encoding ascii

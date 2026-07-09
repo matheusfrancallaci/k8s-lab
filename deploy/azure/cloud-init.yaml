@@ -100,6 +100,12 @@ write_files:
       set -euo pipefail
       # threshold 0 = auto-stop desligado
       [ ${idle_threshold_seconds} -le 0 ] && exit 0
+      # Lease de operacao (deploy/manutencao): /run/lab-busy segura a VM acordada.
+      # Lease com mais de 30 min e ignorado — esquecer o arquivo nao trava a economia.
+      if [ -f /run/lab-busy ] && [ $(( $(date +%s) - $(stat -c %Y /run/lab-busy) )) -lt 1800 ]; then
+        logger "[autostop] lease /run/lab-busy ativo -> nao desaloca"
+        exit 0
+      fi
       data=$(curl -s --max-time 5 http://127.0.0.1:8080/api/idle || echo '{}')
       idle=$(echo "$data" | sed -n 's/.*"idle_seconds":\([0-9]*\).*/\1/p')
       terms=$(echo "$data" | sed -n 's/.*"active_terminals":\([0-9]*\).*/\1/p')
