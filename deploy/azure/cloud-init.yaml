@@ -48,7 +48,7 @@ write_files:
         -e AZURE_REGION='${location}' \
         -e OLLAMA_URL='http://ollama:11434' \
         -e OLLAMA_MODEL='${ollama_model}' \
-        -e OLLAMA_GEN_MODEL='qwen2.5-coder:3b' \
+        -e OLLAMA_GEN_MODEL='${ollama_gen_model}' \
         -e OLLAMA_EMBED_MODEL='${ollama_embed_model}' \
         -v lab-data:/app/data \
         "${image}"
@@ -68,6 +68,10 @@ write_files:
       if [ -n "${ollama_model}" ]; then
         echo "[lab] baixando modelo do tutor: ${ollama_model} (roda em background)"
         ( docker exec ollama ollama pull "${ollama_model}" >/var/log/ollama-pull.log 2>&1 || true ) &
+      fi
+      if [ -n "${ollama_gen_model}" ] && [ "${ollama_gen_model}" != "${ollama_model}" ]; then
+        echo "[lab] baixando modelo gerador: ${ollama_gen_model} (roda em background)"
+        ( docker exec ollama ollama pull "${ollama_gen_model}" >/var/log/ollama-gen-pull.log 2>&1 || true ) &
       fi
       if [ -n "${ollama_embed_model}" ]; then
         echo "[lab] baixando modelo de embeddings: ${ollama_embed_model} (roda em background)"

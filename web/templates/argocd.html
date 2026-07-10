@@ -79,8 +79,9 @@
                 <div style="background:var(--surface);border-radius:8px;padding:12px;border:1px solid var(--border);">
                     <p style="font-size:10px;color:var(--text-3);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Senha admin</p>
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <span class="mono" style="font-size:12px;color:var(--green);" id="argocd-pwd">-</span>
-                        <button class="copy-btn" onclick="copyText('argocd-pwd')">copy</button>
+                        <span class="mono" style="font-size:12px;color:var(--green);" id="argocd-pwd" data-pwd="">••••••••••••</span>
+                        <button class="copy-btn" onclick="revealPwd()" id="pwd-reveal-btn">revelar</button>
+                        <button class="copy-btn" onclick="copyPwd()">copy</button>
                     </div>
                 </div>
             </div>
@@ -232,8 +233,26 @@ function applyStatus(d) {
 
     const url = d.url || `http://localhost:${argoCDPort}`;
     document.getElementById('argocd-url').textContent = url;
-    document.getElementById('argocd-pwd').textContent = d.password || '(verificando...)';
+    // Senha nunca renderizada por padrão (shoulder-surfing / screen share);
+    // fica no data-attr e só aparece se o usuário pedir.
+    document.getElementById('argocd-pwd').dataset.pwd = d.password || '';
     document.getElementById('open-ui-btn').href = url;
+}
+
+function revealPwd() {
+    const el = document.getElementById('argocd-pwd');
+    el.textContent = el.dataset.pwd || '(verificando...)';
+    document.getElementById('pwd-reveal-btn').style.display = 'none';
+    // esconde de novo em 30s — acesso temporário, não permanente
+    setTimeout(() => {
+        el.textContent = '••••••••••••';
+        document.getElementById('pwd-reveal-btn').style.display = '';
+    }, 30000);
+}
+
+function copyPwd() {
+    const el = document.getElementById('argocd-pwd');
+    if (el.dataset.pwd) navigator.clipboard.writeText(el.dataset.pwd).catch(() => {});
 }
 
 function updateStatusBar(ok, label) {
