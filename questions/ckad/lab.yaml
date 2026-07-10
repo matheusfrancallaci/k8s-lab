@@ -917,10 +917,10 @@ questions:
         validation:
           command: "kubectl get statefulset mysql -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null"
           expected_contains: "mysql:8.0"
-      - description: "StatefulSet tem **volumeClaimTemplates** definido"
+      - description: "StatefulSet tem **volumeClaimTemplates** de **1Gi**"
         validation:
-          command: "kubectl get statefulset mysql -o jsonpath='{.spec.volumeClaimTemplates[0].metadata.name}' 2>/dev/null"
-          expected_contains: ""
+          command: "kubectl get statefulset mysql -o jsonpath='{.spec.volumeClaimTemplates[0].spec.resources.requests.storage}' 2>/dev/null"
+          expected_contains: "1Gi"
     teardown:
       - "kubectl delete statefulset mysql --ignore-not-found=true"
       - "kubectl delete pvc -l app=mysql --ignore-not-found=true 2>/dev/null || true"
