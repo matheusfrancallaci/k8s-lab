@@ -2003,6 +2003,23 @@ body {
 .tutor-card .t-body { font-size: 12.5px; color: var(--text-2); line-height: 1.55; margin-bottom: 12px; }
 .tutor-card .t-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
+.lab-readiness {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 16px; margin-bottom: 12px; border-radius: var(--r-md);
+  background: linear-gradient(135deg, var(--green-dim), transparent);
+  border: 1px solid rgba(52,211,153,.28);
+}
+.lab-readiness > div { display: flex; flex-direction: column; gap: 3px; }
+.lab-readiness-kicker { font-family: var(--mono); font-size: 9px; font-weight: 800; letter-spacing: .12em; color: var(--green); }
+.lab-readiness strong { font-size: 13px; color: var(--text); }
+.lab-readiness small { font-size: 10.5px; color: var(--text-3); }
+.lab-readiness-score { flex-shrink: 0; font-family: var(--mono); font-size: 13px; font-weight: 800; color: var(--green); }
+.lab-success-criteria { margin: 0 0 14px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); }
+.lab-success-criteria summary { padding: 10px 12px; cursor: pointer; font-size: 11.5px; font-weight: 700; color: var(--text-2); }
+.lab-success-criteria ul { margin: 0; padding: 0 28px 12px; color: var(--text-3); font-size: 11px; line-height: 1.6; }
+.progressive-hint-btn { width: 100%; padding: 10px 12px; border: 1px dashed var(--violet-b); border-radius: var(--r-md); background: var(--violet-dim); color: var(--violet); font-size: 11px; font-weight: 700; cursor: pointer; }
+.progressive-hint-btn:hover { border-style: solid; }
+
 .skill-row {
   display: grid; grid-template-columns: 1fr 90px 3fr 60px;
   align-items: center; gap: 12px;

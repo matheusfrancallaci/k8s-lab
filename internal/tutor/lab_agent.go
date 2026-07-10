@@ -678,6 +678,10 @@ func scoreLab(q models.Question, spec models.LabSpec) models.LabQuality {
 	for i, g := range q.Goals {
 		if g.Validation == nil || strings.TrimSpace(g.Validation.Command) == "" {
 			warn(15, fmt.Sprintf("goal %d sem validacao automatica", i+1))
+		} else if strings.TrimSpace(g.Validation.ExpectedContains) == "" && strings.TrimSpace(g.Validation.ExpectedOutput) == "" {
+			warn(10, fmt.Sprintf("goal %d valida apenas exit code", i+1))
+		} else {
+			pass(fmt.Sprintf("goal %d tem resultado verificavel", i+1))
 		}
 	}
 	if len(q.Teardown) > 0 {

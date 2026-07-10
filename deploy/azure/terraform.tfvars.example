@@ -14,8 +14,10 @@ app_password = "troque-esta-senha"
 
 # Opcional: região e tamanho
 # location = "brazilsouth"
-# vm_size  = "Standard_B2s"
+# vm_size  = "Standard_D4s_v3"
 
 # Opcional: IA local e embeddings do RAG
-# ollama_model = "llama3.2:1b"
-# ollama_embed_model = "nomic-embed-text"
+# Perfil de alta qualidade (requer VM com 16GB)
+# ollama_model = "qwen3:8b"
+# ollama_gen_model = "qwen3:8b"
+# ollama_embed_model = "embeddinggemma"

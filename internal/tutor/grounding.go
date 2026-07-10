@@ -74,6 +74,10 @@ func CheckAnswerability(msg, activeCert string) AnswerabilityReport {
 	// trusted source in addition to internal curriculum/RAG evidence.
 	volatile := regexp.MustCompile(`(?i)\b(vers[aã]o|release|atual|latest|hoje|202[0-9]|default)\b`).MatchString(msg)
 	answerable := conf >= 45 && (len(sources) > 0 || (evidence != "" && rag != ""))
+	if identifiers := unsupportedProductIdentifiers(msg, enriched); len(identifiers) > 0 {
+		answerable = false
+		reasons = append(reasons, "identificador sem evidencia oficial: "+strings.Join(identifiers, ", "))
+	}
 	if volatile && len(sources) == 0 {
 		answerable = false
 		reasons = append(reasons, "pergunta volatil sem fonte oficial atual")
@@ -102,6 +106,28 @@ func CheckAnswerability(msg, activeCert string) AnswerabilityReport {
 		RAGScore:        bestRAGRelevance(cert, topic, msg+" "+enriched),
 		TopicRecognized: topic != "",
 	}
+}
+
+// Product-like identifiers are a common hallucination trap: generic words such
+// as "secret" can retrieve Kubernetes documentation even when the actual
+// product named by the student does not exist in any recovered source.
+func unsupportedProductIdentifiers(msg, evidence string) []string {
+	re := regexp.MustCompile(`\b[A-Z][A-Z0-9]*-[0-9][A-Z0-9-]*\b`)
+	known := map[string]bool{"CKA": true, "CKAD": true, "CKS": true, "KCNA": true, "AZ-104": true, "AZ-500": true}
+	evidence = strings.ToUpper(evidence)
+	seen := map[string]bool{}
+	var out []string
+	for _, id := range re.FindAllString(strings.ToUpper(msg), -1) {
+		// EnrichSource preserves the original question at the beginning of the
+		// context, so one occurrence is merely the user's claim. A second
+		// occurrence is required before recovered evidence can support it.
+		if known[id] || seen[id] || strings.Count(evidence, id) > 1 {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
 }
 
 func evidenceConfidence(cert, topic, text string) int {

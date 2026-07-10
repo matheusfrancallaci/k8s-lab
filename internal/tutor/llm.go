@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -35,8 +36,8 @@ func ollamaURL() string {
 }
 
 // modelos preferidos, em ordem, quando OLLAMA_MODEL não é definido
-var preferredModels = []string{"llama3.2", "qwen2.5", "gemma2", "mistral", "phi3"}
-var preferredEmbedModels = []string{"nomic-embed-text", "mxbai-embed-large", "bge-m3", "all-minilm"}
+var preferredModels = []string{"qwen3", "gemma3", "llama3.2", "qwen2.5", "gemma2", "mistral", "phi3"}
+var preferredEmbedModels = []string{"embeddinggemma", "nomic-embed-text", "mxbai-embed-large", "bge-m3", "all-minilm"}
 
 var (
 	llmMu        sync.Mutex
@@ -212,6 +213,17 @@ func genModel() string {
 // llmGenerate chama o Ollama de forma síncrona (stream=false). maxTokens<=0 usa
 // o default (num_predict/env). model=="" usa o modelo de chat ativo.
 func llmGenerate(prompt string, wantJSON bool, timeout time.Duration, maxTokens int, model string) (string, error) {
+	var format any
+	if wantJSON {
+		format = "json"
+	}
+	return llmGenerateFormatted(prompt, format, timeout, maxTokens, model)
+}
+
+// llmGenerateFormatted accepts either Ollama's legacy "json" mode or a JSON
+// Schema. Contracts use schemas so malformed model output is constrained at
+// generation time and still validated once more before entering the product.
+func llmGenerateFormatted(prompt string, format any, timeout time.Duration, maxTokens int, model string) (string, error) {
 	started := time.Now()
 	failed := true
 	defer func() { recordTutorLatency("llm.generate", time.Since(started), 0, failed) }()
@@ -234,8 +246,8 @@ func llmGenerate(prompt string, wantJSON bool, timeout time.Duration, maxTokens 
 			"num_predict": maxTokens,
 		},
 	}
-	if wantJSON {
-		payload["format"] = "json"
+	if format != nil {
+		payload["format"] = format
 	}
 	b, _ := json.Marshal(payload)
 
@@ -245,6 +257,10 @@ func llmGenerate(prompt string, wantJSON bool, timeout time.Duration, maxTokens 
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		message, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return "", fmt.Errorf("ollama retornou HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(message)))
+	}
 	var out struct {
 		Response string `json:"response"`
 	}
@@ -291,6 +307,10 @@ func llmStreamGenerate(prompt string, wantJSON bool, timeout time.Duration, maxT
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		message, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("ollama retornou HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(message)))
+	}
 
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)

@@ -727,6 +727,28 @@ func TestLabCompilerAlignsExplicitNamespace(t *testing.T) {
 	}
 }
 
+func TestLabQualityPenalizesExitCodeOnlyValidation(t *testing.T) {
+	base := models.Question{
+		Type: models.Lab, Cert: models.CKA, Topic: "Workloads",
+		Question:      "Crie um deployment e comprove de forma automatica que ele ficou disponivel.",
+		AnswerCommand: "kubectl create deployment web --image=nginx:1.25",
+		Teardown:      []string{"kubectl delete deployment web"},
+	}
+	exitOnly := base
+	exitOnly.Goals = []models.Goal{{Description: "Deployment existe", Validation: &models.Validation{Command: "kubectl get deployment web"}}}
+	verifiable := base
+	verifiable.Goals = []models.Goal{{Description: "Deployment existe", Validation: &models.Validation{Command: "kubectl get deployment web -o name", ExpectedOutput: "deployment.apps/web"}}}
+
+	exitOnly = FinalizeLab(exitOnly, "lab CKA de deployment")
+	verifiable = FinalizeLab(verifiable, "lab CKA de deployment")
+	if exitOnly.LabSpec.Quality.Score >= verifiable.LabSpec.Quality.Score {
+		t.Fatalf("validacao por exit code deveria pontuar menos: exit=%d verificavel=%d", exitOnly.LabSpec.Quality.Score, verifiable.LabSpec.Quality.Score)
+	}
+	if !strings.Contains(strings.Join(exitOnly.LabSpec.Quality.Warnings, " "), "exit code") {
+		t.Fatalf("warning deveria explicar validacao ambigua: %+v", exitOnly.LabSpec.Quality.Warnings)
+	}
+}
+
 func TestPreflightAllowsCommandWordTopic(t *testing.T) {
 	// Regressão: quando o TÓPICO é um comando (bash/java/terraform) a palavra
 	// aparece na prosa do enunciado, e o HideLabSpoilers deixa `comando

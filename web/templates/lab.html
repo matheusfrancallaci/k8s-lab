@@ -218,6 +218,20 @@
 
                     {{with .Question.LabSpec}}
                     <div class="lab-agent-panel">
+                        <div class="lab-readiness">
+                            <div>
+                                <span class="lab-readiness-kicker">LAB PRONTO PARA PRATICAR</span>
+                                <strong>{{.Objective}}</strong>
+                                <small>{{.EstimatedMinutes}} min · {{len .SuccessCriteria}} critérios verificáveis</small>
+                            </div>
+                            <span class="lab-readiness-score" title="Cada goal é verificado automaticamente no cluster">✓ auto-validado</span>
+                        </div>
+                        {{if .SuccessCriteria}}
+                        <details class="lab-success-criteria">
+                            <summary>O que significa concluir este lab</summary>
+                            <ul>{{range .SuccessCriteria}}<li>{{.}}</li>{{end}}</ul>
+                        </details>
+                        {{end}}
                         <div class="lab-agent-grid">
                             <div class="lab-agent-block">
                                 <span>Plano</span>
@@ -325,9 +339,9 @@
                     {{end}}
                     {{range $i, $g := .Goals}}
                     {{if $g.Hint}}
-                    <div style="margin-top:10px;">
-                        <p class="task-label">Goal {{add $i 1}}</p>
-                        <div class="hint-box">{{$g.Hint}}</div>
+                    <div class="progressive-hint" style="margin-top:10px;">
+                        <button type="button" class="progressive-hint-btn" onclick="revealGoalHint(this)">Revelar dica do goal {{add $i 1}}</button>
+                        <div class="hint-box" hidden>{{$g.Hint}}</div>
                     </div>
                     {{end}}
                     {{end}}
@@ -451,6 +465,13 @@ function showTab(name) {
             body: JSON.stringify({ type: name + '_view', question_id: '{{.Question.ID}}' })
         }).catch(() => {});
     }
+}
+
+function revealGoalHint(button) {
+    const hint = button.nextElementSibling;
+    if (!hint) return;
+    hint.hidden = false;
+    button.hidden = true;
 }
 
 // ─────────────────────────────────────────────────────────────

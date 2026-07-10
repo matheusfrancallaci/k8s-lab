@@ -11,9 +11,9 @@ variable "location" {
 }
 
 variable "vm_size" {
-  description = "Tamanho da VM. B2s (2 vCPU/4GB) roda k3s+app com folga; B1ms é mais barato mas apertado."
+  description = "Tamanho da VM. D4s_v3 (4 vCPU/16GB) suporta k3s, app e Qwen3 8B com margem."
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_D4s_v3"
 }
 
 variable "admin_username" {
@@ -52,13 +52,19 @@ variable "idle_minutes" {
 }
 
 variable "ollama_model" {
-  description = "Modelo local do tutor (roda em CPU na VM). llama3.2:1b cabe em 8GB; use qwen2.5:0.5b se faltar RAM. Vazio desliga a IA."
+  description = "Modelo local de chat/roteamento. qwen3:8b prioriza qualidade na VM de 16GB. Vazio desliga a IA."
   type        = string
-  default     = "llama3.2:1b"
+  default     = "qwen3:8b"
+}
+
+variable "ollama_gen_model" {
+  description = "Modelo dedicado a geracao estruturada de labs e quizzes. Mantido separado do chat para priorizar codigo."
+  type        = string
+  default     = "qwen3:8b"
 }
 
 variable "ollama_embed_model" {
   description = "Modelo Ollama dedicado a embeddings persistidos do RAG. Vazio usa fallback local sem embedding neural."
   type        = string
-  default     = "nomic-embed-text"
+  default     = "embeddinggemma"
 }

@@ -14,6 +14,7 @@ type AdminQualityReport struct {
 	GroundingScore     int                   `json:"grounding_score"`
 	SourceCoverage     int                   `json:"source_coverage"`
 	RefusalCorrectness int                   `json:"refusal_correctness"`
+	RegressionScore    int                   `json:"historical_regression_score"`
 	Topics             []string              `json:"topics"`
 	Recommendations    []string              `json:"recommendations"`
 	DeploymentBlockers []string              `json:"deployment_blockers"`
@@ -35,6 +36,7 @@ func BuildAdminQualityReport() AdminQualityReport {
 		GroundingScore:     golden.GroundingScore,
 		SourceCoverage:     golden.SourceCoverage,
 		RefusalCorrectness: golden.RefusalCorrectness,
+		RegressionScore:    golden.RegressionScore,
 		Topics:             Topics(),
 	}
 	if golden.Score < 80 {
@@ -55,11 +57,11 @@ func BuildAdminQualityReport() AdminQualityReport {
 	if metric := rep.Telemetry.Stages["llm.stream"]; metric.Count > 5 && metric.P95MS > 15000 {
 		rep.DeploymentBlockers = append(rep.DeploymentBlockers, "latencia p95 do streaming acima de 15s")
 	}
-	if quality.Total > 0 && quality.AvgRegression < 75 {
-		rep.DeploymentBlockers = append(rep.DeploymentBlockers, "regressao media de prompts reais abaixo de 75")
+	if golden.RegressionTotal > 0 && golden.RegressionScore < 75 {
+		rep.DeploymentBlockers = append(rep.DeploymentBlockers, "reexecucao de prompts historicos abaixo de 75")
 	}
-	if obs.Attempts > 0 && obs.SuccessRate < .60 {
-		rep.DeploymentBlockers = append(rep.DeploymentBlockers, "taxa de sucesso dos validadores abaixo de 60%")
+	if obs.Attempts >= 5 && obs.SuccessRate < .60 {
+		rep.Recommendations = append(rep.Recommendations, "investigar labs com baixa taxa de conclusao; desempenho do aluno nao bloqueia deploy")
 	}
 	if rep.RAG.Chunks == 0 {
 		rep.Recommendations = append(rep.Recommendations, "aquecer RAG com fontes oficiais antes de labs novos")
