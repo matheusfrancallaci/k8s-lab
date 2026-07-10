@@ -380,6 +380,9 @@ function mdLite(s) {
     return escH(s)
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         .replace(/`([^`]+)`/g, '<code>$1</code>')
+        // Fontes verificadas viram links clicáveis — a confiança do grounding
+        // precisa ser perceptível, não só existir no backend.
+        .replace(/(https?:\/\/[^\s<>&,;)]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:var(--sky,#38bdf8);">$1</a>')
         .replace(/\n/g, '<br>');
 }
 function scrollBottom() {
