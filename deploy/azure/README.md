@@ -1,5 +1,9 @@
 # Deploy na Azure (uma instância hospedada)
 
+> Controle de custo: rode `powershell -File scripts/azure-cost-guard.ps1 -Stop`
+> periodicamente ou antes de encerrar os estudos. O script para todos os AKS,
+> aponta clusters duplicados e bloqueia exclusão automática sem revisão.
+
 Sobe **uma VM Linux** rodando o container completo (app + k3s), acessível pelo
 browser dos seus amigos. A imagem é construída na **ACR** (`az acr build`, sem
 Docker local) e a VM a puxa com a própria identidade (sem segredos na VM).

@@ -763,6 +763,15 @@ async function sendChat() {
 
     addUser(text);
     const slot = addTyping();
+    const labIntent = /\b(lab|laborat|hands.?on|pr[aá]tica|trilha)\b/i.test(text);
+    const waitStates = labIntent ? ['Entendendo o lab...', 'Buscando evidencias...', 'Montando tarefas e validadores...', 'Rodando preflight...'] : ['Entendendo sua pergunta...', 'Consultando o contexto...', 'Preparando a resposta...'];
+    let waitIndex = 0;
+    slot.innerHTML = `<span class="generation-state"><i></i><b>${waitStates[0]}</b></span>`;
+    const waitTicker = setInterval(() => {
+        waitIndex = Math.min(waitIndex + 1, waitStates.length - 1);
+        const label = slot.querySelector('.generation-state b');
+        if (label) label.textContent = waitStates[waitIndex];
+    }, 1400);
     try {
         const r = await fetch('/api/tutor/chat/stream', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -776,6 +785,7 @@ async function sendChat() {
                 const { done, value } = await reader.read();
                 if (done) break;
                 out += decoder.decode(value, { stream: true });
+                clearInterval(waitTicker);
                 slot.innerHTML = mdLite(splitAction(out)[0] || '...');
                 scrollBottom();
             }
@@ -788,6 +798,7 @@ async function sendChat() {
     } catch (e) {
         slot.innerHTML = 'algo deu errado por aqui — tenta de novo?';
     }
+    clearInterval(waitTicker);
     chatBusy = false;
     document.getElementById('send-btn').disabled = false;
     ta.focus();

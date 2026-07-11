@@ -479,6 +479,7 @@ function revealGoalHint(button) {
 // ─────────────────────────────────────────────────────────────
 const totalGoals = {{if .Goals}}{{len .Goals}}{{else}}0{{end}};
 let completedGoals = 0;
+let postLabShown = false;
 
 function checkGoal(idx, questionId) {
     const card = document.getElementById('goal-card-' + idx);
@@ -517,6 +518,7 @@ function checkGoal(idx, questionId) {
                 markStreak();
                 const prog = document.getElementById('goals-progress');
                 if (prog) prog.textContent = completedGoals + ' / ' + totalGoals + ' completados';
+                if (completedGoals >= totalGoals) renderPostLabEvolution();
             } else {
                 card.className = 'goal-card state-fail';
                 btn.className = 'goal-check-btn fail';
@@ -540,6 +542,25 @@ function checkGoal(idx, questionId) {
             btn.disabled = false;
             resultEl.classList.add('hidden');
         });
+}
+
+async function renderPostLabEvolution() {
+    if (postLabShown || EXAM) return;
+    postLabShown = true;
+    try {
+        const r = await fetch('/api/tutor/status?cert=' + encodeURIComponent(LAB_CERT));
+        const d = await r.json();
+        const path = d.mastery || [];
+        const learned = path.find(x => String(x.topic).toLowerCase() === String(LAB_TOPIC).toLowerCase());
+        const next = path.find(x => x.status === 'current' && (!learned || x.topic !== learned.topic));
+        const mastered = learned && learned.status === 'mastered';
+        const host = document.getElementById('panel-task');
+        const el = document.createElement('section');
+        el.className = 'evolution-card fade-up';
+        el.innerHTML = `<div class="component-kicker">EVOLUCAO POS-LAB</div><h3>${mastered ? `Voce dominou ${escT(LAB_TOPIC)}` : `Voce avancou em ${escT(LAB_TOPIC)}`}</h3><p>${mastered ? 'O dominio foi confirmado por consistencia e retencao.' : 'Continue praticando ate confirmar dominio com acertos consistentes.'}</p>${next ? `<div class="evolution-next"><span>Proxima lacuna</span><strong>${escT(next.topic)}</strong></div><button class="btn btn-primary btn-sm" onclick="tutorGenerate('${escT(next.topic)}', 2)">Treinar proximo topico</button>` : '<div class="evolution-next"><strong>Trilha dominada — agora e reforco.</strong></div>'}`;
+        host.appendChild(el);
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (e) { postLabShown = false; }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -716,16 +737,24 @@ function renderTutorCard(rec) {
 
 async function tutorGenerate(topic, level) {
     const card = document.getElementById('tutor-suggest');
-    if (card) card.querySelector('.t-actions').innerHTML =
-        '<span style="font-size:11px;color:var(--text-3);">gerando seu lab...</span>';
+    const actions = card && card.querySelector('.t-actions');
+    const states = ['Entendendo o objetivo...', 'Selecionando evidencias...', 'Montando setup e validadores...', 'Executando preflight...'];
+    let state = 0;
+    if (actions) actions.innerHTML = `<span class="generation-state"><i></i><b>${states[0]}</b></span>`;
+    const ticker = setInterval(() => {
+        state = Math.min(state + 1, states.length - 1);
+        const label = actions && actions.querySelector('b');
+        if (label) label.textContent = states[state];
+    }, 1400);
     try {
         const r = await fetch('/api/tutor/generate', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ topic, level, cert: LAB_CERT, count: 2 })
         });
         const d = await r.json();
-        if (d.first) { window.location.href = '/lab/' + d.first + '?session=' + d.id; return; }
+        if (d.first) { clearInterval(ticker); window.location.href = '/lab/' + d.first + '?session=' + d.id; return; }
     } catch(e) {}
+    clearInterval(ticker);
     if (card) card.remove();
 }
 

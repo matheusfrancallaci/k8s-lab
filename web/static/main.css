@@ -2196,3 +2196,13 @@ body {
   to   { opacity: 1; transform: none; }
 }
 .fade-up { animation: fadeUp .22s ease both; }
+.component-kicker { font-family:var(--mono);font-size:9px;font-weight:800;letter-spacing:.14em;color:var(--violet);text-transform:uppercase; }
+.generation-state { display:inline-flex;align-items:center;gap:8px;color:var(--text-3);font-size:11px; }
+.generation-state b { color:inherit;font-weight:600; }
+.generation-state i { width:12px;height:12px;border-radius:50%;border:2px solid var(--border-3);border-top-color:var(--violet);animation:spin .8s linear infinite; }
+.evolution-card { margin-top:18px;padding:18px;border-radius:var(--r-md);border:1px solid rgba(52,211,153,.35);background:var(--surface-2);box-shadow:0 14px 40px var(--shadow-color); }
+.evolution-card h3 { margin:6px 0 5px;color:var(--text);font-size:17px; }
+.evolution-card p { margin:0 0 12px;color:var(--text-3);font-size:12px;line-height:1.55; }
+.evolution-next { display:flex;justify-content:space-between;gap:12px;margin:10px 0 12px;font-size:12px; }
+.evolution-next span { color:var(--text-4); }
+.evolution-next strong { color:var(--green); }

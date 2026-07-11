@@ -48,6 +48,9 @@ var (
 
 // LLMStatus informa disponibilidade e modelo ativo (cache de 30s).
 func LLMStatus() (bool, string) {
+	if c, ok := remoteLLM(); ok {
+		return true, "remote:" + c.Model
+	}
 	llmMu.Lock()
 	defer llmMu.Unlock()
 	if time.Since(llmChecked) < 30*time.Second {
@@ -227,6 +230,11 @@ func llmGenerateFormatted(prompt string, format any, timeout time.Duration, maxT
 	started := time.Now()
 	failed := true
 	defer func() { recordTutorLatency("llm.generate", time.Since(started), 0, failed) }()
+	if _, remote := remoteLLM(); remote {
+		out, err := remoteGenerate(prompt, format != nil, timeout, maxTokens, model)
+		failed = err != nil
+		return out, err
+	}
 	ok, active := LLMStatus()
 	if !ok {
 		return "", fmt.Errorf("ollama indisponível")
@@ -277,6 +285,11 @@ func llmStreamGenerate(prompt string, wantJSON bool, timeout time.Duration, maxT
 	var firstToken time.Duration
 	failed := true
 	defer func() { recordTutorLatency("llm.stream", time.Since(started), firstToken, failed) }()
+	if _, remote := remoteLLM(); remote {
+		err := remoteStream(prompt, timeout, maxTokens, model, onChunk)
+		failed = err != nil
+		return err
+	}
 	ok, active := LLMStatus()
 	if !ok {
 		return fmt.Errorf("ollama indisponível")

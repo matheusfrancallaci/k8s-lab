@@ -154,7 +154,12 @@ func ensureNamespaceLimits(ns string) {
 			},
 		},
 	}
-	_, _ = cs.CoreV1().ResourceQuotas(ns).Create(ctx, quota, metav1.CreateOptions{})
+	if current, err := cs.CoreV1().ResourceQuotas(ns).Get(ctx, quota.Name, metav1.GetOptions{}); err == nil {
+		quota.ResourceVersion = current.ResourceVersion
+		_, _ = cs.CoreV1().ResourceQuotas(ns).Update(ctx, quota, metav1.UpdateOptions{})
+	} else {
+		_, _ = cs.CoreV1().ResourceQuotas(ns).Create(ctx, quota, metav1.CreateOptions{})
+	}
 
 	// LimitRange dá requests/limits default — sem isso, com ResourceQuota de
 	// requests.cpu/memory ativo, todo pod sem requests explícitos é REJEITADO.
@@ -174,7 +179,12 @@ func ensureNamespaceLimits(ns string) {
 			}},
 		},
 	}
-	_, _ = cs.CoreV1().LimitRanges(ns).Create(ctx, lr, metav1.CreateOptions{})
+	if current, err := cs.CoreV1().LimitRanges(ns).Get(ctx, lr.Name, metav1.GetOptions{}); err == nil {
+		lr.ResourceVersion = current.ResourceVersion
+		_, _ = cs.CoreV1().LimitRanges(ns).Update(ctx, lr, metav1.UpdateOptions{})
+	} else {
+		_, _ = cs.CoreV1().LimitRanges(ns).Create(ctx, lr, metav1.CreateOptions{})
+	}
 }
 
 // ensureNamespaceSecurity completes phase 0 for lab-* namespaces. The policy
@@ -207,5 +217,10 @@ func ensureNamespaceSecurity(ns string) {
 			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 		},
 	}
-	_, _ = cs.NetworkingV1().NetworkPolicies(ns).Create(ctx, policy, metav1.CreateOptions{})
+	if current, err := cs.NetworkingV1().NetworkPolicies(ns).Get(ctx, policy.Name, metav1.GetOptions{}); err == nil {
+		policy.ResourceVersion = current.ResourceVersion
+		_, _ = cs.NetworkingV1().NetworkPolicies(ns).Update(ctx, policy, metav1.UpdateOptions{})
+	} else {
+		_, _ = cs.NetworkingV1().NetworkPolicies(ns).Create(ctx, policy, metav1.CreateOptions{})
+	}
 }
