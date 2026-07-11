@@ -292,6 +292,9 @@ type validateResponse struct {
 	Explanation string `json:"explanation"`
 	DocURL      string `json:"doc_url"`
 	DocSection  string `json:"doc_section"`
+	// EnvIssue: a falha foi do AMBIENTE (cluster fora, timeout) — não conta no
+	// progresso do aluno e a UI deve dizer isso.
+	EnvIssue bool `json:"env_issue,omitempty"`
 }
 
 func (h *LabHandler) Validate(w http.ResponseWriter, r *http.Request) {
@@ -351,15 +354,23 @@ func (h *LabHandler) Validate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Alimenta o modelo de habilidade do tutor com o resultado do check.
+	// Falha de AMBIENTE (cluster fora, timeout) não entra no EWMA do aluno:
+	// puni-lo por flakiness travaria o mastery gate injustamente.
 	uid := userID(r)
+	envIssue := !success && tutor.IsEnvironmentFailure(output)
 	tutor.RecordLabValidation(uid, q, goalIdx, validation.Command, success, output)
-	tutor.RecordGoal(uid, q, success)
+	if !envIssue {
+		tutor.RecordGoal(uid, q, success)
+	}
 
 	resp := validateResponse{
-		Success: success,
-		Output:  output,
+		Success:  success,
+		Output:   output,
+		EnvIssue: envIssue,
 	}
-	if !success {
+	if envIssue {
+		resp.Output = "⚠ Problema de AMBIENTE detectado (não conta no seu progresso). Verifique se o cluster está acessível e tente de novo.\n\n" + output
+	} else if !success {
 		resp.Output = validationFailureOutput(output, q, validation)
 	}
 	// Only send explanation/docs on success to avoid giving away the answer on failure.

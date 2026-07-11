@@ -55,7 +55,12 @@ type regressionFixtureFile struct {
 	Cases []PromptQualityCase `json:"cases"`
 }
 
-func regressionFixturePath() string { return filepath.Join("data", "eval", "regression_fixtures.json") }
+func regressionFixturePath() string {
+	if p := strings.TrimSpace(os.Getenv("REGRESSION_FIXTURES_PATH")); p != "" {
+		return p
+	}
+	return filepath.Join("data", "eval", "regression_fixtures.json")
+}
 
 func loadRegressionFixtures() []PromptQualityCase {
 	var file regressionFixtureFile
@@ -74,6 +79,11 @@ func PromotePromptRegression(id string) error {
 	if c == nil {
 		return os.ErrNotExist
 	}
+	return promoteCaseLocked(c)
+}
+
+// promoteCaseLocked grava o caso como fixture durável (caller segura promptQualityMu).
+func promoteCaseLocked(c *PromptQualityCase) error {
 	file := regressionFixtureFile{Cases: loadRegressionFixtures()}
 	for _, existing := range file.Cases {
 		if existing.ID == c.ID {
@@ -93,6 +103,36 @@ func PromotePromptRegression(id string) error {
 		return err
 	}
 	return os.WriteFile(regressionFixturePath(), b, 0o644)
+}
+
+// PromoteNegativeFeedbackRegression liga o 👎 do aluno ao eval: localiza o caso
+// de prompt-quality do prompt avaliado e o promove a fixture de regressão, para
+// que a reclamação vire verificação permanente no golden eval. Devolve o id
+// promovido; ("", false) quando o prompt nunca virou caso rastreado (feedback
+// de conversa livre, por exemplo — fica só no log de feedback).
+func PromoteNegativeFeedbackRegression(prompt string) (string, bool) {
+	prompt = compactText(prompt, 320)
+	if prompt == "" {
+		return "", false
+	}
+	hash := ragID(prompt)
+	promptQualityMu.Lock()
+	defer promptQualityMu.Unlock()
+	st := ensurePromptQualityLocked()
+	for _, c := range st.Cases {
+		if c == nil || c.PromptHash != hash {
+			continue
+		}
+		if !containsFold(c.Risks, "feedback negativo") {
+			c.Risks = limitedStrings(append(c.Risks, "feedback negativo do aluno"), 8)
+			savePromptQualityLocked(st)
+		}
+		if err := promoteCaseLocked(c); err != nil {
+			return c.ID, false
+		}
+		return c.ID, true
+	}
+	return "", false
 }
 
 type promptQualityDataset struct {

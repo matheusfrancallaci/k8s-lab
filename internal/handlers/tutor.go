@@ -47,6 +47,7 @@ func (h *TutorHandler) Status(w http.ResponseWriter, r *http.Request) {
 		"stats":           tutor.Stats(userID(r)),
 		"domain_map":      tutor.DomainMap(userID(r), cert),
 		"review":          tutor.ReviewQueue(userID(r)),
+		"history":         tutor.History(userID(r)),
 		"mastery":         tutor.MasteryPathForCert(userID(r), cert),
 		"coverage":        coverageOrNil(cert, h.repo.Filter([]string{cert}, "")),
 		"rag":             tutor.RAGStatus(),
@@ -144,11 +145,12 @@ func (h *TutorHandler) Explain(w http.ResponseWriter, r *http.Request) {
 func (h *TutorHandler) Event(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var body struct {
-		Type       string `json:"type"` // hint_view | solution_view | dismiss
+		Type       string `json:"type"` // hint_view | solution_view | dismiss | helpful | unhelpful
 		QuestionID string `json:"question_id"`
 		Cert       string `json:"cert"`
 		Topic      string `json:"topic"`
 		MessageID  string `json:"message_id"`
+		Prompt     string `json:"prompt"` // pergunta que gerou a resposta avaliada
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		json.NewEncoder(w).Encode(map[string]any{"ok": false}) //nolint:errcheck
@@ -166,9 +168,27 @@ func (h *TutorHandler) Event(w http.ResponseWriter, r *http.Request) {
 	case "dismiss":
 		tutor.MarkAdvised(userID(r), body.Cert, body.Topic)
 	case "helpful", "unhelpful":
-		_ = tutor.RecordTutorFeedback(userID(r), body.MessageID, body.Type, body.Cert, body.Topic)
+		_ = tutor.RecordTutorFeedback(userID(r), body.MessageID, body.Type, body.Cert, body.Topic, body.Prompt)
 	}
 	json.NewEncoder(w).Encode(map[string]any{"ok": true}) //nolint:errcheck
+}
+
+// ExamReport traduz o resultado do Modo Exame em projeção de aprovação
+// ponderada pelos pesos oficiais dos domínios da certificação.
+func (h *TutorHandler) ExamReport(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var body struct {
+		Cert    string             `json:"cert"`
+		Results []tutor.ExamAnswer `json:"results"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.Results) == 0 {
+		json.NewEncoder(w).Encode(map[string]any{"error": "resultados do simulado obrigatórios"}) //nolint:errcheck
+		return
+	}
+	if len(body.Results) > 64 {
+		body.Results = body.Results[:64]
+	}
+	json.NewEncoder(w).Encode(tutor.BuildExamReport(body.Cert, body.Results)) //nolint:errcheck
 }
 
 // Generate cria labs personalizados e já devolve uma sessão pronta.

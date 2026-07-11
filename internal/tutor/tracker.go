@@ -70,12 +70,25 @@ type DomainMastery struct {
 	Sources    []string `json:"sources"`
 }
 
+// ProfileSnapshot é a fotografia diária do perfil — alimenta a tendência
+// (sparkline) do painel: o aluno vê o loop funcionando, não só o estado de hoje.
+// Valores CUMULATIVOS no fim daquele dia (o último evento do dia sobrescreve).
+type ProfileSnapshot struct {
+	Date            string  `json:"date"` // YYYY-MM-DD
+	AvgScore        float64 `json:"avg_score"`
+	Attempts        int     `json:"attempts"`
+	RetentionHits   int     `json:"retention_hits"`
+	RetentionMisses int     `json:"retention_misses"`
+	DueReviews      int     `json:"due_reviews"`
+}
+
 // Profile é o estado adaptativo de UM usuário (isolado dos demais).
 type Profile struct {
 	mu          sync.Mutex
 	id          string
 	Skills      map[string]*TopicSkill `json:"skills"`
 	Review      map[string]*ReviewItem `json:"review"`
+	History     []ProfileSnapshot      `json:"history,omitempty"`
 	activeCert  string
 	activeTopic string
 	activeLab   *models.Question
@@ -120,8 +133,9 @@ func profileFor(userID string) *Profile {
 }
 
 type skillsDoc struct {
-	Skills map[string]*TopicSkill `json:"skills"`
-	Review map[string]*ReviewItem `json:"review,omitempty"`
+	Skills  map[string]*TopicSkill `json:"skills"`
+	Review  map[string]*ReviewItem `json:"review,omitempty"`
+	History []ProfileSnapshot      `json:"history,omitempty"`
 }
 
 func loadProfile(id string) *Profile {
@@ -140,6 +154,7 @@ func loadProfile(id string) *Profile {
 			if s.Review != nil {
 				p.Review = s.Review
 			}
+			p.History = s.History
 		}
 	}
 	return p
@@ -152,7 +167,7 @@ func (p *Profile) scheduleSave() {
 	}
 	p.saveTimer = time.AfterFunc(2*time.Second, func() {
 		p.mu.Lock()
-		b, err := json.MarshalIndent(skillsDoc{Skills: p.Skills, Review: p.Review}, "", "  ")
+		b, err := json.MarshalIndent(skillsDoc{Skills: p.Skills, Review: p.Review, History: p.History}, "", "  ")
 		p.mu.Unlock()
 		if err != nil {
 			return
@@ -232,7 +247,59 @@ func RecordGoal(userID string, q models.Question, success bool) {
 		}
 	}
 	p.recordReview(q, success, now)
+	p.snapshotLocked(now)
 	p.scheduleSave()
+}
+
+// snapshotLocked atualiza a fotografia do DIA (caller segura p.mu). O último
+// evento do dia vence — a série guarda o estado de fechamento de cada dia.
+func (p *Profile) snapshotLocked(now time.Time) {
+	var sum float64
+	var n, attempts, hits, misses int
+	for _, s := range p.Skills {
+		if s == nil || s.Attempts == 0 {
+			continue
+		}
+		sum += s.Score
+		n++
+		attempts += s.Attempts
+		hits += s.RetentionHits
+		misses += s.RetentionMisses
+	}
+	due := 0
+	for _, item := range p.Review {
+		if item != nil && !item.Due.After(now) {
+			due++
+		}
+	}
+	snap := ProfileSnapshot{
+		Date:            now.Format("2006-01-02"),
+		Attempts:        attempts,
+		RetentionHits:   hits,
+		RetentionMisses: misses,
+		DueReviews:      due,
+	}
+	if n > 0 {
+		snap.AvgScore = sum / float64(n)
+	}
+	if k := len(p.History); k > 0 && p.History[k-1].Date == snap.Date {
+		p.History[k-1] = snap
+	} else {
+		p.History = append(p.History, snap)
+	}
+	if len(p.History) > 90 {
+		p.History = p.History[len(p.History)-90:]
+	}
+}
+
+// History devolve a série diária do perfil para o painel de tendência.
+func History(userID string) []ProfileSnapshot {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make([]ProfileSnapshot, len(p.History))
+	copy(out, p.History)
+	return out
 }
 
 func reviewKey(q models.Question) string {

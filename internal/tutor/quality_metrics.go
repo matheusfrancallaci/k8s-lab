@@ -25,3 +25,15 @@ var (
 func QuizStats() (accepted, rejected int64) {
 	return quizAccepted.Load(), quizRejected.Load()
 }
+
+// Cache de explicações de falha: cada hit é uma chamada de LLM (local ou
+// gateway pago) que NÃO aconteceu.
+var (
+	explainCacheHits   atomic.Int64
+	explainCacheMisses atomic.Int64
+)
+
+// ExplainCacheStats devolve hits/misses do cache de LLMExplainFailure.
+func ExplainCacheStats() (hits, misses int64) {
+	return explainCacheHits.Load(), explainCacheMisses.Load()
+}

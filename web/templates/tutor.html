@@ -69,6 +69,13 @@
 .domain-name { min-width:0; font-size:12px; font-weight:700; color:var(--text); line-height:1.35; }
 .domain-sub { display:block; margin-top:2px; font-family:var(--mono); font-size:9px; color:var(--text-4); }
 
+/* tendência (sparkline) — série única: sem legenda, rótulos em texto */
+.spark-wrap { margin-top:8px; }
+.spark { display:block; width:100%; height:34px; }
+.spark polyline { fill:none; stroke:var(--violet,#818cf8); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.spark circle { fill:var(--violet,#818cf8); stroke:var(--surface-2); stroke-width:2; }
+.spark-sub { margin-top:4px; font-family:var(--mono); font-size:9px; color:var(--text-4); display:flex; justify-content:space-between; gap:8px; }
+
 /* caderno / fraquezas */
 .review-list { display:flex; flex-direction:column; gap:7px; }
 .review-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:rgba(8,8,26,.35); }
@@ -295,6 +302,7 @@ const T = {
         por_dominio: 'ver por domínio', sem_curado: 'sem núcleo curado:',
         caderno: 'caderno de erros', fraquezas: 'pontos fracos',
         retencao: 'retenção real', retencao_sub: 'acerto em tópicos REAPRESENTADOS após o intervalo de revisão — a medida de reter de verdade',
+        tendencia: 'tendência diária', evolucao: 'evolução', evolucao_sub: 'score médio dos tópicos treinados — todas as certs',
         greet_m: 'Bom dia', greet_t: 'Boa tarde', greet_n: 'Boa noite', greet_q: 'Como posso te ajudar?',
         hero_sub: 'Peça labs por certificação, tópico exato ou URL oficial da documentação.',
         placeholder: 'Pergunte, peça um lab, ou cole uma URL de documentação...',
@@ -319,6 +327,7 @@ const T = {
         por_dominio: 'view by domain', sem_curado: 'no curated core:',
         caderno: 'error notebook', fraquezas: 'weak spots',
         retencao: 'real retention', retencao_sub: 'accuracy on topics RE-PRESENTED after the review interval — the true measure of retention',
+        tendencia: 'daily trend', evolucao: 'progress', evolucao_sub: 'average score of trained topics — all certs',
         greet_m: 'Good morning', greet_t: 'Good afternoon', greet_n: 'Good evening', greet_q: 'How can I help?',
         hero_sub: 'Ask for labs by certification, exact topic, or an official docs URL.',
         placeholder: 'Ask something, request a lab, or paste a docs URL...',
@@ -415,14 +424,19 @@ function addTutor(html) {
 function addTyping() {
     return addTutor('<span class="typing"><i></i><i></i><i></i></span>');
 }
-function addFeedback(slot) {
+function addFeedback(slot, prompt) {
     if (!slot || slot.querySelector('.answer-feedback')) return;
     const id = 'msg-' + Date.now().toString(36);
     slot.insertAdjacentHTML('beforeend', `<div class="answer-feedback" data-id="${id}"><span>Essa resposta ajudou?</span><button onclick="rateAnswer(this,'helpful')" aria-label="Ajudou">Sim</button><button onclick="rateAnswer(this,'unhelpful')" aria-label="Nao ajudou">Nao</button></div>`);
+    // O prompt avaliado vai junto do feedback: é o elo que permite ao backend
+    // promover um 👎 a caso de regressão no eval (dataset via atributo para
+    // não depender de escaping de aspas no HTML).
+    const box = slot.querySelector('.answer-feedback');
+    if (box) box.dataset.prompt = prompt || '';
 }
 function rateAnswer(btn, kind) {
     const box = btn.closest('.answer-feedback');
-    fetch('/api/tutor/event', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:kind,message_id:box.dataset.id,cert:chatCert})}).catch(()=>{});
+    fetch('/api/tutor/event', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:kind,message_id:box.dataset.id,cert:chatCert,prompt:box.dataset.prompt||''})}).catch(()=>{});
     box.innerHTML = `<span>${kind === 'helpful' ? 'Obrigado — vou reforcar esse padrao.' : 'Obrigado — isso entrou na fila de melhoria.'}</span>`;
 }
 
@@ -446,19 +460,40 @@ function sameCert(x) {
     return !chatCert || !x.cert || String(x.cert).toLowerCase() === String(chatCert).toLowerCase();
 }
 
+// Um clique da lacuna ao lab: gera direto (sem passar pelo chat) e navega.
+// Se a geração falhar, degrada para o fluxo de chat — nunca deixa o botão morto.
+async function quickLab(btn, topic, level) {
+    if (!topic || !btn || btn.disabled) return;
+    btn.disabled = true;
+    const orig = btn.textContent;
+    btn.textContent = 'preparando lab...';
+    try {
+        const r = await fetch('/api/tutor/generate', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cert: chatCert, topic, level: level || 2, count: 1 })
+        });
+        const d = await r.json();
+        if (d.first) { location.href = '/lab/' + d.first + '?session=' + d.id; return; }
+    } catch (e) {}
+    btn.disabled = false;
+    btn.textContent = orig;
+    sendSuggestion(`crie um lab de ${topic.toLowerCase()} nível ${level || 2}`);
+}
+
 // A ação do dia decide por prioridade: recomendação nº1 (revisões vencidas
 // vêm primeiro do servidor) > fronteira da trilha > calibrar perfil.
 function acaoDoDia(d) {
     const rec = (d.recommendations || [])[0];
     if (rec) {
         const isReview = /revis/i.test(rec.reason || '');
-        const cmd = isReview ? 'revisar meus erros'
-            : `crie um lab de ${(rec.topic || '').toLowerCase()} nível ${rec.level || 2}`;
+        const action = isReview || !rec.topic
+            ? `sendSuggestion('${escH(isReview ? 'revisar meus erros' : `crie um lab de ${(rec.topic || '').toLowerCase()} nível ${rec.level || 2}`)}')`
+            : `quickLab(this, '${escH(rec.topic)}', ${rec.level || 2})`;
         const label = isReview ? t('revisar_agora') : t('bora');
         return `<div class="p-card p-acao${isReview ? '' : ' frontier'}">
             <div class="cc-title">${t('acao_dia')}</div>
             <p>${mdLite(rec.reason || '')}</p>
-            <button class="btn btn-primary btn-sm" onclick="sendSuggestion('${escH(cmd)}')">${label} →</button>
+            <button class="btn btn-primary btn-sm" onclick="${action}">${label} →</button>
         </div>`;
     }
     const frontier = (d.mastery || []).find(x => x.status === 'current');
@@ -466,7 +501,7 @@ function acaoDoDia(d) {
         return `<div class="p-card p-acao frontier">
             <div class="cc-title">${t('acao_dia')}</div>
             <p><strong>${escH(frontier.topic)}</strong> — ${t('fronteira')}</p>
-            <button class="btn btn-primary btn-sm" onclick="sendSuggestion('crie um lab de ${escH((frontier.topic || '').toLowerCase())} nível 2')">${t('treinar')} →</button>
+            <button class="btn btn-primary btn-sm" onclick="quickLab(this, '${escH(frontier.topic)}', 2)">${t('treinar')} →</button>
         </div>`;
     }
     return `<div class="p-card p-acao">
@@ -488,7 +523,7 @@ function trilhaCard(d) {
             : (x.due_reviews ? `${x.due_reviews} ${t('revisoes_seguram')}` : t('fronteira'));
         const score = x.attempts ? Math.round((x.score || 0) * 100) + '% · ' + x.attempts + 'x' : t('novo');
         const cta = st === 'current'
-            ? `<button class="btn btn-primary btn-sm" onclick="sendSuggestion('crie um lab de ${escH((x.topic || '').toLowerCase())} nível 2')">${t('treinar')}</button>`
+            ? `<button class="btn btn-primary btn-sm" onclick="quickLab(this, '${escH(x.topic || '')}', 2)">${t('treinar')}</button>`
             : `<span class="mastery-score">${score}</span>`;
         return `<div class="mastery-row ${st}">
             <span class="mastery-icon" style="color:${color};">${icon}</span>
@@ -524,6 +559,31 @@ function coberturaCard(d) {
     </div>`;
 }
 
+// ── tendência: sparkline de série única (rótulos em texto, sem legenda) ──
+function sparkSVG(pts, label) {
+    if ((pts || []).length < 2) return '';
+    const W = 260, H = 34, PAD = 3;
+    const min = Math.min(...pts.map(p => p.v)), max = Math.max(...pts.map(p => p.v));
+    const span = Math.max(max - min, 1);
+    const x = i => PAD + i * (W - 2 * PAD) / (pts.length - 1);
+    const y = v => H - PAD - (v - min) * (H - 2 * PAD) / span;
+    const line = pts.map((p, i) => `${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
+    const last = pts[pts.length - 1];
+    return `<div class="spark-wrap">
+        <svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${escH(label || '')}">
+            <polyline points="${line}" vector-effect="non-scaling-stroke"></polyline>
+            <circle cx="${x(pts.length - 1).toFixed(1)}" cy="${y(last.v).toFixed(1)}" r="2.5"></circle>
+        </svg>
+        <div class="spark-sub"><span>${escH((pts[0].d || '').slice(5))}</span><span>${t('tendencia')}</span><span>${escH((last.d || '').slice(5))}</span></div>
+    </div>`;
+}
+// Série diária de retenção (cumulativa: hits/(hits+misses) no fim de cada dia).
+function retentionSeries(hist) {
+    return (hist || [])
+        .filter(h => (h.retention_hits || 0) + (h.retention_misses || 0) > 0)
+        .map(h => ({ d: h.date, v: Math.round((h.retention_hits || 0) * 100 / ((h.retention_hits || 0) + (h.retention_misses || 0))) }));
+}
+
 // A métrica central do game-change: acertou quando o tópico VOLTOU após o
 // intervalo? Só aparece quando existe reapresentação registrada.
 function retencaoCard(d) {
@@ -537,6 +597,22 @@ function retencaoCard(d) {
     return `<div class="p-card">
         <div class="cc-title">${t('retencao')}</div>
         <div class="cov-line"><b style="color:${scoreColor(pct / 100)};">${pct}%</b><span>${hits}/${total} · ${t('retencao_sub')}</span></div>
+        ${sparkSVG(retentionSeries(d.history), t('retencao'))}
+    </div>`;
+}
+
+// Sem retenção medida ainda, a tendência do score médio mostra o progresso —
+// o aluno vê o loop funcionando, não só o estado de hoje.
+function evolucaoCard(d) {
+    if (retentionSeries(d.history).length >= 2) return ''; // retenção já mostra tendência
+    const pts = (d.history || []).filter(h => h.attempts > 0)
+        .map(h => ({ d: h.date, v: Math.round((h.avg_score || 0) * 100) }));
+    if (pts.length < 2) return '';
+    const last = pts[pts.length - 1];
+    return `<div class="p-card">
+        <div class="cc-title">${t('evolucao')}</div>
+        <div class="cov-line"><b style="color:${scoreColor(last.v / 100)};">${last.v}%</b><span>${t('evolucao_sub')}</span></div>
+        ${sparkSVG(pts, t('evolucao'))}
     </div>`;
 }
 
@@ -563,7 +639,7 @@ function fraquezasCard(d) {
 function renderPainel(d) {
     statusCache = d;
     document.getElementById('painel-body').innerHTML =
-        acaoDoDia(d) + trilhaCard(d) + retencaoCard(d) + coberturaCard(d) + cadernoCard(d) + fraquezasCard(d);
+        acaoDoDia(d) + trilhaCard(d) + retencaoCard(d) + evolucaoCard(d) + coberturaCard(d) + cadernoCard(d) + fraquezasCard(d);
 }
 
 async function refreshPainel() {
@@ -589,7 +665,7 @@ function ragCard(d) {
 }
 function obsCard(d) {
     const obs = (d && d.observability) || {};
-    if (!((obs.attempts || 0) > 0 || (obs.top_failures || []).length || (obs.stuck_topics || []).length)) return '';
+    if (!((obs.attempts || 0) > 0 || (obs.env_failures || 0) > 0 || (obs.top_failures || []).length || (obs.stuck_topics || []).length)) return '';
     const rate = Math.round((obs.success_rate || 0) * 100);
     const failures = (obs.top_failures || []).slice(0, 3).map(x => `<div class="obs-item">
         <strong>${escH(x.topic || x.cert || 'Lab')}</strong><code>${escH(x.command || 'falha')}</code>
@@ -597,12 +673,19 @@ function obsCard(d) {
     const stuck = (obs.stuck_topics || []).slice(0, 3).map(x => `<div class="obs-item">
         <strong>${escH(x.topic || 'Topico')}</strong><code>${(x.failures || 0) + (x.setup_warnings || 0) + (x.term_errors || 0)} sinais</code>
     </div>`).join('');
+    // Validador falhando para 3+ alunos distintos = provável defeito do LAB
+    // (gabarito/validador), não dos alunos — fila de revisão de conteúdo.
+    const suspects = (obs.suspect_goals || []).slice(0, 3).map(x => `<div class="obs-item">
+        <strong>⚠ ${escH(x.topic || x.lab_id || 'Lab')} — revisar validador</strong><code>${x.distinct_users} aluno(s) · ${escH(x.command || '')}</code>
+    </div>`).join('');
     return `<div class="p-card"><div class="cc-title">observabilidade hands-on</div>
         <div class="obs-grid">
             <div class="obs-kpi"><b>${rate}%</b><span>sucesso</span></div>
             <div class="obs-kpi"><b>${obs.attempts || 0}</b><span>validacoes</span></div>
             <div class="obs-kpi"><b>${obs.labs || 0}</b><span>labs</span></div>
         </div>
+        ${obs.env_failures ? `<div class="eval-sub">${obs.env_failures} falha(s) de AMBIENTE ignoradas no skill dos alunos</div>` : ''}
+        ${suspects ? `<div class="obs-list">${suspects}</div>` : ''}
         ${stuck ? `<div class="obs-list">${stuck}</div>` : ''}
         ${failures ? `<div class="obs-list">${failures}</div>` : ''}
     </div>`;
@@ -805,7 +888,7 @@ async function sendChat() {
         const [txt, action] = splitAction(out);
         slot.innerHTML = mdLite(txt || '...');
         if (action) renderAction(slot, action);
-        addFeedback(slot);
+        addFeedback(slot, text);
     } catch (e) {
         slot.innerHTML = 'algo deu errado por aqui — tenta de novo?';
     }

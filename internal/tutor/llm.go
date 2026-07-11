@@ -551,6 +551,66 @@ func groundedInSource(question, correctOpt, source string) bool {
 // Uso 2 — explicar em tempo real por que um goal falhou (tutoria de verdade).
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Cache por assinatura de falha: o mesmo goal falhando com o mesmo TIPO de
+// saída rende a mesma tutoria, então não há por que pagar outra chamada de
+// modelo (latência p/ o aluno + custo no gateway remoto). A assinatura apaga
+// identificadores voláteis (sufixo de pod, ids hex, contagens) para que
+// "web-7f9cd" e "web-8a1bc" caiam na mesma entrada.
+const (
+	explainCacheTTL = 6 * time.Hour
+	explainCacheMax = 512
+)
+
+type explainEntry struct {
+	text    string
+	expires time.Time
+}
+
+var (
+	explainCacheMu sync.Mutex
+	explainCache   = map[string]explainEntry{}
+)
+
+var volatileTokenRe = regexp.MustCompile(`\b[0-9a-f]{4,}\b|\d+`)
+
+func failureSignature(questionText, goalDesc, valCmd, output string) string {
+	norm := strings.ToLower(compactText(output, 400))
+	norm = volatileTokenRe.ReplaceAllString(norm, "#")
+	return ragID(questionText, goalDesc, valCmd, norm)
+}
+
+func cachedExplanation(sig string) (string, bool) {
+	explainCacheMu.Lock()
+	defer explainCacheMu.Unlock()
+	e, ok := explainCache[sig]
+	if !ok || time.Now().After(e.expires) {
+		return "", false
+	}
+	return e.text, true
+}
+
+func storeExplanation(sig, text string) {
+	explainCacheMu.Lock()
+	defer explainCacheMu.Unlock()
+	now := time.Now()
+	if len(explainCache) >= explainCacheMax {
+		for k, e := range explainCache {
+			if now.After(e.expires) {
+				delete(explainCache, k)
+			}
+		}
+		// ainda cheio (nada expirado): descarta entradas arbitrárias — cache é
+		// otimização, nunca fonte de verdade.
+		for k := range explainCache {
+			if len(explainCache) < explainCacheMax {
+				break
+			}
+			delete(explainCache, k)
+		}
+	}
+	explainCache[sig] = explainEntry{text: text, expires: now.Add(explainCacheTTL)}
+}
+
 // LLMExplainFailure gera uma explicação curta e didática do erro do usuário.
 // answerCmd é o gabarito do lab: nunca é enviado ao modelo, serve só para
 // redigir a resposta caso o modelo o reconstrua por conta própria.
@@ -558,6 +618,12 @@ func LLMExplainFailure(questionText, goalDesc, valCmd, answerCmd, output string)
 	if len(output) > 800 {
 		output = output[:800]
 	}
+	sig := failureSignature(questionText, goalDesc, valCmd, output)
+	if text, ok := cachedExplanation(sig); ok {
+		explainCacheHits.Add(1)
+		return text, nil
+	}
+	explainCacheMisses.Add(1)
 	prompt := fmt.Sprintf(`Você é um tutor de Kubernetes paciente. Um aluno está fazendo este exercício:
 
 EXERCÍCIO: %s
@@ -577,7 +643,9 @@ Priorize diagnosticar namespace errado, nome divergente, selector/label sem casa
 	if err != nil {
 		return "", err
 	}
-	return finalizeExplanation(raw, answerCmd, goalDesc), nil
+	text := finalizeExplanation(raw, answerCmd, goalDesc)
+	storeExplanation(sig, text)
+	return text, nil
 }
 
 // finalizeExplanation aplica o guard e garante que SEMPRE sobra tutoria: se o

@@ -12,6 +12,8 @@ type AdminQualityReport struct {
 	RAG                RAGStatusInfo         `json:"rag"`
 	Telemetry          TutorTelemetryReport  `json:"telemetry"`
 	Feedback           FeedbackSummary       `json:"feedback"`
+	ExplainCacheHits   int64                 `json:"explain_cache_hits"`
+	ExplainCacheMisses int64                 `json:"explain_cache_misses"`
 	GroundingScore     int                   `json:"grounding_score"`
 	SourceCoverage     int                   `json:"source_coverage"`
 	RefusalCorrectness int                   `json:"refusal_correctness"`
@@ -25,6 +27,7 @@ func BuildAdminQualityReport() AdminQualityReport {
 	golden := RunGoldenEval()
 	quality := PromptQualityReport()
 	obs := LabObservability()
+	cacheHits, cacheMisses := ExplainCacheStats()
 	rep := AdminQualityReport{
 		GeneratedAt:        time.Now().UTC().Format(time.RFC3339),
 		GoldenScore:        golden.Score,
@@ -35,6 +38,8 @@ func BuildAdminQualityReport() AdminQualityReport {
 		RAG:                RAGStatus(),
 		Telemetry:          TutorTelemetry(),
 		Feedback:           TutorFeedbackSummary(),
+		ExplainCacheHits:   cacheHits,
+		ExplainCacheMisses: cacheMisses,
 		GroundingScore:     golden.GroundingScore,
 		SourceCoverage:     golden.SourceCoverage,
 		RefusalCorrectness: golden.RefusalCorrectness,

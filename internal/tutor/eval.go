@@ -16,6 +16,7 @@ type GoldenEvalReport struct {
 	Cases              []GoldenEvalCaseResult `json:"cases"`
 	RegressionCases    []GoldenEvalCaseResult `json:"regression_cases,omitempty"`
 	Quality            PromptQualitySummary   `json:"quality"`
+	Feedback           FeedbackSummary        `json:"feedback"`
 	GroundingTotal     int                    `json:"grounding_total"`
 	GroundingPassed    int                    `json:"grounding_passed"`
 	GroundingScore     int                    `json:"grounding_score"`
@@ -106,6 +107,7 @@ func RunGoldenEval() GoldenEvalReport {
 		report.Score = int(float64(report.Passed) / float64(report.Total) * 100)
 	}
 	report.Quality = PromptQualityReport()
+	report.Feedback = TutorFeedbackSummary()
 	for _, h := range HistoricalRegressionPrompts(8) {
 		c := runHistoricalRegressionPrompt(h)
 		report.RegressionTotal++

@@ -519,6 +519,16 @@ function checkGoal(idx, questionId) {
                 const prog = document.getElementById('goals-progress');
                 if (prog) prog.textContent = completedGoals + ' / ' + totalGoals + ' completados';
                 if (completedGoals >= totalGoals) renderPostLabEvolution();
+            } else if (d.env_issue) {
+                // Falha de AMBIENTE (cluster fora, timeout): não é erro do
+                // aluno — não pinta de vermelho nem oferece "explicar erro".
+                card.className = 'goal-card state-idle';
+                btn.className = 'goal-check-btn idle';
+                btn.textContent = '▶ CHECK';
+                btn.disabled = false;
+                resultEl.className = 'goal-result';
+                retryEl.style.display = 'block';
+                retryEl.innerHTML = 'Problema de ambiente — isso não conta no seu progresso. Confira o cluster e tente de novo.';
             } else {
                 card.className = 'goal-card state-fail';
                 btn.className = 'goal-check-btn fail';
@@ -602,42 +612,77 @@ function examRecordCurrent() {
     if (!EXAM) return;
     try {
         const res = JSON.parse(localStorage.getItem(examKey('-res')) || '[]');
-        res.push({ topic: LAB_TOPIC, ok: totalGoals > 0 && completedGoals === totalGoals });
+        res.push({ topic: LAB_TOPIC, cert: LAB_CERT, ok: totalGoals > 0 && completedGoals === totalGoals });
         localStorage.setItem(examKey('-res'), JSON.stringify(res));
     } catch (e) {}
 }
 
-function finishExam() {
+// Linha do score report: barra fina + valor em texto (cor = status vs corte).
+function examDomainRow(label, okN, n, p, cut) {
+    const color = p >= cut ? 'var(--green)' : 'var(--red)';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;">
+        <span style="flex:1;min-width:0;color:var(--text-2);">${esc(label)}</span>
+        <div style="width:64px;height:4px;border-radius:2px;background:var(--border);overflow:hidden;flex-shrink:0;"><div style="width:${p}%;height:100%;background:${color};"></div></div>
+        <span class="mono" style="color:${color};font-weight:700;min-width:76px;text-align:right;flex-shrink:0;">${okN}/${n} · ${p}%</span></div>`;
+}
+
+async function finishExam() {
     examRecordCurrent();
     let res = [];
     try { res = JSON.parse(localStorage.getItem(examKey('-res')) || '[]'); } catch (e) {}
     const total = Math.max(res.length, 1);
     const ok = res.filter(r => r.ok).length;
-    const pct = Math.round(ok / total * 100);
-    const passed = pct >= 66;
-    const byTopic = {};
-    res.forEach(r => {
-        byTopic[r.topic] = byTopic[r.topic] || { ok: 0, n: 0 };
-        byTopic[r.topic].n++; if (r.ok) byTopic[r.topic].ok++;
-    });
+
+    // Projeção oficial: o backend pondera pelos PESOS dos domínios da cert e
+    // aplica a nota de corte real. Sem servidor/currículo, degrada para o
+    // percentual bruto por tópico (comportamento antigo).
+    let rep = null;
+    try {
+        const r = await fetch('/api/tutor/exam-report', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cert: LAB_CERT, results: res })
+        });
+        const d = await r.json();
+        if (d && !d.error && d.total) rep = d;
+    } catch (e) {}
+
+    const cut = rep ? rep.pass_cut : 66;
+    const pct = rep ? rep.weighted_pct : Math.round(ok / total * 100);
+    const passed = rep ? rep.passed : pct >= cut;
     let rows = '';
-    Object.keys(byTopic).sort().forEach(t => {
-        const b = byTopic[t], p = Math.round(b.ok / b.n * 100);
-        rows += `<div style="display:flex;justify-content:space-between;gap:16px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;">
-            <span style="color:var(--text-2);">${esc(t)}</span>
-            <span class="mono" style="color:${p >= 66 ? 'var(--green)' : 'var(--red)'};font-weight:700;">${b.ok}/${b.n} · ${p}%</span></div>`;
-    });
+    if (rep) {
+        (rep.domains || []).forEach(b => { rows += examDomainRow(`${b.domain} · peso ${b.weight}%`, b.correct, b.attempts, b.pct, cut); });
+        (rep.extra || []).forEach(b => { rows += examDomainRow(b.domain, b.correct, b.attempts, b.pct, cut); });
+    } else {
+        const byTopic = {};
+        res.forEach(r => {
+            byTopic[r.topic] = byTopic[r.topic] || { ok: 0, n: 0 };
+            byTopic[r.topic].n++; if (r.ok) byTopic[r.topic].ok++;
+        });
+        Object.keys(byTopic).sort().forEach(t => {
+            const b = byTopic[t];
+            rows += examDomainRow(t, b.ok, b.n, Math.round(b.ok / b.n * 100), cut);
+        });
+    }
+    const unseen = rep && (rep.unseen || []).length
+        ? `<p style="margin-top:10px;font-size:10px;color:var(--text-4);line-height:1.5;">não cobertos neste simulado: ${rep.unseen.map(u => esc(u.domain) + ' (' + u.weight + '%)').join(', ')}</p>`
+        : '';
+    const projNote = rep && rep.covered_weight_pct > 0 && rep.covered_weight_pct < 100
+        ? ` · projeção sobre ${rep.covered_weight_pct}% do peso oficial`
+        : '';
+
     const ov = document.createElement('div');
     ov.className = 'full-overlay active';
     ov.style.zIndex = '95';
     ov.innerHTML = `<div style="max-width:430px;width:100%;padding:0 24px;text-align:center;">
         <div style="color:${passed ? 'var(--green)' : 'var(--text-3)'};margin-bottom:10px;line-height:0;animation:fadeUp .5s ease both;">${passed ? icon('exam', 44) : icon('docs', 44)}</div>
         <h2 style="font-size:26px;font-weight:800;color:${passed ? 'var(--green)' : 'var(--red)'};margin-bottom:4px;">${pct}%</h2>
-        <p style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px;">${passed ? 'APROVADO ✓' : 'Ainda não — nota de corte: 66%'}</p>
-        <p style="font-size:11px;color:var(--text-3);margin-bottom:18px;">${ok} de ${total} questões completas</p>
+        <p style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px;">${passed ? (rep ? 'APROVADO ✓ (projeção)' : 'APROVADO ✓') : 'Ainda não — nota de corte: ' + cut + '%'}</p>
+        <p style="font-size:11px;color:var(--text-3);margin-bottom:18px;">${ok} de ${total} questões completas${projNote}</p>
         <div style="background:var(--surface-2);border:1px solid var(--border-2);border-radius:12px;padding:14px 16px;text-align:left;margin-bottom:18px;">
-            <p class="mono" style="font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text-4);margin-bottom:8px;">score por domínio</p>
+            <p class="mono" style="font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text-4);margin-bottom:8px;">${rep ? 'score por domínio oficial (peso da prova)' : 'score por domínio'}</p>
             ${rows}
+            ${unseen}
         </div>
         <div style="display:flex;gap:10px;justify-content:center;">
             <a href="/tutor" class="btn btn-outline">Revisar com o tutor</a>
@@ -1211,6 +1256,9 @@ async function nextQuestion() {
         if (d.done) {
             document.getElementById('nav-loading').classList.remove('active');
             try { localStorage.removeItem('k8slab-resume'); } catch(e) {}
+            // Exame terminado por completar as questões (não só pelo relógio):
+            // o aluno merece o score report, não o overlay genérico de sessão.
+            if (EXAM) { finishExam(); return; }
             document.getElementById('session-complete-overlay').classList.add('active');
         } else {
             examRecordCurrent();

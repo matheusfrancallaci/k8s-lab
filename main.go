@@ -191,6 +191,7 @@ func main() {
 	mux.HandleFunc("POST /api/tutor/generate", tutorH.Generate)
 	mux.HandleFunc("POST /api/tutor/ingest", tutorH.Ingest)
 	mux.HandleFunc("POST /api/tutor/explain", tutorH.Explain)
+	mux.HandleFunc("POST /api/tutor/exam-report", tutorH.ExamReport)
 	mux.HandleFunc("GET /api/tutor/eval", tutorH.Eval)
 	mux.HandleFunc("GET /api/tutor/quality", tutorH.Quality)
 	mux.HandleFunc("POST /api/tutor/quality/promote", tutorH.PromoteQualityFixture)

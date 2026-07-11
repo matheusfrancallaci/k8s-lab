@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -15,39 +16,68 @@ type TutorFeedback struct {
 	Kind      string    `json:"kind"`
 	Cert      string    `json:"cert,omitempty"`
 	Topic     string    `json:"topic,omitempty"`
+	Prompt    string    `json:"prompt,omitempty"`
+	// EvalCase é o id do caso de prompt-quality promovido a fixture de
+	// regressão por causa deste feedback — o elo "👎 do aluno → eval".
+	EvalCase string `json:"eval_case,omitempty"`
 }
 
 type FeedbackSummary struct {
 	Positive int `json:"positive"`
 	Negative int `json:"negative"`
 	Total    int `json:"total"`
+	// PromotedToEval conta quantos 👎 viraram caso durável de regressão.
+	PromotedToEval int `json:"promoted_to_eval"`
 }
 
 var feedbackMu sync.Mutex
 
-func RecordTutorFeedback(userID, messageID, kind, cert, topic string) error {
+func feedbackLogPath() string {
+	if p := strings.TrimSpace(os.Getenv("TUTOR_FEEDBACK_PATH")); p != "" {
+		return p
+	}
+	return filepath.Join("data", "eval", "tutor_feedback.jsonl")
+}
+
+func RecordTutorFeedback(userID, messageID, kind, cert, topic, prompt string) error {
 	if kind != "helpful" && kind != "unhelpful" {
 		return nil
 	}
+	// Feedback negativo fecha o loop de qualidade: o prompt avaliado vira
+	// fixture de regressão e passa a rodar em todo golden eval. Promove ANTES
+	// de segurar feedbackMu (a promoção usa o mutex do prompt-quality).
+	evalCase := ""
+	if kind == "unhelpful" {
+		evalCase, _ = PromoteNegativeFeedbackRegression(prompt)
+	}
 	feedbackMu.Lock()
 	defer feedbackMu.Unlock()
-	dir := filepath.Join("data", "eval")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	path := feedbackLogPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(filepath.Join(dir, "tutor_feedback.jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	e := TutorFeedback{At: time.Now().UTC(), UserHash: ragID(userID), MessageID: messageID, Kind: kind, Cert: cert, Topic: topic}
+	e := TutorFeedback{
+		At:        time.Now().UTC(),
+		UserHash:  ragID(userID),
+		MessageID: messageID,
+		Kind:      kind,
+		Cert:      cert,
+		Topic:     topic,
+		Prompt:    compactText(prompt, 320),
+		EvalCase:  evalCase,
+	}
 	return json.NewEncoder(f).Encode(e)
 }
 
 func TutorFeedbackSummary() FeedbackSummary {
 	feedbackMu.Lock()
 	defer feedbackMu.Unlock()
-	b, err := os.ReadFile(filepath.Join("data", "eval", "tutor_feedback.jsonl"))
+	b, err := os.ReadFile(feedbackLogPath())
 	if err != nil {
 		return FeedbackSummary{}
 	}
@@ -62,6 +92,9 @@ func TutorFeedbackSummary() FeedbackSummary {
 			s.Positive++
 		} else if e.Kind == "unhelpful" {
 			s.Negative++
+		}
+		if e.EvalCase != "" {
+			s.PromotedToEval++
 		}
 	}
 	return s
