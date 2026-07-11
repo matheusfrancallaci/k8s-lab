@@ -28,7 +28,9 @@
       "Bash(curl -s --max-time 30 https://k8slab-b9ue3.eastus2.cloudapp.azure.com/healthz)",
       "Bash(curl -s --max-time 280 https://k8slab-b9ue3.eastus2.cloudapp.azure.com/api/tutor/deploy-gate)",
       "PowerShell(git config core.hooksPath .githooks)",
-      "PowerShell(git config core.hooksPath)"
+      "PowerShell(git config core.hooksPath)",
+      "PowerShell(git commit -F \"C:\\\\Users\\\\mathe\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--desenv-estudo-app\\\\1c9f2dbf-5925-4e7c-87fd-7acd94ea07e5\\\\scratchpad\\\\commit-msg.txt\" 2>&1)",
+      "PowerShell(git add deploy/azure/vm-backup-install.sh .claude/settings.json; $env:SKIP_TESTS='1'; git commit -m 'chore: instalador de backup da VM \\(snapshot incremental + retencao\\) e permissoes de sessao' 2>&1 | Select-Object -Last 3; $env:SKIP_TESTS='')"
     ]
   }
 }
