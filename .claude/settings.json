@@ -22,7 +22,8 @@
       "PowerShell(go build -o estudo-app.exe .)",
       "PowerShell(if \\($?\\) { \"build ok\" })",
       "PowerShell(& .\\\\estudo-app.exe)",
-      "PowerShell(git add .claude/settings.json)"
+      "PowerShell(git add .claude/settings.json)",
+      "PowerShell(.\\\\scripts\\\\redeploy.ps1)"
     ]
   }
 }
