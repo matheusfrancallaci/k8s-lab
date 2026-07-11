@@ -19,5 +19,6 @@ app_password = "troque-esta-senha"
 # Opcional: IA local e embeddings do RAG
 # Perfil de alta qualidade (requer VM com 16GB)
 # ollama_model = "qwen3:8b"
+# ollama_router_model = "qwen3:4b"
 # ollama_gen_model = "qwen3:8b"
 # ollama_embed_model = "embeddinggemma"

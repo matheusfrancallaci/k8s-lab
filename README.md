@@ -55,3 +55,7 @@ make build     # binário local
 - **client-go** para falar com a API do cluster sem `kubectl` shell (hot paths)
 - **Tutor local**: modelo de habilidade EWMA por tópico, recomendações determinísticas,
   e enhancer opcional via **Ollama** (streaming), tudo local
+- **Planner pedagógico**: memória por aluno, pré-requisitos, diagnóstico de lacunas e estratégia explicável
+- **Grounding verificável**: RAG híbrido, allowlist de fontes, proteção contra prompt injection e citações por afirmação
+- **Labs com contrato de publicação**: digest de conteúdo, quality gate, verificação executável e estado real de prontidão
+- **Operação mensurável**: fila da LLM, keep-alive, cancelamento, telemetria persistente p50/p95/p99 e TTFT

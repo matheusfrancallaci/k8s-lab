@@ -47,6 +47,7 @@ RUN ENC=$(echo "$K3S_VERSION" | sed 's/+/%2B/') && \
     ln -sf /usr/local/bin/k3s /usr/local/bin/kubectl
 
 COPY --from=build /out/estudo-app /app/estudo-app
+COPY questions-custom /app/questions-custom
 COPY docker-entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
 

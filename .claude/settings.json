@@ -23,7 +23,12 @@
       "PowerShell(if \\($?\\) { \"build ok\" })",
       "PowerShell(& .\\\\estudo-app.exe)",
       "PowerShell(git add .claude/settings.json)",
-      "PowerShell(.\\\\scripts\\\\redeploy.ps1)"
+      "PowerShell(.\\\\scripts\\\\redeploy.ps1)",
+      "Bash(curl -s -o /dev/null -w \"healthz status=%{http_code}\\\\n\" --max-time 30 https://k8slab-b9ue3.eastus2.cloudapp.azure.com/healthz)",
+      "Bash(curl -s --max-time 30 https://k8slab-b9ue3.eastus2.cloudapp.azure.com/healthz)",
+      "Bash(curl -s --max-time 280 https://k8slab-b9ue3.eastus2.cloudapp.azure.com/api/tutor/deploy-gate)",
+      "PowerShell(git config core.hooksPath .githooks)",
+      "PowerShell(git config core.hooksPath)"
     ]
   }
 }

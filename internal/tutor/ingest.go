@@ -123,6 +123,15 @@ func Ingest(text, cert, topic string, level, wantLabs, wantQuiz int) ([]models.Q
 		rep.Notes = append(rep.Notes, "URL ignorada por segurança (fora do escopo infra/cloud/dev): "+b)
 	}
 
+	// Cert sem currículo conhecido + material oficial em mãos: APRENDE os
+	// domínios/pesos (LLM com contrato + grounding) e persiste — a partir daqui
+	// a cert tem trilha, cobertura e simulado ponderado sem editar código.
+	if _, known := CurriculumFor(cert); !known {
+		if learned, ok := LearnCurriculumFromMaterial(cert, text, sources); ok {
+			rep.Notes = append(rep.Notes, fmt.Sprintf("aprendi o currículo oficial de %s (%d domínios) — persistido para trilha/cobertura/simulado", cert, len(learned)))
+		}
+	}
+
 	// Consciência de certificação: se o material não cobre a cert pedida
 	// (ex.: link fala de Pods mas o usuário quer CKS), busca sozinho nas
 	// fontes oficiais da cert e complementa o material.

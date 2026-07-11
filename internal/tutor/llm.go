@@ -3,6 +3,7 @@ package tutor
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -62,8 +63,13 @@ func LLMStatus() (bool, string) {
 }
 
 func probeOllama() (bool, string) {
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(ollamaURL() + "/api/tags")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ollamaURL()+"/api/tags", nil)
+	if err != nil {
+		return false, ""
+	}
+	resp, err := sharedLLMHTTPClient.Do(req)
 	if err != nil {
 		return false, ""
 	}
@@ -77,7 +83,12 @@ func probeOllama() (bool, string) {
 		return false, ""
 	}
 	if m := envOr("OLLAMA_MODEL", ""); m != "" {
-		return true, m
+		for _, installed := range body.Models {
+			if modelNameMatches(installed.Name, m) {
+				return true, installed.Name
+			}
+		}
+		return false, m
 	}
 	// escolhe o primeiro instalado que case com a lista de preferência
 	for _, pref := range preferredModels {
@@ -91,11 +102,14 @@ func probeOllama() (bool, string) {
 }
 
 func ollamaEmbeddingModel() (string, bool) {
-	if m := envOr("OLLAMA_EMBED_MODEL", ""); m != "" {
-		return m, true
+	configured := envOr("OLLAMA_EMBED_MODEL", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ollamaURL()+"/api/tags", nil)
+	if err != nil {
+		return "", false
 	}
-	client := &http.Client{Timeout: 1200 * time.Millisecond}
-	resp, err := client.Get(ollamaURL() + "/api/tags")
+	resp, err := sharedLLMHTTPClient.Do(req)
 	if err != nil {
 		return "", false
 	}
@@ -108,6 +122,14 @@ func ollamaEmbeddingModel() (string, bool) {
 	if json.NewDecoder(resp.Body).Decode(&body) != nil {
 		return "", false
 	}
+	if configured != "" {
+		for _, installed := range body.Models {
+			if modelNameMatches(installed.Name, configured) {
+				return installed.Name, true
+			}
+		}
+		return configured, false
+	}
 	for _, pref := range preferredEmbedModels {
 		for _, m := range body.Models {
 			if strings.HasPrefix(m.Name, pref) {
@@ -116,6 +138,12 @@ func ollamaEmbeddingModel() (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func modelNameMatches(installed, requested string) bool {
+	installed = strings.TrimSpace(installed)
+	requested = strings.TrimSpace(requested)
+	return installed == requested || strings.TrimSuffix(installed, ":latest") == strings.TrimSuffix(requested, ":latest")
 }
 
 func ollamaEmbedding(input string) ([]float64, string, error) {
@@ -134,10 +162,11 @@ func ollamaEmbeddingForModel(input, model string) ([]float64, error) {
 	if len(input) > 4000 {
 		input = input[:4000]
 	}
-	client := &http.Client{Timeout: 8 * time.Second}
 	payload := map[string]any{"model": model, "prompt": input}
 	b, _ := json.Marshal(payload)
-	resp, err := client.Post(ollamaURL()+"/api/embeddings", "application/json", bytes.NewReader(b))
+	ctxLegacy, cancelLegacy := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancelLegacy()
+	resp, err := llmRequest(ctxLegacy, http.MethodPost, ollamaURL()+"/api/embeddings", "application/json", bytes.NewReader(b))
 	if err == nil {
 		defer resp.Body.Close()
 		var out struct {
@@ -150,7 +179,9 @@ func ollamaEmbeddingForModel(input, model string) ([]float64, error) {
 
 	payload = map[string]any{"model": model, "input": input}
 	b, _ = json.Marshal(payload)
-	resp, err = client.Post(ollamaURL()+"/api/embed", "application/json", bytes.NewReader(b))
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	resp, err = llmRequest(ctx, http.MethodPost, ollamaURL()+"/api/embed", "application/json", bytes.NewReader(b))
 	if err != nil {
 		return nil, err
 	}
@@ -165,6 +196,39 @@ func ollamaEmbeddingForModel(input, model string) ([]float64, error) {
 		return nil, fmt.Errorf("embedding vazio")
 	}
 	return out.Embeddings[0], nil
+}
+
+func ollamaEmbeddingBatchForModel(inputs []string, model string) ([][]float64, error) {
+	if len(inputs) == 0 || strings.TrimSpace(model) == "" {
+		return nil, fmt.Errorf("batch de embedding vazio")
+	}
+	for i := range inputs {
+		if len(inputs[i]) > 4000 {
+			inputs[i] = inputs[i][:4000]
+		}
+	}
+	payload := map[string]any{"model": model, "input": inputs}
+	b, _ := json.Marshal(payload)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	resp, err := llmRequest(ctx, http.MethodPost, ollamaURL()+"/api/embed", "application/json", bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return nil, fmt.Errorf("embedding batch HTTP %d", resp.StatusCode)
+	}
+	var out struct {
+		Embeddings [][]float64 `json:"embeddings"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	if len(out.Embeddings) != len(inputs) {
+		return nil, fmt.Errorf("embedding batch incompleto: %d/%d", len(out.Embeddings), len(inputs))
+	}
+	return out.Embeddings, nil
 }
 
 // Orçamento de tokens por tipo de uso. Em CPU o tempo de resposta é ~linear no
@@ -202,6 +266,29 @@ func numPredict() int {
 	return tokensGen
 }
 
+func chatTokenBudget(msg string) int {
+	words := len(strings.Fields(msg))
+	switch {
+	case words <= 12:
+		return 220
+	case words <= 40:
+		return 320
+	default:
+		return tokensChat
+	}
+}
+
+func ollamaContextSize() int {
+	n := 4096
+	if _, err := fmt.Sscanf(envOr("OLLAMA_NUM_CTX", "4096"), "%d", &n); err != nil || n < 2048 {
+		return 4096
+	}
+	if n > 32768 {
+		return 32768
+	}
+	return n
+}
+
 // genModel devolve o modelo dedicado à GERAÇÃO de código/labs (OLLAMA_GEN_MODEL),
 // separado do modelo de chat: chat quer velocidade (modelo pequeno), geração de
 // HCL/YAML quer qualidade (modelo de código). Sem a env, usa o modelo ativo.
@@ -216,22 +303,30 @@ func genModel() string {
 // llmGenerate chama o Ollama de forma síncrona (stream=false). maxTokens<=0 usa
 // o default (num_predict/env). model=="" usa o modelo de chat ativo.
 func llmGenerate(prompt string, wantJSON bool, timeout time.Duration, maxTokens int, model string) (string, error) {
+	return llmGenerateContext(context.Background(), prompt, wantJSON, timeout, maxTokens, model)
+}
+
+func llmGenerateContext(ctx context.Context, prompt string, wantJSON bool, timeout time.Duration, maxTokens int, model string) (string, error) {
 	var format any
 	if wantJSON {
 		format = "json"
 	}
-	return llmGenerateFormatted(prompt, format, timeout, maxTokens, model)
+	return llmGenerateFormattedContext(ctx, prompt, format, timeout, maxTokens, model)
 }
 
 // llmGenerateFormatted accepts either Ollama's legacy "json" mode or a JSON
 // Schema. Contracts use schemas so malformed model output is constrained at
 // generation time and still validated once more before entering the product.
 func llmGenerateFormatted(prompt string, format any, timeout time.Duration, maxTokens int, model string) (string, error) {
+	return llmGenerateFormattedContext(context.Background(), prompt, format, timeout, maxTokens, model)
+}
+
+func llmGenerateFormattedContext(parent context.Context, prompt string, format any, timeout time.Duration, maxTokens int, model string) (string, error) {
 	started := time.Now()
 	failed := true
 	defer func() { recordTutorLatency("llm.generate", time.Since(started), 0, failed) }()
 	if _, remote := remoteLLM(); remote {
-		out, err := remoteGenerate(prompt, format != nil, timeout, maxTokens, model)
+		out, err := remoteGenerateContext(parent, prompt, format != nil, timeout, maxTokens, model)
 		failed = err != nil
 		return out, err
 	}
@@ -245,13 +340,22 @@ func llmGenerateFormatted(prompt string, format any, timeout time.Duration, maxT
 	if maxTokens <= 0 {
 		maxTokens = numPredict()
 	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	release, err := acquireLLMSlot(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer release()
 	payload := map[string]any{
-		"model":  model,
-		"prompt": prompt,
-		"stream": false,
+		"model":      model,
+		"prompt":     prompt,
+		"stream":     false,
+		"keep_alive": envOr("OLLAMA_KEEP_ALIVE", "10m"),
 		"options": map[string]any{
 			"temperature": 0.3,
 			"num_predict": maxTokens,
+			"num_ctx":     ollamaContextSize(),
 		},
 	}
 	if format != nil {
@@ -259,8 +363,7 @@ func llmGenerateFormatted(prompt string, format any, timeout time.Duration, maxT
 	}
 	b, _ := json.Marshal(payload)
 
-	client := &http.Client{Timeout: timeout}
-	resp, err := client.Post(ollamaURL()+"/api/generate", "application/json", bytes.NewReader(b))
+	resp, err := llmRequest(ctx, http.MethodPost, ollamaURL()+"/api/generate", "application/json", bytes.NewReader(b))
 	if err != nil {
 		return "", err
 	}
@@ -281,12 +384,16 @@ func llmGenerateFormatted(prompt string, format any, timeout time.Duration, maxT
 
 // llmStreamGenerate executa streaming incremental do Ollama quando disponível.
 func llmStreamGenerate(prompt string, wantJSON bool, timeout time.Duration, maxTokens int, model string, onChunk func(string)) error {
+	return llmStreamGenerateContext(context.Background(), prompt, wantJSON, timeout, maxTokens, model, onChunk)
+}
+
+func llmStreamGenerateContext(parent context.Context, prompt string, wantJSON bool, timeout time.Duration, maxTokens int, model string, onChunk func(string)) error {
 	started := time.Now()
 	var firstToken time.Duration
 	failed := true
 	defer func() { recordTutorLatency("llm.stream", time.Since(started), firstToken, failed) }()
 	if _, remote := remoteLLM(); remote {
-		err := remoteStream(prompt, timeout, maxTokens, model, onChunk)
+		err := remoteStreamContext(parent, prompt, timeout, maxTokens, model, onChunk)
 		failed = err != nil
 		return err
 	}
@@ -300,13 +407,22 @@ func llmStreamGenerate(prompt string, wantJSON bool, timeout time.Duration, maxT
 	if maxTokens <= 0 {
 		maxTokens = numPredict()
 	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	release, err := acquireLLMSlot(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
 	payload := map[string]any{
-		"model":  model,
-		"prompt": prompt,
-		"stream": true,
+		"model":      model,
+		"prompt":     prompt,
+		"stream":     true,
+		"keep_alive": envOr("OLLAMA_KEEP_ALIVE", "10m"),
 		"options": map[string]any{
 			"temperature": 0.3,
 			"num_predict": maxTokens,
+			"num_ctx":     ollamaContextSize(),
 		},
 	}
 	if wantJSON {
@@ -314,8 +430,7 @@ func llmStreamGenerate(prompt string, wantJSON bool, timeout time.Duration, maxT
 	}
 	b, _ := json.Marshal(payload)
 
-	client := &http.Client{Timeout: timeout}
-	resp, err := client.Post(ollamaURL()+"/api/generate", "application/json", bytes.NewReader(b))
+	resp, err := llmRequest(ctx, http.MethodPost, ollamaURL()+"/api/generate", "application/json", bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -359,6 +474,12 @@ func llmStreamGenerate(prompt string, wantJSON bool, timeout time.Duration, maxT
 
 // StreamLLMReply responde conversa livre com streaming incremental para a UI.
 func StreamLLMReply(msg string, onChunk func(string)) error {
+	return StreamLLMReplyContext(context.Background(), msg, onChunk)
+}
+
+// StreamLLMReplyContext cancels model generation as soon as the caller goes
+// away. This prevents abandoned browser streams from occupying the local model.
+func StreamLLMReplyContext(ctx context.Context, msg string, onChunk func(string)) error {
 	prompt, report := BuildGroundedChatPrompt(msg)
 	if technicalQuestion(msg) && !report.Answerable {
 		if onChunk != nil {
@@ -366,9 +487,21 @@ func StreamLLMReply(msg string, onChunk func(string)) error {
 		}
 		return nil
 	}
-	err := llmStreamGenerate(prompt, false, 60*time.Second, tokensChat, chatModel(), onChunk)
+	cacheKey := groundedReplyKey(msg, chatModel(), report)
+	if reply, ok := cachedGroundedReply(cacheKey); ok {
+		recordTutorLatency("llm.grounded_cache", 0, 0, false)
+		if onChunk != nil {
+			onChunk(reply)
+		}
+		return nil
+	}
+	guard := newGroundingStreamGuard(report, onChunk)
+	err := llmStreamGenerateContext(ctx, prompt, false, 60*time.Second, chatTokenBudget(msg), chatModel(), guard.Write)
 	if err == nil && onChunk != nil {
-		onChunk("\n\n" + strings.TrimPrefix(report.AppendVerifiedSources(""), "\n\n"))
+		guard.Close()
+		suffix := "\n\n" + strings.TrimPrefix(report.AppendVerifiedSources(""), "\n\n")
+		onChunk(suffix)
+		storeGroundedReply(cacheKey, guard.published.String()+suffix)
 	}
 	return err
 }

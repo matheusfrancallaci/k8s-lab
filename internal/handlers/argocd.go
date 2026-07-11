@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os/exec"
 	"strings"
 	"sync"
@@ -27,7 +30,9 @@ var argoCDSteps = []struct {
 	{"Instalando ArgoCD (pode demorar 2-3 min...)", "kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml 2>&1 | tail -5"},
 	{"Aguardando argocd-server ficar pronto", "kubectl wait deployment argocd-server -n argocd --for=condition=available --timeout=300s"},
 	{"Configurando serviço NodePort", "kubectl patch svc argocd-server -n argocd -p '{\"spec\":{\"type\":\"NodePort\"}}' 2>/dev/null || true"},
-	{"Habilitando acesso HTTP", "kubectl patch deployment argocd-server -n argocd --type=json -p='[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--insecure\"}]' 2>/dev/null || true"},
+	// Guards com grep: reinstalar não pode duplicar flags no deployment.
+	{"Habilitando acesso HTTP", "kubectl get deployment argocd-server -n argocd -o jsonpath='{.spec.template.spec.containers[0].args}' | grep -q insecure || kubectl patch deployment argocd-server -n argocd --type=json -p='[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--insecure\"}]' 2>/dev/null || true"},
+	{"Servindo a UI sob /argocd (proxy da app)", "kubectl get deployment argocd-server -n argocd -o jsonpath='{.spec.template.spec.containers[0].args}' | grep -q rootpath || kubectl patch deployment argocd-server -n argocd --type=json -p='[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--rootpath=/argocd\"}]' 2>/dev/null || true"},
 	{"Aguardando reinício do servidor", "kubectl rollout status deployment/argocd-server -n argocd --timeout=120s 2>/dev/null || true"},
 }
 
@@ -57,9 +62,13 @@ func getArgoCDStatus() ArgoCDStatus {
 	scheme := argoCDPFScheme
 	argoCDMu.Unlock()
 
+	_ = scheme
+	// URL relativa: o browser chega ao ArgoCD PELA APP (/argocd/ → proxy →
+	// port-forward interno). "localhost:8090" só existia para quem roda tudo
+	// local — na instância hospedada essa porta nunca alcança o usuário.
 	url := ""
 	if pfActive {
-		url = fmt.Sprintf("%s://localhost:%d", scheme, argoCDLocalPort)
+		url = "/argocd/"
 	}
 
 	return ArgoCDStatus{
@@ -129,7 +138,7 @@ func ArgoCDInstallHandler(w http.ResponseWriter, r *http.Request) {
 
 	pfErr := doStartPortForward()
 	pfStatus := "done"
-	pfDesc := fmt.Sprintf("ArgoCD acessível em %s://localhost:%d", argoCDPFScheme, argoCDLocalPort)
+	pfDesc := "ArgoCD acessível em /argocd/ (atrás do seu login)"
 	if pfErr != nil {
 		pfStatus = "warn"
 		pfDesc = "Port-forward falhou — tente reiniciar manualmente na página ArgoCD"
@@ -165,13 +174,52 @@ func ArgoCDPortForwardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"url":     "/argocd/",
+	})
+}
+
+// ArgoCDProxyHandler serve a UI do ArgoCD pela própria app, atrás do login.
+// O port-forward vive DENTRO do processo/container; expor a UI como caminho
+// da app (/argocd/) é o único jeito de ela funcionar tanto local quanto na
+// instância hospedada. Exige argocd-server com --rootpath=/argocd (garantido
+// no install e em ensureArgoCDRootpathLocked para instalações antigas).
+func ArgoCDProxyHandler(w http.ResponseWriter, r *http.Request) {
+	argoCDMu.Lock()
+	active := argoCDPFActive
+	argoCDMu.Unlock()
+	if !active {
+		if err := doStartPortForward(); err != nil {
+			http.Error(w, "ArgoCD indisponível: "+err.Error()+". Instale/reinicie na página /argocd.", http.StatusServiceUnavailable)
+			return
+		}
+	}
 	argoCDMu.Lock()
 	scheme := argoCDPFScheme
 	argoCDMu.Unlock()
-	json.NewEncoder(w).Encode(map[string]any{
-		"success": true,
-		"url":     fmt.Sprintf("%s://localhost:%d", scheme, argoCDLocalPort),
-	})
+	target, err := url.Parse(fmt.Sprintf("%s://127.0.0.1:%d", scheme, argoCDLocalPort))
+	if err != nil {
+		http.Error(w, "proxy indisponível", http.StatusServiceUnavailable)
+		return
+	}
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	if scheme == "https" {
+		// fallback 443: o cert interno do argocd-server é self-signed
+		proxy.Transport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+	}
+	proxy.ServeHTTP(w, r)
+}
+
+// ensureArgoCDRootpathLocked cura instalações feitas antes do proxy: adiciona
+// --rootpath=/argocd ao argocd-server se faltar (caller segura argoCDMu).
+func ensureArgoCDRootpathLocked() {
+	out, err := wslShell("kubectl get deployment argocd-server -n argocd -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null").Output()
+	if err != nil || strings.Contains(string(out), "rootpath") {
+		return
+	}
+	wslShell(`kubectl patch deployment argocd-server -n argocd --type=json -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--rootpath=/argocd"}]'`).Run()          //nolint:errcheck
+	wslShell("kubectl rollout status deployment/argocd-server -n argocd --timeout=120s 2>/dev/null").Run() //nolint:errcheck
 }
 
 // doStopPortForwardLocked kills the tracked subprocess. Caller must hold argoCDMu.
@@ -190,6 +238,7 @@ func doStartPortForward() error {
 	argoCDMu.Lock()
 	defer argoCDMu.Unlock()
 
+	ensureArgoCDRootpathLocked()
 	doStopPortForwardLocked()
 	time.Sleep(400 * time.Millisecond)
 

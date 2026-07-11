@@ -69,7 +69,7 @@ func (h *LabHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/lab", http.StatusSeeOther)
 		return
 	}
-	q = tutor.FinalizeLab(q, "")
+	q = tutor.PrepareLabForDelivery(q)
 	prevID, nextID := h.repo.GetLabNeighbors(id)
 
 	// Contexto do tutor: eventos do terminal serão atribuídos a esta questão.
@@ -192,6 +192,26 @@ func runCmd(cmdStr, userID string) (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
+func executeGuardedLabCommand(command, userID string) (string, error) {
+	if reason := tutor.BlockedLabCommandReason(command); reason != "" {
+		message := "Comando automatico nao executado por seguranca: " + reason
+		return message, fmt.Errorf("%s", message)
+	}
+	return runCmd(command, userID)
+}
+
+func executeLabSetupStep(step models.SetupStep, userID string) (string, string) {
+	output, err := executeGuardedLabCommand(step.Command, userID)
+	status := "done"
+	if err != nil {
+		lower := strings.ToLower(output)
+		if !strings.Contains(lower, "already exists") && !strings.Contains(lower, "alreadyexists") {
+			status = "warn"
+		}
+	}
+	return output, status
+}
+
 func (h *LabHandler) Setup(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -211,6 +231,8 @@ func (h *LabHandler) Setup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Setup executa somente o ambiente do exercicio. A verificacao executavel
+	// acontece na geracao e nunca e repetida no request do aluno.
 	q = tutor.FinalizeLab(q, "")
 
 	if len(q.Setup) == 0 {
@@ -232,22 +254,7 @@ func (h *LabHandler) Setup(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "data: %s\n\n", msg)
 		flusher.Flush()
 
-		var output string
-		var err error
-		if reason := tutor.BlockedLabCommandReason(step.Command); reason != "" {
-			output = "bloqueado pelo guardrail do Lab Agent: " + reason
-			err = fmt.Errorf("%s", reason)
-		} else {
-			output, err = runCmd(step.Command, userID(r))
-		}
-
-		status := "done"
-		if err != nil {
-			lower := strings.ToLower(output)
-			if !strings.Contains(lower, "already exists") && !strings.Contains(lower, "alreadyexists") {
-				status = "warn"
-			}
-		}
+		output, status := executeLabSetupStep(step, userID(r))
 		tutor.RecordLabSetup(uid, q, step.Command, status, output)
 
 		msg, _ = json.Marshal(map[string]any{
@@ -279,11 +286,15 @@ func (h *LabHandler) Teardown(w http.ResponseWriter, r *http.Request) {
 
 	q = tutor.FinalizeLab(q, "")
 
+	var warnings []string
 	for _, cmdStr := range q.Teardown {
-		runCmd(cmdStr, userID(r)) //nolint:errcheck
+		output, err := executeGuardedLabCommand(cmdStr, userID(r))
+		if err != nil {
+			warnings = append(warnings, output)
+		}
 	}
 
-	json.NewEncoder(w).Encode(map[string]any{"success": true})
+	json.NewEncoder(w).Encode(map[string]any{"success": len(warnings) == 0, "warnings": warnings})
 }
 
 type validateResponse struct {
@@ -335,7 +346,7 @@ func (h *LabHandler) Validate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	output, err := runCmd(validation.Command, userID(r))
+	output, err := executeGuardedLabCommand(validation.Command, userID(r))
 	if output == "" && err != nil {
 		output = err.Error()
 	}

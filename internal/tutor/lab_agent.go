@@ -30,6 +30,7 @@ func FinalizeLab(q models.Question, request string) models.Question {
 	q = CompileLab(q, request)
 	if q.LabSpec == nil {
 		spec := BuildLabSpec(q, request)
+		ensureLabReadiness(q, &spec)
 		q.LabSpec = &spec
 		return q
 	}
@@ -77,6 +78,7 @@ func FinalizeLab(q models.Question, request string) models.Question {
 	plan := BuildLabPlan(q, request, spec)
 	spec.LabPlan = &plan
 	spec.Quality = scoreLab(q, spec)
+	ensureLabReadiness(q, &spec)
 	q.LabSpec = &spec
 	return q
 }

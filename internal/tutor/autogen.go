@@ -316,7 +316,10 @@ func specToQuestion(fam *labFamily, s labSpec, topic string, level int) models.Q
 		Teardown:    []string{`rm -rf "` + work + `"`},
 		DocURL:      fam.docURL,
 	}
-	return FinalizeLab(q, "")
+	q = FinalizeLab(q, "")
+	markLabVerified(&q, true, nil)
+	_ = RecordLabCatalog([]models.Question{q})
+	return q
 }
 
 func trunc(s string, n int) string {

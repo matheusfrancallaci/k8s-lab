@@ -7,6 +7,8 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"time"
 
 	"estudo-app/internal/models"
@@ -76,7 +78,7 @@ func pickHelp(level int, l1, l2, l3 string) string {
 	}
 }
 
-const localStackInstallCommand = "kubectl create namespace tools 2>/dev/null || true; kubectl get deploy localstack -n tools >/dev/null 2>&1 || kubectl create deployment localstack --image=localstack/localstack:latest -n tools 2>/dev/null || true; kubectl set env deployment/localstack -n tools SERVICES=s3,sqs,iam,sts DEBUG=0 2>/dev/null || true; kubectl get svc localstack -n tools >/dev/null 2>&1 || kubectl expose deployment localstack --port=4566 --target-port=4566 -n tools 2>/dev/null || true; kubectl rollout status deployment/localstack -n tools --timeout=180s 2>/dev/null || true; kubectl -n tools exec deploy/localstack -- localstack wait -t 60 2>/dev/null || true"
+const localStackInstallCommand = "kubectl create namespace tools 2>/dev/null || true; kubectl get deploy localstack -n tools >/dev/null 2>&1 || kubectl create deployment localstack --image=localstack/localstack:2026.06.2 -n tools 2>/dev/null || true; kubectl set env deployment/localstack -n tools SERVICES=s3,sqs,iam,sts DEBUG=0 2>/dev/null || true; kubectl get svc localstack -n tools >/dev/null 2>&1 || kubectl expose deployment localstack --port=4566 --target-port=4566 -n tools 2>/dev/null || true; kubectl rollout status deployment/localstack -n tools --timeout=180s 2>/dev/null || true; kubectl -n tools exec deploy/localstack -- localstack wait -t 60 2>/dev/null || true"
 
 func localStackSetupSteps() []models.SetupStep {
 	return []models.SetupStep{{
@@ -209,28 +211,92 @@ func Generate(topic, cert string, level, count int) ([]models.Question, error) {
 	qs := generateQuestions(topic, cert, level, count)
 	for i := range qs {
 		qs[i].Source = models.SourceGenerated
-		q := qs[i]
-		if err := LabQualityGate(q); err != nil {
-			return nil, err
+		if err := LabQualityGate(qs[i]); err != nil {
+			// O gate continua visivel no catalogo, mas nao apaga o material
+			// pedagogico. Setup, validacao e teardown ainda bloqueiam cada
+			// comando inseguro antes de chegar ao shell.
+			markLabDegraded(&qs[i], "quality gate: "+err.Error())
 		}
 	}
-	if err := verifyGeneratedKubernetesLabs(qs); err != nil {
-		return nil, err
-	}
+	// A verificacao executavel promove ou reprova o estado interno. Falhas
+	// nunca impedem persistencia/entrega do enunciado, hint e solucao.
+	_ = verifyGeneratedKubernetesLabs(qs)
 	for i := range qs {
-		if qs[i].LabSpec != nil && isKubernetesLab(qs[i]) && shouldVerifyGeneratedKubernetesLabs() {
+		if qs[i].LabSpec != nil && isKubernetesLab(qs[i]) && qs[i].LabSpec.Readiness.State == "ready" && qs[i].LabSpec.Readiness.Executable {
 			qs[i].LabSpec.ValidationMode = "compiled+runtime-verified"
 		}
 	}
 	if err := persist(qs); err != nil {
 		return nil, err
 	}
+	if err := RecordLabCatalog(qs); err != nil {
+		return nil, err
+	}
 	return qs, nil
 }
 
 // persist grava as questões geradas como YAML em questions-custom/.
+func CustomQuestionsDir() string {
+	return envOr("QUESTIONS_CUSTOM_DIR", "questions-custom")
+}
+
+// PruneGeneratedQuestions remove labs GERADOS antigos de questions-custom.
+// Conteúdo gerado é descartável por design (o gerador refaz sob demanda, e a
+// revisão regenera por tópico) — sem GC o diretório cresce sem limite e polui
+// o banco de prática, o pré-aquecimento de imagens e o catálogo. O conteúdo
+// CURADO nunca é tocado (vive embutido em questions/). Mantém os maxFiles mais
+// novos e descarta o que passou de maxAge. Config: GENERATED_LAB_TTL_DAYS
+// (default 14) e GENERATED_LAB_MAX (default 200); 0 desliga o critério.
+func PruneGeneratedQuestions(maxAge time.Duration, maxFiles int) (removed int) {
+	files, err := filepath.Glob(filepath.Join(CustomQuestionsDir(), "gen-*.yaml"))
+	if err != nil || len(files) == 0 {
+		return 0
+	}
+	type meta struct {
+		path string
+		mod  time.Time
+	}
+	metas := make([]meta, 0, len(files))
+	for _, f := range files {
+		st, err := os.Stat(f)
+		if err != nil {
+			continue
+		}
+		metas = append(metas, meta{f, st.ModTime()})
+	}
+	sort.Slice(metas, func(i, j int) bool { return metas[i].mod.After(metas[j].mod) }) // novo → velho
+	cutoff := time.Now().Add(-maxAge)
+	for i, m := range metas {
+		tooMany := maxFiles > 0 && i >= maxFiles
+		tooOld := maxAge > 0 && m.mod.Before(cutoff)
+		if (tooMany || tooOld) && os.Remove(m.path) == nil {
+			removed++
+		}
+	}
+	return removed
+}
+
+// PruneGeneratedQuestionsDefault aplica a retenção padrão (chamado no boot,
+// antes de carregar o diretório).
+func PruneGeneratedQuestionsDefault() int {
+	days := 14
+	if v := envOr("GENERATED_LAB_TTL_DAYS", ""); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			days = n
+		}
+	}
+	max := 200
+	if v := envOr("GENERATED_LAB_MAX", ""); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			max = n
+		}
+	}
+	return PruneGeneratedQuestions(time.Duration(days)*24*time.Hour, max)
+}
+
 func persist(qs []models.Question) error {
-	if err := os.MkdirAll("questions-custom", 0o755); err != nil {
+	dir := CustomQuestionsDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	qs = FinalizeLabs(qs, "")
@@ -246,7 +312,7 @@ func persist(qs []models.Question) error {
 		return err
 	}
 	name := fmt.Sprintf("gen-%s.yaml", time.Now().Format("20060102-150405"))
-	return os.WriteFile(filepath.Join("questions-custom", name), b, 0o644)
+	return os.WriteFile(filepath.Join(dir, name), b, 0o644)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

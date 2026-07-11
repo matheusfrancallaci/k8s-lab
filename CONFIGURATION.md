@@ -44,9 +44,25 @@ single-user; os defaults cobrem esse caso.
 | `OLLAMA_GEN_MODEL` | `OLLAMA_MODEL` | Perfil de geração estruturada de labs e quiz; prefira o modelo mais capaz de código. |
 | `OLLAMA_EMBED_MODEL` | *(auto/local fallback)* | Modelo dedicado aos embeddings persistidos do RAG, ex.: `embeddinggemma` (Ollama >= 0.11.10). Sem ele, o RAG usa fallback local determinístico. |
 | `OLLAMA_NUM_PREDICT` | `1200` | Teto de tokens da geração. Conversa de chat já usa `400` fixo (menor = mais rápido). |
+| `OLLAMA_NUM_CTX` | `4096` | Janela de contexto do Ollama. Valores maiores aumentam memória e latência; o app limita o intervalo seguro. |
+| `OLLAMA_MAX_CONCURRENCY` | `1` | Número máximo de gerações simultâneas. Em CPU, `1` evita thrashing e deixa a fila observável. |
+| `OLLAMA_KEEP_ALIVE` | `10m` | Mantém o modelo carregado entre chamadas e reduz cold start. |
+| Runtime Ollama Azure | `ollama/ollama:0.30.11` | Imagem fixada para evitar mudanças incompatíveis em `latest`. |
 | `TUTOR_DOC_CACHE_TTL` | `30m` | TTL do cache com ETag para documentação oficial; reduz fetch/crawl repetido. |
-| `K8S_LAB_VERIFY_GENERATED` | `0` | Quando `1`, executa templates Kubernetes gerados em namespace efêmero antes de entregá-los. Ative somente no cluster de verificação. |
+| `K8S_LAB_VERIFY_GENERATED` | `0` | Verificação executável experimental. Falhas nunca escondem conteúdo; mantenha desligado no cluster compartilhado até usar um runner efêmero dedicado. |
+| `TUTOR_TELEMETRY_PERSIST` | `1` | Persiste amostras p50/p95/p99, falhas, fila e TTFT em `data/eval/tutor_telemetry.jsonl`. Use `0` somente em testes isolados. |
+| `TUTOR_TELEMETRY_FILE` | `data/eval/tutor_telemetry.jsonl` | Caminho alternativo para a telemetria durável. |
+| `QUESTIONS_CUSTOM_DIR` | `questions-custom` | Diretório dos labs gerados. No Azure usa `/app/data/questions-custom` para sobreviver a redeploys. |
+| `TUTOR_STRICT_DEPLOY_GATE` | `0` | Quando `1`, bloqueia promoção de modelo/deploy até existir amostra operacional mínima de streaming. Use em canary/promoção, não no primeiro bootstrap. |
 | `LAB_PSA_ENFORCE` | `baseline` | Perfil Pod Security Admission aplicado aos namespaces `lab-<usuário>`. |
+
+### Contrato de qualidade da IA
+
+- Afirmações técnicas de conversa usam IDs de fontes recuperadas (`[S1]`, `[S2]`). O backend rejeita URLs inventadas e mede cobertura por afirmação.
+- Chunks com sinais de prompt injection ou domínio fora da allowlist não entram no contexto.
+- O tutor mantém memória pedagógica por usuário e emite uma decisão explicável com lacuna, pré-requisitos, estratégia, atividade e critério de sucesso.
+- Labs gerados passam pelos estados `compiled → verifying → ready`; `degraded` e `rejected` bloqueiam o gate.
+- O estado do catálogo e do prewarm pode ser consultado em `GET /api/labs/readiness`.
 
 ## Deploy hospedado (Azure)
 Ver [deploy/azure/README.md](deploy/azure/README.md) e a memória de deploy. Resumo:

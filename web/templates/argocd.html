@@ -53,8 +53,8 @@
             </div>
         </div>
         <p style="font-size:13px;color:var(--text-2);line-height:1.6;">
-            Instale o ArgoCD no seu cluster minikube e acesse a interface gráfica diretamente pelo navegador.
-            Após a instalação, a UI estará disponível em <strong style="color:var(--argo);">http://localhost:{{.Port}}</strong>.
+            Instale o ArgoCD no seu cluster e acesse a interface gráfica diretamente pelo navegador.
+            Após a instalação, a UI fica disponível em <strong style="color:var(--argo);">/argocd/</strong> — mesmo endereço deste site, atrás do seu login.
         </p>
     </div>
 
@@ -231,8 +231,10 @@ function applyStatus(d) {
     runningPanel.style.display = 'block';
     updateStatusBar(true, 'ArgoCD rodando');
 
-    const url = d.url || `http://localhost:${argoCDPort}`;
-    document.getElementById('argocd-url').textContent = url;
+    // URL relativa (/argocd/): o browser chega pela app — funciona igual no
+    // local e na instância hospedada (localhost:8090 só existia no primeiro).
+    const url = d.url || '/argocd/';
+    document.getElementById('argocd-url').textContent = new URL(url, location.origin).href;
     // Senha nunca renderizada por padrão (shoulder-surfing / screen share);
     // fica no data-attr e só aparece se o usuário pedir.
     document.getElementById('argocd-pwd').dataset.pwd = d.password || '';

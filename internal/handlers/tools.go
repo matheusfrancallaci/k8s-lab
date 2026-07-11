@@ -104,7 +104,7 @@ var toolCatalog = []toolDef{
 		steps: []toolStep{
 			{Desc: "Criando namespace tools...", Cmd: "kubectl create namespace tools 2>/dev/null || true"},
 			{Desc: "Instalando o LocalStack...",
-				Cmd: "kubectl get deploy localstack -n tools >/dev/null 2>&1 || kubectl create deployment localstack --image=localstack/localstack:latest -n tools 2>&1 || true; kubectl set env deployment/localstack -n tools SERVICES=s3,sqs,iam,sts DEBUG=0 2>/dev/null || true"},
+				Cmd: "kubectl get deploy localstack -n tools >/dev/null 2>&1 || kubectl create deployment localstack --image=localstack/localstack:2026.06.2 -n tools 2>&1 || true; kubectl set env deployment/localstack -n tools SERVICES=s3,sqs,iam,sts DEBUG=0 2>/dev/null || true"},
 			{Desc: "Expondo endpoint AWS local na porta 4566...",
 				Cmd: "kubectl get svc localstack -n tools >/dev/null 2>&1 || kubectl expose deployment localstack --port=4566 --target-port=4566 -n tools 2>&1 || true"},
 			{Desc: "Aguardando LocalStack ficar pronto...",

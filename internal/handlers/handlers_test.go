@@ -128,6 +128,67 @@ func TestLabMakerInternalLabelIsNotRendered(t *testing.T) {
 	}
 }
 
+func TestStudentLabTemplateDoesNotRenderInternalAgentDiagnostics(t *testing.T) {
+	b, err := os.ReadFile("../../web/templates/lab.html")
+	if err != nil {
+		t.Fatalf("nao consegui ler template do lab: %v", err)
+	}
+	tpl := string(b)
+	for _, forbidden := range []string{
+		"lab-agent-panel",
+		"lab-readiness",
+		"lab-agent-grid",
+		"RAG usado",
+		".Readiness.State",
+		".EvidenceScore",
+		".Dependencies",
+		".Chunks",
+	} {
+		if strings.Contains(tpl, forbidden) {
+			t.Fatalf("diagnostico interno %q nao deve aparecer no exercicio do aluno", forbidden)
+		}
+	}
+	for _, required := range []string{
+		`id="panel-task"`,
+		`id="goals-list"`,
+		`id="panel-hint"`,
+		`id="panel-solution"`,
+	} {
+		if !strings.Contains(tpl, required) {
+			t.Fatalf("superficie pedagogica %q deve permanecer no lab", required)
+		}
+	}
+}
+
+func TestUnsafeLabSetupIsReportedWithoutExecution(t *testing.T) {
+	output, status := executeLabSetupStep(models.SetupStep{
+		Description: "comando host destrutivo",
+		Command:     "sudo rm -rf /",
+	}, "test-user")
+	if status != "warn" {
+		t.Fatalf("setup inseguro deve ser recusado com warn, veio %q", status)
+	}
+	if !strings.Contains(output, "nao executado por seguranca") {
+		t.Fatalf("recusa deve ser explicita sem executar o shell: %q", output)
+	}
+}
+
+func TestUnsafeValidationAndTeardownCommandsAreGuarded(t *testing.T) {
+	commands := []string{
+		"sudo rm -rf /",
+		"shutdown -h now",
+	}
+	for _, command := range commands {
+		output, err := executeGuardedLabCommand(command, "test-user")
+		if err == nil {
+			t.Fatalf("comando automatico inseguro nao pode chegar ao shell: %q", command)
+		}
+		if !strings.Contains(output, "nao executado por seguranca") {
+			t.Fatalf("validacao/teardown deve devolver erro seguro e visivel: %q", output)
+		}
+	}
+}
+
 func TestTechIconPath(t *testing.T) {
 	cases := map[string]string{
 		"CKA HPA":         "/static/vendor/kubernetes.svg",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -69,22 +70,26 @@ func extractLabImages(qs []models.Question) []string {
 // PrewarmLabImages dispara o pré-aquecimento (no máx. 1x/30min por contexto).
 // Não bloqueia: roda em goroutine própria.
 func PrewarmLabImages(qs []models.Question) {
+	if os.Getenv("LAB_NO_CLUSTER") != "" {
+		return
+	}
 	ctxName := currentContext()
 	if ctxName == "" {
 		return
 	}
-	prewarmMu.Lock()
-	if t, ok := prewarmLast[ctxName]; ok && time.Since(t) < 30*time.Minute {
-		prewarmMu.Unlock()
-		return
-	}
-	prewarmLast[ctxName] = time.Now()
-	prewarmMu.Unlock()
-
 	images := extractLabImages(qs)
 	if len(images) == 0 {
 		return
 	}
+	cacheKey := ctxName + "|" + strings.Join(images, ",")
+	prewarmMu.Lock()
+	if t, ok := prewarmLast[cacheKey]; ok && time.Since(t) < 30*time.Minute {
+		prewarmMu.Unlock()
+		return
+	}
+	prewarmLast[cacheKey] = time.Now()
+	prewarmMu.Unlock()
+	savePrewarmStatus(PrewarmStatus{Context: ctxName, State: "preparing", Images: images, StartedAt: time.Now().UTC().Format(time.RFC3339)})
 
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
@@ -92,8 +97,8 @@ func PrewarmLabImages(qs []models.Question) {
 
 		var sb strings.Builder
 		// ns compartilhado com o cloud shell; limpa prewarms antigos já completados
-		sb.WriteString("kubectl create namespace " + cloudShellSystemNS + " 2>/dev/null; ")
-		sb.WriteString("kubectl -n " + cloudShellSystemNS + " delete pod -l prewarm=1 --ignore-not-found --wait=false 2>/dev/null; ")
+		sb.WriteString("set -e; kubectl create namespace " + cloudShellSystemNS + " 2>/dev/null || true; ")
+		sb.WriteString("kubectl -n " + cloudShellSystemNS + " delete pod -l prewarm=1 --ignore-not-found --wait=true >/dev/null 2>&1; ")
 		for _, img := range images {
 			name := "prewarm-" + strings.Trim(nonAlnumRe.ReplaceAllString(strings.ToLower(img), "-"), "-")
 			if len(name) > 60 {
@@ -103,10 +108,21 @@ func PrewarmLabImages(qs []models.Question) {
 				"kubectl -n %s run %s --image=%s --restart=Never --labels=prewarm=1 --command -- true 2>/dev/null; ",
 				cloudShellSystemNS, name, img))
 		}
-		if _, err := wslShellCtx(ctx, sb.String()).CombinedOutput(); err != nil {
+		sb.WriteString("kubectl -n " + cloudShellSystemNS + " wait --for=jsonpath='{.status.phase}'=Succeeded pod -l prewarm=1 --timeout=12m >/dev/null; ")
+		sb.WriteString("kubectl -n " + cloudShellSystemNS + " get pod -l prewarm=1 -o jsonpath='{range .items[*]}{.status.containerStatuses[0].imageID}{\"\\n\"}{end}'; ")
+		output, err := wslShellCtx(ctx, sb.String()).CombinedOutput()
+		if err != nil {
+			savePrewarmStatus(PrewarmStatus{Context: ctxName, State: "degraded", Images: images, StartedAt: time.Now().UTC().Format(time.RFC3339), Failure: err.Error()})
 			log.Printf("[prewarm] falhou (contexto %s): %v", ctxName, err)
 			return
 		}
+		var resolved []string
+		for _, line := range strings.Split(string(output), "\n") {
+			if id := strings.TrimSpace(line); id != "" {
+				resolved = append(resolved, id)
+			}
+		}
+		savePrewarmStatus(PrewarmStatus{Context: ctxName, State: "ready", Images: images, Resolved: resolved, ReadyAt: time.Now().UTC().Format(time.RFC3339)})
 		log.Printf("[prewarm] %d imagens sendo aquecidas no contexto %s", len(images), ctxName)
 	}()
 }

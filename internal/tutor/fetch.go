@@ -1,6 +1,7 @@
 package tutor
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -41,7 +42,9 @@ func fetchTrustedDocument(u, accept string) (string, error) {
 		recordTutorLatency("docs.cache_hit", 0, 0, false)
 		return cached.content, nil
 	}
-	req, err := http.NewRequest("GET", u, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 	if err != nil {
 		return "", err
 	}
@@ -52,7 +55,7 @@ func fetchTrustedDocument(u, accept string) (string, error) {
 	if found && cached.etag != "" {
 		req.Header.Set("If-None-Match", cached.etag)
 	}
-	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	resp, err := sharedLLMHTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -658,6 +661,15 @@ var certCurricula = map[string][]CurriculumDomain{
 		{"Supply Chain Security", 20, []string{"https://kubernetes.io/docs/concepts/containers/images/"}},
 		{"Monitoring, Logging and Runtime Security", 20, []string{"https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/"}},
 	},
+	// KCNA — Kubernetes and Cloud Native Associate (CNCF). Pesos oficiais do
+	// exame; era a cert que o chat recusava por "não existir" (bug real).
+	"KCNA": {
+		{"Kubernetes Fundamentals", 46, []string{"https://kubernetes.io/docs/concepts/overview/", "https://kubernetes.io/docs/concepts/overview/components/", "https://kubernetes.io/docs/concepts/workloads/pods/"}},
+		{"Container Orchestration", 22, []string{"https://kubernetes.io/docs/concepts/architecture/", "https://kubernetes.io/docs/concepts/services-networking/service/", "https://kubernetes.io/docs/concepts/scheduling-eviction/kube-scheduler/"}},
+		{"Cloud Native Architecture", 16, []string{"https://www.cncf.io/projects/", "https://kubernetes.io/docs/concepts/architecture/nodes/"}},
+		{"Cloud Native Observability", 8, []string{"https://kubernetes.io/docs/tasks/debug/debug-cluster/resource-metrics-pipeline/", "https://prometheus.io/docs/introduction/overview/"}},
+		{"Cloud Native Application Delivery", 8, []string{"https://argo-cd.readthedocs.io/en/stable/", "https://kubernetes.io/docs/concepts/workloads/management/"}},
+	},
 	"ArgoCD": {
 		{"Fundamentos GitOps", 40, []string{"https://argo-cd.readthedocs.io/en/stable/getting_started/"}},
 		{"Sync e Rollback", 30, []string{"https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/"}},
@@ -707,14 +719,17 @@ var certCurricula = map[string][]CurriculumDomain{
 	},
 }
 
-// CurriculumFor devolve o currículo oficial embutido da cert (se houver).
+// CurriculumFor devolve o currículo da cert: o embutido (núcleo curado) tem
+// precedência; sem ele, cai nos APRENDIDOS de material oficial (persistidos —
+// ver curriculum_learned.go). É o que torna cert nova primeira classe sem
+// editar código.
 func CurriculumFor(cert string) ([]CurriculumDomain, bool) {
 	for k, v := range certCurricula {
 		if strings.EqualFold(k, cert) {
 			return v, true
 		}
 	}
-	return nil, false
+	return learnedCurriculumFor(cert)
 }
 
 // FetchCurriculum baixa 1 página oficial por domínio (com marcadores de fonte)

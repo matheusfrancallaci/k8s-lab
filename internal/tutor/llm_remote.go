@@ -3,6 +3,7 @@ package tutor
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -41,6 +42,10 @@ func remoteModelFor(role, requested string) string {
 }
 
 func remoteGenerate(prompt string, wantJSON bool, timeout time.Duration, maxTokens int, model string) (string, error) {
+	return remoteGenerateContext(context.Background(), prompt, wantJSON, timeout, maxTokens, model)
+}
+
+func remoteGenerateContext(parent context.Context, prompt string, wantJSON bool, timeout time.Duration, maxTokens int, model string) (string, error) {
 	started := time.Now()
 	failed := true
 	defer func() { recordTutorLatency("llm.remote.generate", time.Since(started), 0, failed) }()
@@ -56,10 +61,20 @@ func remoteGenerate(prompt string, wantJSON bool, timeout time.Duration, maxToke
 		body["response_format"] = map[string]string{"type": "json_object"}
 	}
 	b, _ := json.Marshal(body)
-	req, _ := http.NewRequest(http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(b))
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	release, err := acquireLLMSlot(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer release()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(b))
+	if err != nil {
+		return "", err
+	}
 	req.Header.Set("Authorization", "Bearer "+c.APIKey)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{Timeout: timeout}).Do(req)
+	resp, err := sharedLLMHTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -83,6 +98,10 @@ func remoteGenerate(prompt string, wantJSON bool, timeout time.Duration, maxToke
 }
 
 func remoteStream(prompt string, timeout time.Duration, maxTokens int, model string, onChunk func(string)) error {
+	return remoteStreamContext(context.Background(), prompt, timeout, maxTokens, model, onChunk)
+}
+
+func remoteStreamContext(parent context.Context, prompt string, timeout time.Duration, maxTokens int, model string, onChunk func(string)) error {
 	started := time.Now()
 	failed := true
 	defer func() { recordTutorLatency("llm.remote.stream", time.Since(started), 0, failed) }()
@@ -92,10 +111,20 @@ func remoteStream(prompt string, timeout time.Duration, maxTokens int, model str
 	}
 	body := map[string]any{"model": remoteModelFor("chat", model), "messages": []map[string]string{{"role": "user", "content": prompt}}, "max_completion_tokens": maxTokens, "stream": true}
 	b, _ := json.Marshal(body)
-	req, _ := http.NewRequest(http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(b))
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	release, err := acquireLLMSlot(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
 	req.Header.Set("Authorization", "Bearer "+c.APIKey)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{Timeout: timeout}).Do(req)
+	resp, err := sharedLLMHTTPClient.Do(req)
 	if err != nil {
 		return err
 	}

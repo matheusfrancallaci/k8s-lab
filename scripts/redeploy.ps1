@@ -121,9 +121,17 @@ for ($i = 1; $i -le 12; $i++) {
   Start-Sleep -Seconds 5
 }
 if (-not $healthy) { Die "healthz remoto nao confirmou o commit $sha" }
-try {
-  $gate = Invoke-RestMethod -Uri "$baseUrl/api/tutor/deploy-gate" -TimeoutSec 30
-  if (-not $gate.passed) { Die ("deploy gate remoto falhou: " + ($gate.blockers -join "; ")) }
-} catch { Die "nao consegui confirmar o deploy gate remoto: $($_.Exception.Message)" }
+# O gate roda o golden eval INTEIRO na VM de 2 vCPU: ~2 min a frio. Timeout de
+# 30s dava falso negativo com o deploy ja OK (2026-07-11) — 300s + 1 retry.
+$gateOK = $false
+$gateErr = ""
+for ($i = 1; $i -le 2; $i++) {
+  try {
+    $gate = Invoke-RestMethod -Uri "$baseUrl/api/tutor/deploy-gate" -TimeoutSec 300
+    if (-not $gate.passed) { Die ("deploy gate remoto falhou: " + ($gate.blockers -join "; ")) }
+    $gateOK = $true; break
+  } catch { $gateErr = $_.Exception.Message }
+}
+if (-not $gateOK) { Die "nao consegui confirmar o deploy gate remoto: $gateErr" }
 Ok "healthz e deploy gate confirmados"
 Say "Deploy concluido do commit $sha"

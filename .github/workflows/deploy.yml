@@ -23,6 +23,12 @@ permissions:
   id-token: write # OIDC login na Azure
   contents: read
 
+# Nunca deixa dois deploys disputarem a tag latest ou reiniciarem a VM ao mesmo
+# tempo. O segundo aguarda o primeiro em vez de cancelar um deploy em andamento.
+concurrency:
+  group: estudo-app-azure-production
+  cancel-in-progress: false
+
 env:
   ACR: k8slabacrb9ue3
   RG: k8slab-rg
@@ -33,6 +39,8 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,24 +70,23 @@ jobs:
             --query "instanceView.statuses[?starts_with(code,'PowerState')].displayStatus" -o tsv)
           if [ "$power" != "VM running" ]; then az vm start -g "$RG" -n "$VM"; fi
 
-      - name: Restart na VM + confere o digest
+      - name: Restart na VM + confere a imagem exata
         run: |
-          digest=$(az acr repository show --name "$ACR" \
-            --image "$IMAGE:${{ steps.sha.outputs.short }}" --query digest -o tsv)
           out=$(az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript \
-            --scripts "az acr login --name $ACR && docker pull $ACR.azurecr.io/$IMAGE:latest && systemctl restart estudo-app.service && sleep 8 && docker inspect --format '{{.Image}}' lab" \
+            --scripts "set -e; trap 'rm -f /run/lab-busy' EXIT; touch /run/lab-busy; az acr login --name $ACR >/dev/null; docker pull $ACR.azurecr.io/$IMAGE:${{ steps.sha.outputs.short }} >/dev/null; docker pull $ACR.azurecr.io/$IMAGE:latest >/dev/null; sha_id=\$(docker inspect --format '{{.Id}}' $ACR.azurecr.io/$IMAGE:${{ steps.sha.outputs.short }}); latest_id=\$(docker inspect --format '{{.Id}}' $ACR.azurecr.io/$IMAGE:latest); test \"\$sha_id\" = \"\$latest_id\"; systemctl restart estudo-app.service; sleep 10; got=\$(docker inspect --format '{{.Image}}' lab); test \"\$sha_id\" = \"\$got\"; echo MATCH \$got" \
             --query "value[0].message" -o tsv)
           echo "$out"
-          echo "$out" | grep -q "$digest" || { echo "::error::digest do container nao bate com o build"; exit 1; }
+          echo "$out" | grep -q "MATCH" || { echo "::error::container nao roda a imagem do SHA solicitado"; exit 1; }
 
       - name: Smoke test do app publicado
-        if: ${{ env.APP_URL != '' }}
         run: |
+          test -n "$APP_URL" || { echo "::error::secret APP_URL ausente"; exit 1; }
           base="${APP_URL%/}"
           for i in $(seq 1 12); do
-            if curl --fail --silent --show-error "$base/healthz"; then break; fi
+            health=$(curl --fail --silent --show-error "$base/healthz" || true)
+            if echo "$health" | grep -q "ok ${{ steps.sha.outputs.short }}"; then break; fi
             [ "$i" -eq 12 ] && { echo "::error::healthz nao respondeu apos deploy"; exit 1; }
             sleep 5
           done
-          curl --fail --silent --show-error "$base/api/tutor/deploy-gate" > gate.json
+          curl --fail --silent --show-error --max-time 180 "$base/api/tutor/deploy-gate" > gate.json
           jq -e '.passed == true' gate.json >/dev/null || { cat gate.json; echo "::error::deploy gate remoto falhou"; exit 1; }

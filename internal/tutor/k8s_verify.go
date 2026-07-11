@@ -1,6 +1,7 @@
 package tutor
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -8,6 +9,8 @@ import (
 
 	"estudo-app/internal/models"
 )
+
+var executableKubernetesLabVerifier = VerifyGeneratedKubernetesLab
 
 // shouldVerifyGeneratedKubernetesLabs is explicitly enabled only after the
 // cluster sandbox is provisioned. Local development and unit tests stay fast,
@@ -58,11 +61,26 @@ func VerifyGeneratedKubernetesLab(q models.Question) error {
 			return fmt.Errorf("setup da verificacao Kubernetes falhou: %w", err)
 		}
 	}
+	// A validator must not already pass before the student's solution. This
+	// catches labs whose setup accidentally gives away the finished state.
+	for _, validation := range appendValidationObjects(q) {
+		output, err := sh(base+validation.Command, 60)
+		want := validation.ExpectedContains
+		if want == "" {
+			want = validation.ExpectedOutput
+		}
+		if err == nil && (want == "" || strings.Contains(output, want)) {
+			return fmt.Errorf("validador ja aprovava antes da solucao")
+		}
+	}
 	if _, err := sh(base+q.AnswerCommand, 180); err != nil {
 		return fmt.Errorf("solucao Kubernetes nao aplicou: %w", err)
 	}
 	for _, validation := range appendValidationObjects(q) {
-		output, _ := sh(base+validation.Command, 60)
+		output, validationErr := sh(base+validation.Command, 60)
+		if validationErr != nil {
+			return fmt.Errorf("validador Kubernetes falhou: %w", validationErr)
+		}
 		want := validation.ExpectedContains
 		if want == "" {
 			want = validation.ExpectedOutput
@@ -70,6 +88,14 @@ func VerifyGeneratedKubernetesLab(q models.Question) error {
 		if want != "" && !strings.Contains(output, want) {
 			return fmt.Errorf("validador Kubernetes nao confirmou %q", want)
 		}
+	}
+	if len(q.Teardown) > 0 {
+		if _, err := sh(base+strings.Join(q.Teardown, "; "), 120); err != nil {
+			return fmt.Errorf("teardown Kubernetes falhou: %w", err)
+		}
+	}
+	if _, err := sh(fmt.Sprintf(`kubectl delete namespace %s --ignore-not-found --wait=true --timeout=90s >/dev/null`, ns), 100); err != nil {
+		return fmt.Errorf("sandbox da verificacao nao foi limpo: %w", err)
 	}
 	return nil
 }
@@ -91,13 +117,26 @@ func verifyGeneratedKubernetesLabs(qs []models.Question) error {
 	if !shouldVerifyGeneratedKubernetesLabs() {
 		return nil
 	}
-	for _, q := range qs {
+	var verificationErrors []error
+	for i := range qs {
+		if !isKubernetesLab(qs[i]) {
+			continue
+		}
+		// Um gate estatico degradado pode incluir comando inseguro. O conteudo
+		// continua disponivel, mas nunca e elegivel a execucao automatica.
+		if qs[i].LabSpec != nil && qs[i].LabSpec.Readiness.State == "degraded" {
+			continue
+		}
 		started := time.Now()
-		err := VerifyGeneratedKubernetesLab(q)
+		err := executableKubernetesLabVerifier(qs[i])
 		recordTutorLatency("lab.kubernetes_verify", time.Since(started), 0, err != nil)
+		markLabVerified(&qs[i], true, err)
 		if err != nil {
-			return err
+			verificationErrors = append(verificationErrors, fmt.Errorf("lab %s: %w", qs[i].ID, err))
 		}
 	}
-	return nil
+	if err := RecordLabCatalog(qs); err != nil {
+		verificationErrors = append(verificationErrors, fmt.Errorf("catalogo de labs: %w", err))
+	}
+	return errors.Join(verificationErrors...)
 }

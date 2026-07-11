@@ -54,11 +54,15 @@ type RAGStatusInfo struct {
 	Embeddings     int    `json:"embeddings"`
 	EmbeddingModel string `json:"embedding_model,omitempty"`
 	Mode           string `json:"mode"`
+	StaleChunks    int    `json:"stale_chunks"`
+	UnsafeChunks   int    `json:"unsafe_chunks"`
 }
 
 var (
-	ragMu      sync.Mutex
-	ragIndexes = map[string]*ragIndex{}
+	ragMu               sync.Mutex
+	ragIndexes          = map[string]*ragIndex{}
+	ragEmbedMu          sync.Mutex
+	ragEmbedLastAttempt time.Time
 )
 
 func ragDir() string {
@@ -78,6 +82,7 @@ func RAGStatus() RAGStatusInfo {
 	chunks := 0
 	embeddings := 0
 	model := ""
+	stale, unsafe := 0, 0
 	certs := map[string]bool{}
 	loaded := map[string]bool{}
 	for cert, idx := range ragIndexes {
@@ -86,6 +91,12 @@ func RAGStatus() RAGStatusInfo {
 		loaded[key] = true
 		chunks += len(idx.Chunks)
 		for _, c := range idx.Chunks {
+			if !c.CollectedAt.IsZero() && time.Since(c.CollectedAt) > 90*24*time.Hour {
+				stale++
+			}
+			if promptInjectionRe.MatchString(c.Text) || (c.URL != "" && !isTrustedURL(c.URL)) {
+				unsafe++
+			}
 			if len(c.Embedding) > 0 {
 				embeddings++
 				if model == "" {
@@ -107,6 +118,12 @@ func RAGStatus() RAGStatusInfo {
 			if idx := loadRAGIndex(key); idx != nil {
 				chunks += len(idx.Chunks)
 				for _, c := range idx.Chunks {
+					if !c.CollectedAt.IsZero() && time.Since(c.CollectedAt) > 90*24*time.Hour {
+						stale++
+					}
+					if promptInjectionRe.MatchString(c.Text) || (c.URL != "" && !isTrustedURL(c.URL)) {
+						unsafe++
+					}
 					if len(c.Embedding) > 0 {
 						embeddings++
 						if model == "" {
@@ -117,7 +134,7 @@ func RAGStatus() RAGStatusInfo {
 			}
 		}
 	}
-	return RAGStatusInfo{Certs: len(certs), Chunks: chunks, Embeddings: embeddings, EmbeddingModel: model, Mode: "persistent-embeddings+chunks"}
+	return RAGStatusInfo{Certs: len(certs), Chunks: chunks, Embeddings: embeddings, EmbeddingModel: model, Mode: "hybrid-bm25+dense+metadata-rerank", StaleChunks: stale, UnsafeChunks: unsafe}
 }
 
 func WarmRAG(cert, query string) {
@@ -132,7 +149,7 @@ func RAGContext(cert, topic, query string, max int) (string, []models.LabChunk) 
 	var lines []string
 	var refs []models.LabChunk
 	for _, h := range hits {
-		excerpt := compactText(h.Chunk.Text, 520)
+		excerpt := compactText(sanitizeRetrievedText(h.Chunk.Text), 520)
 		lines = append(lines, fmt.Sprintf("- chunk %s | %s | relevancia %d | fonte %s\n  %s",
 			h.Chunk.ID, h.Chunk.Domain, h.Relevance, h.Chunk.URL, excerpt))
 		refs = append(refs, labChunkFromHit(h))
@@ -190,6 +207,9 @@ func RAGSearch(cert, query string, max int, hydrate bool) []RAGHit {
 	queryNorm := normalizeEvidenceText(query)
 	var hits []RAGHit
 	for _, c := range idx.Chunks {
+		if promptInjectionRe.MatchString(c.Text) || (c.URL != "" && !isTrustedURL(c.URL)) {
+			continue
+		}
 		if c.SourceType == "" {
 			c.SourceType = "official-curriculum"
 		}
@@ -225,6 +245,19 @@ func RAGSearch(cert, query string, max int, hydrate bool) []RAGHit {
 		if c.Hydrated {
 			score += 0.04
 		}
+		// Metadata reranking favors fresh, versioned primary material.
+		if !c.CollectedAt.IsZero() {
+			age := time.Since(c.CollectedAt)
+			switch {
+			case age <= 30*24*time.Hour:
+				score += 0.04
+			case age > 180*24*time.Hour:
+				score -= 0.08
+			}
+		}
+		if c.DocumentVersion != "" {
+			score += 0.03
+		}
 		if c.Weight > 0 {
 			score += math.Min(float64(c.Weight), 40) / 1000
 		}
@@ -257,6 +290,7 @@ func ragIndexForCert(cert string, hydrate bool) *ragIndex {
 	ragMu.Lock()
 	if idx := ragIndexes[canonical]; idx != nil && (!hydrate || idx.Hydrated) {
 		ragMu.Unlock()
+		refreshCachedRAGEmbeddings(idx)
 		return idx
 	}
 	ragMu.Unlock()
@@ -283,6 +317,32 @@ func ragIndexForCert(cert string, hydrate bool) *ragIndex {
 	return idx
 }
 
+func refreshCachedRAGEmbeddings(idx *ragIndex) {
+	configured := strings.TrimSpace(os.Getenv("OLLAMA_EMBED_MODEL"))
+	if configured == "" || idx == nil {
+		return
+	}
+	ragEmbedMu.Lock()
+	defer ragEmbedMu.Unlock()
+	needsRefresh := false
+	for i := range idx.Chunks {
+		if !modelNameMatches(idx.Chunks[i].EmbeddingModel, configured) {
+			needsRefresh = true
+			break
+		}
+	}
+	if !needsRefresh {
+		return
+	}
+	if time.Since(ragEmbedLastAttempt) < time.Minute {
+		return
+	}
+	ragEmbedLastAttempt = time.Now()
+	if ensureRAGEmbeddings(idx) {
+		saveRAGIndex(idx)
+	}
+}
+
 const (
 	localEmbeddingModel = "local-hash-v1"
 	localEmbeddingDims  = 128
@@ -294,31 +354,44 @@ func ensureRAGEmbeddings(idx *ragIndex) bool {
 	}
 	remoteModel, remoteOK := ollamaEmbeddingModel()
 	changed := false
-	remoteFailed := false
+	var pending []int
 	for i := range idx.Chunks {
 		c := &idx.Chunks[i]
-		if len(c.Embedding) > 0 && strings.TrimSpace(c.EmbeddingModel) != "" {
-			if !(c.EmbeddingModel == localEmbeddingModel && remoteOK && !remoteFailed) {
+		if len(c.Embedding) == 0 || strings.TrimSpace(c.EmbeddingModel) == "" || (remoteOK && !modelNameMatches(c.EmbeddingModel, remoteModel)) {
+			pending = append(pending, i)
+		}
+	}
+	remoteFailed := !remoteOK
+	for start := 0; start < len(pending) && !remoteFailed; start += 16 {
+		end := start + 16
+		if end > len(pending) {
+			end = len(pending)
+		}
+		texts := make([]string, 0, end-start)
+		for _, i := range pending[start:end] {
+			c := idx.Chunks[i]
+			texts = append(texts, c.Domain+" "+c.Title+" "+c.Text)
+		}
+		embs, err := ollamaEmbeddingBatchForModel(texts, remoteModel)
+		if err != nil {
+			remoteFailed = true
+			break
+		}
+		for j, i := range pending[start:end] {
+			idx.Chunks[i].Embedding, idx.Chunks[i].EmbeddingModel = embs[j], remoteModel
+			changed = true
+		}
+	}
+	if remoteFailed {
+		for _, i := range pending {
+			c := &idx.Chunks[i]
+			if len(c.Embedding) > 0 && c.EmbeddingModel != localEmbeddingModel {
 				continue
 			}
+			c.Embedding = localEmbedding(c.Domain + " " + c.Title + " " + c.Text)
+			c.EmbeddingModel = localEmbeddingModel
+			changed = true
 		}
-		text := c.Domain + " " + c.Title + " " + c.Text
-		var emb []float64
-		model := localEmbeddingModel
-		if remoteOK && !remoteFailed {
-			if got, err := ollamaEmbeddingForModel(text, remoteModel); err == nil && len(got) > 0 {
-				emb = got
-				model = remoteModel
-			} else {
-				remoteFailed = true
-			}
-		}
-		if len(emb) == 0 {
-			emb = localEmbedding(text)
-		}
-		c.Embedding = emb
-		c.EmbeddingModel = model
-		changed = true
 	}
 	return changed
 }

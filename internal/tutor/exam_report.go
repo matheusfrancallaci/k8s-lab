@@ -54,6 +54,7 @@ var passCuts = map[string]int{
 	"CKA":       66,
 	"CKAD":      66,
 	"CKS":       67,
+	"KCNA":      75,
 	"CAPA":      75,
 	"ARGOCD":    75,
 	"TERRAFORM": 70,

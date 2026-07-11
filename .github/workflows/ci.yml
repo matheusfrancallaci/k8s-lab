@@ -40,6 +40,9 @@ jobs:
       - name: Testes
         run: go test ./...
 
+      - name: Concorrencia (race detector)
+        run: go test -race -count=1 ./internal/tutor ./internal/handlers
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:

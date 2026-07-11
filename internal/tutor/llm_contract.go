@@ -48,6 +48,19 @@ func llmContractSchema(contract string) any {
 				"reason": stringField,
 			},
 		},
+		"curriculum": map[string]any{
+			"type": "object", "additionalProperties": false, "required": []string{"domains"},
+			"properties": map[string]any{"domains": map[string]any{
+				"type": "array", "items": map[string]any{
+					"type": "object", "additionalProperties": false,
+					"required": []string{"domain", "weight"},
+					"properties": map[string]any{
+						"domain": stringField,
+						"weight": map[string]any{"type": "integer", "minimum": 0, "maximum": 100},
+					},
+				},
+			}},
+		},
 		"quiz": map[string]any{
 			"type": "object", "additionalProperties": false, "required": []string{"questions"},
 			"properties": map[string]any{"questions": map[string]any{
@@ -82,6 +95,14 @@ func validateLLMContract(contract, raw string) error {
 	required := map[string][]string{
 		"lab-spec":        {"question", "solution", "validation", "expected", "hint", "explanation"},
 		"topic-selection": {"topics", "reason"},
+	}
+	if contract == "curriculum" {
+		// domains vazio é resposta VÁLIDA ("o material não é guia de exame") —
+		// a recusa explícita faz parte do contrato, como no grounding.
+		if _, ok := obj["domains"].([]any); !ok {
+			return fmt.Errorf("contrato curriculum requer campo domains (array)")
+		}
+		return nil
 	}
 	if contract == "quiz" {
 		items, ok := obj["questions"].([]any)

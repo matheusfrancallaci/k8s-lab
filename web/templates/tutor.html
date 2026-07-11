@@ -749,12 +749,16 @@ function renderAdminQualityReport(d) {
     const stream = stages['llm.stream'] || {};
     const gen = stages['llm.generate'] || {};
     const latency = stream.count ? `p95 stream ${stream.p95_ms || 0}ms · 1o token ${stream.first_token_ms || 0}ms` : (gen.count ? `p95 geracao ${gen.p95_ms || 0}ms` : 'aguardando amostras de latencia');
+    const labs = `labs ${d.lab_catalog_ready || 0} prontos · ${d.lab_catalog_pending || 0} pendentes · ${d.lab_catalog_rejected || 0} bloqueados`;
+    const safety = `safety adversarial ${(d.safety_eval && d.safety_eval.score) || 0}% · RAG inseguro ${(d.rag && d.rag.unsafe_chunks) || 0}`;
     return `<div class="eval-head">
         <div>
             <div class="cc-title">painel admin</div>
             <div class="domain-name">golden ${d.golden_passed || 0}/${d.golden_total || 0} · rag ${(d.rag && d.rag.chunks) || 0} chunks</div>
             <div class="eval-sub">${(d.topics || []).length} topicos · ${(d.lab_observability && d.lab_observability.attempts) || 0} validacoes reais</div>
             <div class="eval-sub">${latency}</div>
+            <div class="eval-sub">${labs}</div>
+            <div class="eval-sub">${safety}</div>
         </div>
         <div class="eval-score" style="color:${color};border-color:${color};">${score}%</div>
     </div>${blockers || recs}`;

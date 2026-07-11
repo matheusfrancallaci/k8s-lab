@@ -81,8 +81,16 @@ func main() {
 		log.Fatalf("erro ao carregar questões: %v", err)
 	}
 
-	// Labs/quiz gerados pelo tutor (persistidos em disco entre execuções)
+	// Labs/quiz gerados pelo tutor (persistidos em disco entre execuções).
+	// GC antes de carregar: gerado é descartável — sem retenção o diretório
+	// cresce sem limite e polui o banco de prática e o pré-aquecimento.
+	if n := tutor.PruneGeneratedQuestionsDefault(); n > 0 {
+		slog.Info("[gc] labs gerados antigos removidos", "removidos", n)
+	}
 	repo.LoadDir("questions-custom")
+	if generatedDir := tutor.CustomQuestionsDir(); generatedDir != "questions-custom" {
+		repo.LoadDir(generatedDir)
+	}
 
 	// Pré-compila todas as páginas HTML no boot: um template quebrado falha
 	// aqui (no start), não em produção no primeiro acesso.
@@ -217,8 +225,12 @@ func main() {
 	mux.HandleFunc("GET /api/contexts", handlers.ContextsHandler)
 	mux.HandleFunc("POST /api/context/test", handlers.ContextTestHandler)
 
-	// ArgoCD routes
+	// ArgoCD routes — /argocd (exato) é a página de controle; /argocd/{...} é a
+	// UI real do ArgoCD servida por proxy (argocd-server --rootpath=/argocd),
+	// atrás do login da app. "localhost:8090" não existe para quem acessa a
+	// instância hospedada — o proxy é o único caminho que funciona nos dois.
 	mux.HandleFunc("GET /argocd", argoCDPage(templatesFS))
+	mux.HandleFunc("/argocd/", handlers.ArgoCDProxyHandler)
 	mux.HandleFunc("GET /api/argocd/status", handlers.ArgoCDStatusHandler)
 	mux.HandleFunc("GET /api/argocd/install", handlers.ArgoCDInstallHandler)
 	mux.HandleFunc("POST /api/argocd/portforward", handlers.ArgoCDPortForwardHandler)
@@ -226,6 +238,7 @@ func main() {
 
 	// Cluster status API (client-go no WSL, shell no host Windows)
 	mux.HandleFunc("GET /api/cluster-status", handlers.ClusterStatusHandler)
+	mux.HandleFunc("GET /api/labs/readiness", handlers.LabReadinessStatusHandler)
 
 	// Ociosidade — lido pelo auto-stop da VM (público, info não sensível)
 	mux.HandleFunc("GET /api/idle", handlers.IdleHandler)

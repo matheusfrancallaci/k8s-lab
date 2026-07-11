@@ -1,6 +1,10 @@
 package tutor
 
-import "time"
+import (
+	"os"
+	"strings"
+	"time"
+)
 
 type AdminQualityReport struct {
 	GeneratedAt        string                `json:"generated_at"`
@@ -21,6 +25,12 @@ type AdminQualityReport struct {
 	Topics             []string              `json:"topics"`
 	Recommendations    []string              `json:"recommendations"`
 	DeploymentBlockers []string              `json:"deployment_blockers"`
+	LabCatalogTotal    int                   `json:"lab_catalog_total"`
+	LabCatalogReady    int                   `json:"lab_catalog_ready"`
+	LabCatalogPending  int                   `json:"lab_catalog_pending"`
+	LabCatalogRejected int                   `json:"lab_catalog_rejected"`
+	SafetyEval         SafetyEvalReport      `json:"safety_eval"`
+	Models             ModelReadiness        `json:"models"`
 }
 
 func BuildAdminQualityReport() AdminQualityReport {
@@ -46,6 +56,19 @@ func BuildAdminQualityReport() AdminQualityReport {
 		RegressionScore:    golden.RegressionScore,
 		Topics:             Topics(),
 	}
+	rep.SafetyEval = RunSafetyEval()
+	rep.Models = LLMModelReadiness()
+	for _, entry := range LabCatalog() {
+		rep.LabCatalogTotal++
+		switch entry.Readiness.State {
+		case "ready":
+			rep.LabCatalogReady++
+		case "rejected", "degraded":
+			rep.LabCatalogRejected++
+		default:
+			rep.LabCatalogPending++
+		}
+	}
 	if golden.Score < 80 {
 		rep.DeploymentBlockers = append(rep.DeploymentBlockers, "golden eval abaixo de 80")
 	}
@@ -64,8 +87,31 @@ func BuildAdminQualityReport() AdminQualityReport {
 	if metric := rep.Telemetry.Stages["llm.stream"]; metric.Count > 5 && metric.P95MS > 15000 {
 		rep.DeploymentBlockers = append(rep.DeploymentBlockers, "latencia p95 do streaming acima de 15s")
 	}
+	streamSamples := rep.Telemetry.Stages["llm.stream"].Count
+	if streamSamples < 20 {
+		rep.Recommendations = append(rep.Recommendations, "coletar ao menos 20 amostras de streaming antes de promover um novo modelo")
+		strict := strings.TrimSpace(os.Getenv("TUTOR_STRICT_DEPLOY_GATE"))
+		if strict == "1" || strings.EqualFold(strict, "true") {
+			rep.DeploymentBlockers = append(rep.DeploymentBlockers, "amostra operacional de streaming insuficiente para promocao")
+		}
+	}
 	if golden.RegressionTotal > 0 && golden.RegressionScore < 75 {
 		rep.DeploymentBlockers = append(rep.DeploymentBlockers, "reexecucao de prompts historicos abaixo de 75")
+	}
+	if rep.LabCatalogRejected > 0 {
+		rep.Recommendations = append(rep.Recommendations, "revisar labs degradados do catalogo sem bloquear o restante do produto")
+	}
+	if rep.LabCatalogPending > 0 {
+		rep.Recommendations = append(rep.Recommendations, "verificar em background os labs pendentes do catalogo")
+	}
+	if rep.RAG.UnsafeChunks > 0 {
+		rep.DeploymentBlockers = append(rep.DeploymentBlockers, "RAG contem chunks inseguros ou fora da allowlist")
+	}
+	if rep.SafetyEval.Score < 100 {
+		rep.DeploymentBlockers = append(rep.DeploymentBlockers, "safety eval adversarial abaixo de 100")
+	}
+	if rep.Models.Configured && !rep.Models.Ready {
+		rep.DeploymentBlockers = append(rep.DeploymentBlockers, "modelos obrigatorios indisponiveis: "+strings.Join(rep.Models.Missing, ", "))
 	}
 	if obs.Attempts >= 5 && obs.SuccessRate < .60 {
 		rep.Recommendations = append(rep.Recommendations, "investigar labs com baixa taxa de conclusao; desempenho do aluno nao bloqueia deploy")

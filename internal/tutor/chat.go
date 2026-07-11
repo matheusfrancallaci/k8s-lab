@@ -1,6 +1,8 @@
 package tutor
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -9,6 +11,41 @@ import (
 
 	"estudo-app/internal/models"
 )
+
+// errNoCurriculum sinaliza que a cert não tem currículo embutido nem aprendido.
+var errNoCurriculum = errors.New("curriculo desconhecido")
+
+// curriculumSession pesquisa o currículo oficial da cert e monta o pacote
+// inicial (labs + quiz). Usado pelo "montar currículo de X" e pelo pedido de
+// lab que nomeia uma cert inteira ("crie um lab de KCNA").
+func curriculumSession(target, msg string, level int, createSession func(ids []string) (string, string, int)) (ChatResult, error) {
+	WarmRAG(target, msg)
+	text, srcs, domains, ok := FetchCurriculum(target, 1)
+	if !ok {
+		return ChatResult{}, errNoCurriculum
+	}
+	qs, rep, err := Ingest(text, target, target+" · Currículo", level, 4, 4)
+	if err != nil {
+		return ChatResult{}, err
+	}
+	reply := fmt.Sprintf("📋 Pesquisei o **currículo oficial de %s** e li %d página(s) da documentação:\n", target, len(srcs))
+	for _, d := range domains {
+		reply += fmt.Sprintf("• **%s** — %d%%\n", d.Domain, d.Weight)
+	}
+	reply += fmt.Sprintf("\n✦ Montei o pacote inicial: **%d lab(s)** e **%d pergunta(s)** — cada questão cita a linha exata da doc de onde saiu.", rep.Labs, rep.Quizzes)
+	var labIDs []string
+	for _, q := range qs {
+		if q.Type == models.Lab {
+			labIDs = append(labIDs, q.ID)
+		}
+	}
+	res := ChatResult{Reply: reply, Questions: qs}
+	if len(labIDs) > 0 {
+		sid, first, total := createSession(labIDs)
+		res.Action = sessionAction(sid, first, total, qs)
+	}
+	return res, nil
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Chat do tutor — interface conversacional. A compreensão é local (regras +
@@ -45,7 +82,8 @@ type ChatResult struct {
 	// intenções ("criar certificação X", "montar currículo", "modo incidente")
 	// nunca são sobrescritas por um papo genérico. Reply carrega o fallback de
 	// capacidades para quando o LLM estiver indisponível ou falhar.
-	NeedsLLM bool `json:"-"`
+	NeedsLLM bool           `json:"-"`
+	Decision *TutorDecision `json:"decision,omitempty"`
 }
 
 // capabilitiesReply é o fallback mostrado quando não há intenção nem LLM.
@@ -64,6 +102,10 @@ const capabilitiesReply = "Posso te ajudar assim:\n" +
 // FreeChatReply responde conversa livre (persona restrita ao escopo) de forma
 // síncrona. Usado pelo handler quando ChatResult.NeedsLLM é true.
 func FreeChatReply(msg string) (string, error) { return llmChatReply(msg) }
+
+func FreeChatReplyContext(ctx context.Context, msg string) (string, error) {
+	return llmChatReplyContext(ctx, msg)
+}
 
 // sinônimos PT-BR → tópico do gerador
 var topicSynonyms = []struct {
@@ -182,33 +224,15 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 				break
 			}
 		}
-		WarmRAG(target, msg)
-		text, srcs, domains, ok := FetchCurriculum(target, 1)
-		if !ok {
+		res, err := curriculumSession(target, msg, detectLevel(msg), createSession)
+		if err == nil {
+			return res
+		}
+		if errors.Is(err, errNoCurriculum) {
 			return ChatResult{Reply: fmt.Sprintf(
 				"Ainda não tenho o currículo oficial de **%s** embutido. Cole aqui a **URL da página oficial do exame** (guia de domínios/tópicos) que eu leio, extraio os temas e monto tudo — só aceito fontes oficiais.", target)}
 		}
-		qs, rep, err := Ingest(text, target, target+" · Currículo", detectLevel(msg), 4, 4)
-		if err != nil {
-			return ChatResult{Reply: "Li o currículo mas não consegui gerar: " + err.Error()}
-		}
-		reply := fmt.Sprintf("📋 Pesquisei o **currículo oficial de %s** e li %d página(s) da documentação:\n", target, len(srcs))
-		for _, d := range domains {
-			reply += fmt.Sprintf("• **%s** — %d%%\n", d.Domain, d.Weight)
-		}
-		reply += fmt.Sprintf("\n✦ Montei o pacote inicial: **%d lab(s)** e **%d pergunta(s)** — cada questão cita a linha exata da doc de onde saiu.", rep.Labs, rep.Quizzes)
-		var labIDs []string
-		for _, q := range qs {
-			if q.Type == models.Lab {
-				labIDs = append(labIDs, q.ID)
-			}
-		}
-		res := ChatResult{Reply: reply, Questions: qs}
-		if len(labIDs) > 0 {
-			sid, first, total := createSession(labIDs)
-			res.Action = sessionAction(sid, first, total, qs)
-		}
-		return res
+		return ChatResult{Reply: "Li o currículo mas não consegui gerar: " + err.Error()}
 	}
 
 	// 1. Desempenho / progresso
@@ -289,6 +313,15 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 
 	// 4. Gerar de documentação (URL ou pedido explícito)
 	if urlRe.MatchString(msg) || regexp.MustCompile(`quest[õo]es sobre|gerar d[ea]|estudar sobre|quiz sobre`).MatchString(l) {
+		// A cert do material é a da MENSAGEM ("crie um lab da KCNA <url>"), não
+		// o chip ativo — senão o conteúdo novo é atribuído à cert errada (bug
+		// real: URL da KCNA virava labs de CKA). Cert citada e inédita é
+		// registrada na hora; o Ingest aprende o currículo dela do material.
+		if named, ok := certNamedInMessage(msg); ok && !strings.EqualFold(named, cert) {
+			if reg, _ := RegisterCert(named); reg != "" {
+				cert = reg
+			}
+		}
 		topic := detectTopic(msg)
 		if topic == "" {
 			topic = "Custom"
@@ -389,6 +422,20 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 	// Kubernetes/AKS seguros em vez de cair em resposta generica.
 	if isBroadLabRequest(msg) {
 		level := detectLevel(msg)
+		// Pedido nomeia uma CERT inteira ("crie um lab de KCNA") sem tópico:
+		// se o currículo é conhecido (embutido ou aprendido), monta direto da
+		// fonte oficial em vez de recusar — a recusa aqui era o beco sem saída
+		// do bug da KCNA.
+		if named, ok := certNamedInMessage(msg); ok && exactTopicForRequest(named, msg) == "" && detectTopic(msg) == "" {
+			if _, hasCur := CurriculumFor(named); hasCur {
+				if reg, _ := RegisterCert(named); reg != "" {
+					named = reg
+				}
+				if res, err := curriculumSession(named, msg, level, createSession); err == nil {
+					return res
+				}
+			}
+		}
 		if err := LabRequestPreflight(msg, cert); err != nil {
 			return ChatResult{Reply: "Nao gerei um lab generico para esse pedido. " + err.Error()}
 		}
@@ -544,13 +591,23 @@ func sessionAction(id, first string, total int, qs []models.Question) *ChatActio
 
 // llmChatReply responde conversa livre com persona restrita ao escopo.
 func llmChatReply(msg string) (string, error) {
+	return llmChatReplyContext(context.Background(), msg)
+}
+
+func llmChatReplyContext(ctx context.Context, msg string) (string, error) {
 	prompt, report := BuildGroundedChatPrompt(msg)
 	if technicalQuestion(msg) && !report.Answerable {
 		return report.Refusal(), nil
 	}
-	reply, err := llmGenerate(prompt, false, 60*time.Second, tokensChat, chatModel())
+	cacheKey := groundedReplyKey(msg, chatModel(), report)
+	if reply, ok := cachedGroundedReply(cacheKey); ok {
+		return reply, nil
+	}
+	reply, err := llmGenerateContext(ctx, prompt, false, 60*time.Second, chatTokenBudget(msg), chatModel())
 	if err != nil {
 		return "", err
 	}
-	return report.AppendVerifiedSources(reply), nil
+	final := FinalizeGroundedReply(reply, report)
+	storeGroundedReply(cacheKey, final)
+	return final, nil
 }

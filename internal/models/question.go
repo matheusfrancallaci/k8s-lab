@@ -55,6 +55,25 @@ type LabQuality struct {
 	Warnings []string `yaml:"warnings"`
 }
 
+// LabReadiness is the publication contract for a hands-on lab. Generated labs
+// are never represented as implicitly ready: the compiler records what was
+// checked and the runtime can promote them after an executable verification.
+type LabReadiness struct {
+	State           string   `yaml:"state" json:"state"` // compiled | verifying | ready | degraded | rejected
+	Version         string   `yaml:"version" json:"version"`
+	ContentDigest   string   `yaml:"content_digest" json:"content_digest"`
+	CheckedAt       string   `yaml:"checked_at" json:"checked_at"`
+	VerifiedAt      string   `yaml:"verified_at,omitempty" json:"verified_at,omitempty"`
+	Executable      bool     `yaml:"executable" json:"executable"`
+	SetupVerified   bool     `yaml:"setup_verified" json:"setup_verified"`
+	SolveVerified   bool     `yaml:"solve_verified" json:"solve_verified"`
+	ChecksVerified  bool     `yaml:"checks_verified" json:"checks_verified"`
+	CleanupVerified bool     `yaml:"cleanup_verified" json:"cleanup_verified"`
+	ImageDigests    []string `yaml:"image_digests,omitempty" json:"image_digests,omitempty"`
+	Warnings        []string `yaml:"warnings,omitempty" json:"warnings,omitempty"`
+	Failure         string   `yaml:"failure,omitempty" json:"failure,omitempty"`
+}
+
 type LabPlan struct {
 	ExactTopic      string      `yaml:"exact_topic"`
 	Cert            string      `yaml:"cert"`
@@ -102,6 +121,7 @@ type LabSpec struct {
 	Safety           []string        `yaml:"safety"`
 	LabPlan          *LabPlan        `yaml:"lab_plan,omitempty"`
 	Quality          LabQuality      `yaml:"quality"`
+	Readiness        LabReadiness    `yaml:"readiness" json:"readiness"`
 }
 
 // Proveniência do conteúdo: quem responde pela qualidade desta questão.

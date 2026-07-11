@@ -31,7 +31,7 @@ write_files:
         docker run -d --restart=unless-stopped \
           --network labnet --name ollama \
           -v ollama-data:/root/.ollama \
-          ollama/ollama
+          ollama/ollama:0.30.11
       fi
 
       # App: container completo (k3s dentro -> --privileged), na rede labnet.
@@ -48,8 +48,15 @@ write_files:
         -e AZURE_REGION='${location}' \
         -e OLLAMA_URL='http://ollama:11434' \
         -e OLLAMA_MODEL='${ollama_model}' \
+        -e OLLAMA_CHAT_MODEL='${ollama_model}' \
+        -e OLLAMA_ROUTER_MODEL='${ollama_router_model}' \
         -e OLLAMA_GEN_MODEL='${ollama_gen_model}' \
         -e OLLAMA_EMBED_MODEL='${ollama_embed_model}' \
+        -e OLLAMA_MAX_CONCURRENCY=1 \
+        -e OLLAMA_KEEP_ALIVE=15m \
+        -e K8S_LAB_VERIFY_GENERATED=0 \
+        -e TUTOR_TELEMETRY_PERSIST=1 \
+        -e QUESTIONS_CUSTOM_DIR='/app/data/questions-custom' \
         -v lab-data:/app/data \
         "${image}"
 
@@ -67,11 +74,15 @@ write_files:
       # assim que terminar — o app detecta sozinho em ~30s).
       if [ -n "${ollama_model}" ]; then
         echo "[lab] baixando modelo do tutor: ${ollama_model} (roda em background)"
-        ( docker exec ollama ollama pull "${ollama_model}" >/var/log/ollama-pull.log 2>&1 || true ) &
+        ( docker exec ollama ollama pull "${ollama_model}" >/var/log/ollama-pull.log 2>&1 && docker exec ollama ollama run "${ollama_model}" "responda apenas: pronto" >/var/log/ollama-warm.log 2>&1 || true ) &
       fi
       if [ -n "${ollama_gen_model}" ] && [ "${ollama_gen_model}" != "${ollama_model}" ]; then
         echo "[lab] baixando modelo gerador: ${ollama_gen_model} (roda em background)"
-        ( docker exec ollama ollama pull "${ollama_gen_model}" >/var/log/ollama-gen-pull.log 2>&1 || true ) &
+        ( docker exec ollama ollama pull "${ollama_gen_model}" >/var/log/ollama-gen-pull.log 2>&1 && docker exec ollama ollama run "${ollama_gen_model}" "responda apenas: pronto" >/var/log/ollama-gen-warm.log 2>&1 || true ) &
+      fi
+      if [ -n "${ollama_router_model}" ] && [ "${ollama_router_model}" != "${ollama_model}" ] && [ "${ollama_router_model}" != "${ollama_gen_model}" ]; then
+        echo "[lab] baixando modelo roteador: ${ollama_router_model} (roda em background)"
+        ( docker exec ollama ollama pull "${ollama_router_model}" >/var/log/ollama-router-pull.log 2>&1 && docker exec ollama ollama run "${ollama_router_model}" "responda apenas: pronto" >/var/log/ollama-router-warm.log 2>&1 || true ) &
       fi
       if [ -n "${ollama_embed_model}" ]; then
         echo "[lab] baixando modelo de embeddings: ${ollama_embed_model} (roda em background)"

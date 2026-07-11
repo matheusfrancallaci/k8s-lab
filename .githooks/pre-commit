@@ -1,0 +1,14 @@
+#!/bin/sh
+# Gate local de commit: build + vet + testes. Com várias sessões de agente
+# mexendo na mesma árvore, este hook é o que impede um commit quebrado de
+# contaminar as outras. Instalação: make hooks (git config core.hooksPath).
+set -e
+echo "[pre-commit] go build ./..."
+go build ./...
+echo "[pre-commit] go vet ./..."
+go vet ./...
+echo "[pre-commit] go test ./... (use SKIP_TESTS=1 para pular em emergência)"
+if [ "${SKIP_TESTS:-0}" != "1" ]; then
+  go test ./... -count=1
+fi
+echo "[pre-commit] ok"

@@ -177,6 +177,7 @@ resource "azurerm_linux_virtual_machine" "lab" {
     vm_name                = "${var.prefix}-vm"
     idle_threshold_seconds = var.idle_minutes * 60
     ollama_model           = var.ollama_model
+    ollama_router_model    = var.ollama_router_model
     ollama_gen_model       = var.ollama_gen_model
     ollama_embed_model     = var.ollama_embed_model
   }))

@@ -196,7 +196,7 @@ func BuildGroundedChatPrompt(msg string) (string, AnswerabilityReport) {
 	report := CheckAnswerability(msg, "CKA")
 	context := ""
 	if report.Context != "" && len(report.Sources) > 0 {
-		ctx := report.Context
+		ctx := sanitizeRetrievedText(report.Context)
 		if len(ctx) > 4500 {
 			ctx = ctx[:4500]
 		}
@@ -208,8 +208,11 @@ func BuildGroundedChatPrompt(msg string) (string, AnswerabilityReport) {
 	if report.RAG != "" {
 		context += "\n\nCHUNKS VETORIAIS RECUPERADOS:\n" + report.RAG
 	}
-	if len(report.Sources) > 0 {
-		context += "\n\nFONTES RECUPERADAS:\n- " + strings.Join(report.Sources, "\n- ")
+	if len(report.VerifiedSources()) > 0 {
+		context += "\n\nFONTES RECUPERADAS (IDs permitidos):"
+		for i, source := range report.VerifiedSources() {
+			context += fmt.Sprintf("\n[S%d] %s", i+1, source)
+		}
 	}
 	context += fmt.Sprintf("\n\nFUNDAMENTACAO: confianca %d/100; verificado em %s; motivo: %s.", report.Confidence, report.CheckedAt, report.Reason)
 
@@ -218,8 +221,11 @@ func BuildGroundedChatPrompt(msg string) (string, AnswerabilityReport) {
 REGRAS ANTI-ALUCINACAO:
 - Use somente fatos sustentados pelo contexto, evidencias, RAG ou conhecimento tecnico basico e estavel.
 - Se faltar evidencia para uma parte da pergunta, diga exatamente o que nao foi encontrado.
-- Quando usar inferencia, marque como "Inferencia:".
-- Nao invente nem escreva URLs. Termine com "Fontes: controladas pelo backend"; o backend acrescenta somente fontes verificadas.
+- Toda frase com afirmacao tecnica deve terminar com um ou mais IDs de fonte, por exemplo [S1] ou [S1][S2].
+- Use apenas IDs listados em FONTES RECUPERADAS. Se nenhum ID sustentar uma afirmacao, omita a afirmacao.
+- Quando usar inferencia, marque como "Inferencia:" e ainda cite a evidencia que sustenta a inferencia.
+- Nao invente nem escreva URLs; o backend acrescenta somente fontes verificadas.
+- Termine com "Fontes: IDs citados acima"; URLs sao controladas pelo backend.
 
 ESCOPO: Kubernetes, AKS/Azure, containers, cloud (Azure/AWS/GCP), Terraform/IaC, Linux, redes, DevOps, CI/CD, GitOps/ArgoCD, Helm e programacao. So recuse se fugir totalmente de tecnologia.%s
 
@@ -228,7 +234,7 @@ Pergunta do aluno: %s`, context, strings.TrimSpace(msg))
 }
 
 func technicalQuestion(msg string) bool {
-	return regexp.MustCompile(`(?i)\b(k8s|kubernetes|kubectl|pod|deployment|replicaset|service|ingress|helm|docker|container|linux|bash|shell|java|terraform|iac|ansible|aws|azure|gcp|aks|eks|cloud|devops|ci/cd|gitops|argocd|prometheus|grafana|cilium|network|dns|rbac|iam|s3|sqs|vpc|ec2|hpa|autoscal|replica|scale)\b`).MatchString(msg)
+	return regexp.MustCompile(`(?i)\b(k8s|kubernetes|kubectl|pods?|deployments?|replicasets?|statefulsets?|daemonsets?|services?|ingress|configmaps?|secrets?|jobs?|cronjobs?|namespaces?|nodes?|pvc|pv|persistentvolumes?|probes?|liveness|readiness|quotas?|helm|docker|containers?|linux|bash|shell|java|terraform|iac|ansible|aws|azure|gcp|aks|eks|cloud|devops|ci/cd|gitops|argocd|prometheus|grafana|cilium|network|dns|rbac|iam|s3|sqs|vpc|ec2|hpa|autoscal|replica|scale)\b`).MatchString(msg)
 }
 
 func specificLabSubject(msg string) string {
@@ -326,5 +332,8 @@ func LabRequestPreflight(msg, activeCert string) error {
 	if report.Confidence >= 45 && len(report.Sources) > 0 {
 		return nil
 	}
-	return fmt.Errorf("nao encontrei fonte/template confiavel para criar um lab especificamente sobre %q; prefiro falhar explicitamente em vez de gerar um lab generico", subject)
+	// Recusa ACIONÁVEL: dizer só "não sei" deixa o aluno num beco (bug real com
+	// KCNA). O caminho existe — colar a URL oficial faz o tutor aprender o
+	// currículo sozinho e a cert virar primeira classe.
+	return fmt.Errorf("nao encontrei fonte/template confiavel para %q. Se for uma certificacao, **cole a URL da pagina oficial do exame** (ex.: training.linuxfoundation.org) que eu leio, aprendo o curriculo e monto os labs — prefiro pedir a fonte a inventar um lab generico", subject)
 }

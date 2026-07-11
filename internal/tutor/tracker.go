@@ -89,6 +89,7 @@ type Profile struct {
 	Skills      map[string]*TopicSkill `json:"skills"`
 	Review      map[string]*ReviewItem `json:"review"`
 	History     []ProfileSnapshot      `json:"history,omitempty"`
+	Memory      LearningMemory         `json:"memory,omitempty"`
 	activeCert  string
 	activeTopic string
 	activeLab   *models.Question
@@ -136,6 +137,7 @@ type skillsDoc struct {
 	Skills  map[string]*TopicSkill `json:"skills"`
 	Review  map[string]*ReviewItem `json:"review,omitempty"`
 	History []ProfileSnapshot      `json:"history,omitempty"`
+	Memory  LearningMemory         `json:"memory,omitempty"`
 }
 
 func loadProfile(id string) *Profile {
@@ -155,6 +157,7 @@ func loadProfile(id string) *Profile {
 				p.Review = s.Review
 			}
 			p.History = s.History
+			p.Memory = s.Memory
 		}
 	}
 	return p
@@ -167,7 +170,8 @@ func (p *Profile) scheduleSave() {
 	}
 	p.saveTimer = time.AfterFunc(2*time.Second, func() {
 		p.mu.Lock()
-		b, err := json.MarshalIndent(skillsDoc{Skills: p.Skills, Review: p.Review, History: p.History}, "", "  ")
+		refreshLearningMemoryLocked(p)
+		b, err := json.MarshalIndent(skillsDoc{Skills: p.Skills, Review: p.Review, History: p.History, Memory: p.Memory}, "", "  ")
 		p.mu.Unlock()
 		if err != nil {
 			return

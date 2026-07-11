@@ -1,4 +1,15 @@
-.PHONY: run run-wsl build build-linux docker-build docker-run setup setup-win clean kill
+.PHONY: run run-wsl build build-linux docker-build docker-run setup setup-win clean kill check hooks
+
+## check: Gate local (build + vet + testes) — o mesmo que o hook de pre-commit roda
+check:
+	go build ./...
+	go vet ./...
+	go test ./... -count=1
+
+## hooks: Instala o pre-commit que roda 'make check' (protege commits entre sessões)
+hooks:
+	git config core.hooksPath .githooks
+	@echo "hooks instalados (.githooks/pre-commit)"
 
 ## run: Build and start the study app on :8080
 run:

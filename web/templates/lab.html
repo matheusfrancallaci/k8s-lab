@@ -216,84 +216,6 @@
                     <p class="task-label">Tarefa</p>
                     <div class="task-body" id="task-body-text">{{.Question.Question}}</div>
 
-                    {{with .Question.LabSpec}}
-                    <div class="lab-agent-panel">
-                        <div class="lab-readiness">
-                            <div>
-                                <span class="lab-readiness-kicker">LAB PRONTO PARA PRATICAR</span>
-                                <strong>{{.Objective}}</strong>
-                                <small>{{.EstimatedMinutes}} min · {{len .SuccessCriteria}} critérios verificáveis</small>
-                            </div>
-                            <span class="lab-readiness-score" title="Cada goal é verificado automaticamente no cluster">✓ auto-validado</span>
-                        </div>
-                        {{if .SuccessCriteria}}
-                        <details class="lab-success-criteria">
-                            <summary>O que significa concluir este lab</summary>
-                            <ul>{{range .SuccessCriteria}}<li>{{.}}</li>{{end}}</ul>
-                        </details>
-                        {{end}}
-                        <div class="lab-agent-grid">
-                            <div class="lab-agent-block">
-                                <span>Plano</span>
-                                {{range .Plan}}
-                                <p>{{.}}</p>
-                                {{end}}
-                            </div>
-                            <div class="lab-agent-block">
-                                <span>Dependencias</span>
-                                {{range .Dependencies}}
-                                <p class="lab-agent-item">
-                                    <img class="official-icon" src="{{techIcon .Name .Kind .InstallAction}}" alt="">
-                                    <span><strong>{{.Name}}</strong> <small>{{.InstallAction}}</small></span>
-                                </p>
-                                {{end}}
-                            </div>
-                            {{if .Evidence}}
-                            <div class="lab-agent-block lab-agent-evidence">
-                                <span>Evidencia</span>
-                                {{range .Evidence}}
-                                <p class="lab-agent-item">
-                                    <img class="official-icon" src="{{techIcon .Domain}}" alt="">
-                                    <span><strong>{{.Domain}}</strong> <small>{{.Confidence}} confianca</small></span>
-                                </p>
-                                {{end}}
-                            </div>
-                            {{end}}
-                            {{if .Chunks}}
-                            <div class="lab-agent-block lab-agent-chunks">
-                                <span>RAG usado</span>
-                                {{range .Chunks}}
-                                <p class="lab-agent-item">
-                                    <img class="official-icon" src="{{sourceIcon .Title .URL .Domain}}" alt="">
-                                    <span><strong>{{.Domain}}</strong> <small>{{.Relevance}} relevancia</small><br>{{.Excerpt}}</span>
-                                </p>
-                                {{end}}
-                            </div>
-                            {{end}}
-                        </div>
-                        <div class="lab-agent-strip">
-                            {{if eq $.Question.Source "curated"}}<span class="prov-curated" title="Escrito e verificado por humano">✓ conteudo curado</span>
-                            {{else if eq $.Question.Source "generated"}}<span class="prov-gen" title="Gerado pela IA local e aprovado no quality gate">⚡ gerado por IA · passou no gate</span>{{end}}
-                            {{range .Skills}}<span>{{.}}</span>{{end}}
-                            <span>{{.EstimatedMinutes}} min</span>
-                            {{if .Namespace}}<span>namespace {{.Namespace}}</span>{{end}}
-                            {{if .ValidationMode}}<span>{{.ValidationMode}}</span>{{end}}
-                            {{with .LabPlan}}{{if .SourceVersion}}<span>{{.SourceVersion}}</span>{{end}}{{end}}
-                            {{if .EvidenceScore}}<span>evidencia {{.EvidenceScore}}</span>{{end}}
-                        </div>
-                        {{if .Sources}}
-                        <div class="lab-agent-sources">
-                            {{range .Sources}}
-                            <a href="{{.URL}}" target="_blank" rel="noopener">
-                                <img class="official-icon" src="{{sourceIcon .Title .URL .Section}}" alt="">
-                                <span>{{.Title}}</span>
-                            </a>
-                            {{end}}
-                        </div>
-                        {{end}}
-                    </div>
-                    {{end}}
-
                     <!-- GOALS CHECKLIST -->
                     {{if .Goals}}
                     <div class="goals-header">
@@ -438,11 +360,6 @@
             .replace(/`([^`]+)`/g, '<code style="font-family:var(--mono);font-size:11px;background:var(--surface-4);color:var(--violet);padding:1px 4px;border-radius:3px;">$1</code>');
     });
 
-    document.querySelectorAll('.lab-agent-block p').forEach(d => {
-        d.innerHTML = d.innerHTML
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/`([^`]+)`/g, '<code style="font-family:var(--mono);font-size:10px;background:var(--surface-4);color:var(--violet);padding:1px 4px;border-radius:3px;">$1</code>');
-    });
 })();
 
 // ─────────────────────────────────────────────────────────────

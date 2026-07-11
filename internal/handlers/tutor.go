@@ -42,6 +42,12 @@ func (h *TutorHandler) Status(w http.ResponseWriter, r *http.Request) {
 	if cert == "" {
 		cert = "CKA"
 	}
+	nextDecision := tutor.BuildTutorDecision(userID(r), "", cert)
+	// Predictive preparation: opening the tutor dashboard warms the images for
+	// the learner's most likely next topic before they request the lab.
+	if likely := h.repo.FilterLabs([]string{cert}, "", []string{nextDecision.TargetTopic}); len(likely) > 0 {
+		PrewarmLabImages(likely)
+	}
 	json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
 		"recommendations": tutor.Advise(userID(r)),
 		"stats":           tutor.Stats(userID(r)),
@@ -49,12 +55,15 @@ func (h *TutorHandler) Status(w http.ResponseWriter, r *http.Request) {
 		"review":          tutor.ReviewQueue(userID(r)),
 		"history":         tutor.History(userID(r)),
 		"mastery":         tutor.MasteryPathForCert(userID(r), cert),
+		"learning_memory": tutor.LearningMemoryFor(userID(r)),
+		"next_decision":   nextDecision,
 		"coverage":        coverageOrNil(cert, h.repo.Filter([]string{cert}, "")),
 		"rag":             tutor.RAGStatus(),
 		"observability":   tutor.LabObservability(),
 		"gen_topics":      tutor.Topics(),
 		"certs":           tutor.AllCerts(),
 		"llm":             map[string]any{"available": llmOK, "model": llmModel},
+		"model_readiness": tutor.LLMModelReadiness(),
 	})
 }
 
@@ -290,6 +299,8 @@ func (h *TutorHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		sess := h.labSessions.Create(ids)
 		return sess.ID, ids[0], len(ids)
 	})
+	decision := tutor.BuildTutorDecision(uid, body.Message, body.Cert)
+	res.Decision = &decision
 	if len(res.Questions) > 0 {
 		h.repo.Add(res.Questions)
 		PrewarmLabImages(res.Questions)
@@ -297,11 +308,11 @@ func (h *TutorHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	tutor.RecordPromptQuality(uid, body.Message, body.Cert, res)
 	reply := res.Reply
 	if res.NeedsLLM { // conversa livre: resolve o LLM síncrono (fallback = res.Reply)
-		if r, err := tutor.FreeChatReply(body.Message); err == nil && r != "" {
+		if r, err := tutor.FreeChatReplyContext(r.Context(), body.Message); err == nil && r != "" {
 			reply = r
 		}
 	}
-	json.NewEncoder(w).Encode(map[string]any{"reply": reply, "action": res.Action}) //nolint:errcheck
+	json.NewEncoder(w).Encode(map[string]any{"reply": reply, "action": res.Action, "decision": res.Decision}) //nolint:errcheck
 }
 
 // chatActionMarker separa o texto da resposta do JSON da ação no stream. Usa um
@@ -339,7 +350,7 @@ func (h *TutorHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	// Só aqui o LLM entra — NUNCA sobre uma intenção reconhecida.
 	if res.NeedsLLM && flusher != nil {
 		var got bool
-		err := tutor.StreamLLMReply(body.Message, func(chunk string) {
+		err := tutor.StreamLLMReplyContext(r.Context(), body.Message, func(chunk string) {
 			if chunk == "" {
 				return
 			}

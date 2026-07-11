@@ -52,9 +52,15 @@ variable "idle_minutes" {
 }
 
 variable "ollama_model" {
-  description = "Modelo local de chat/roteamento. qwen3:8b prioriza qualidade na VM de 16GB. Vazio desliga a IA."
+  description = "Modelo local de chat. qwen3:8b prioriza qualidade grounded na VM de 16GB. Vazio desliga a IA."
   type        = string
   default     = "qwen3:8b"
+}
+
+variable "ollama_router_model" {
+  description = "Modelo menor para classificacao e planejamento curto; reduz a latencia sem rebaixar o gerador de labs."
+  type        = string
+  default     = "qwen3:4b"
 }
 
 variable "ollama_gen_model" {

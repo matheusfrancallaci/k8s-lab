@@ -187,6 +187,28 @@ const (
 // Sobrescreva com CLOUD_SHELL_IMAGE se a tag não existir mais.
 func cloudShellImage() string { return envOr("CLOUD_SHELL_IMAGE", "alpine/k8s:1.33.4") }
 
+// terminalUsesCloudShell centralizes the security boundary for the terminal.
+// On an Azure VM with managed identity, the application container shell is
+// never exposed: even local/minikube contexts use a Kubernetes pod with its
+// own ServiceAccount and RBAC. Outside hosted mode, legacy local behavior is
+// preserved.
+func terminalUsesCloudShell(kubeContext string) bool {
+	return managedIdentity() || (kubeContext != "" && kubeContext != localContext)
+}
+
+func terminalLocalFallbackAllowed() bool { return !managedIdentity() }
+
+// hostedTerminalIdentityReady fails closed if hosted mode is accidentally
+// started without authentication. RequireAuth normally guarantees this, but a
+// terminal must not silently become shared after a runtime misconfiguration.
+func hostedTerminalIdentityReady(uid string) bool {
+	if !managedIdentity() {
+		return true
+	}
+	id := tutor.SanitizeID(uid)
+	return appPassword() != "" && id != "" && id != "default"
+}
+
 // cloudShellTarget resolve o alvo do shell dentro do cluster para um usuário.
 // Multi-user (APP_PASSWORD): cada conta ganha o PRÓPRIO pod num namespace
 // isolado (lab-<user>) e RBAC namespaced para os namespaces usados pelos labs.
@@ -194,6 +216,15 @@ func cloudShellImage() string { return envOr("CLOUD_SHELL_IMAGE", "alpine/k8s:1.
 // login cai no pod único de sistema com cluster-admin (single-tenant).
 func cloudShellTarget(uid string) (ns, pod, sa string, scoped bool) {
 	id := tutor.SanitizeID(uid)
+	// Hosted environments must never resolve to the shared lab-admin pod. The
+	// WebSocket handler rejects a default identity; this scoped fallback keeps
+	// maintenance callers safe as defense in depth.
+	if managedIdentity() {
+		if id == "" || id == "default" {
+			id = "hosted-default"
+		}
+		return "lab-" + id, "lab-shell-" + id, "lab-user", true
+	}
 	if appPassword() == "" || id == "" || id == "default" {
 		return cloudShellSystemNS, cloudShellSystemPod, "lab-admin", false
 	}
@@ -412,11 +443,17 @@ func cloudShellClusterRoleName(userNS, name string) string {
 func cloudShellNamespaceAccessScript(userNS, sa string, q *models.Question) string {
 	var parts []string
 	parts = append(parts,
-		fmt.Sprintf("kubectl create namespace %[1]s 2>/dev/null; ", userNS)+namespaceGuardrailsScript(userNS)+fmt.Sprintf("; kubectl -n %[1]s create serviceaccount %[2]s 2>/dev/null", userNS, sa))
+		fmt.Sprintf("kubectl create namespace %[1]s 2>/dev/null; ", userNS)+namespaceGuardrailsScript(userNS)+fmt.Sprintf("\nkubectl -n %[1]s create serviceaccount %[2]s 2>/dev/null", userNS, sa))
 	plan := cloudShellAccessPlanFor(userNS, q)
 	for _, r := range plan.Namespaces {
 		if r.EnsureNamespace {
 			parts = append(parts, fmt.Sprintf("kubectl create namespace %s 2>/dev/null", r.Namespace))
+		}
+		// Labs commonly use default/tools instead of the shell namespace. Apply
+		// the same IMDS boundary anywhere this user can create pods, otherwise a
+		// second pod would trivially bypass the shell's egress policy.
+		if r.Namespace != userNS && r.ClusterRole == "admin" {
+			parts = append(parts, imdsEgressGuardrailCommand(r.Namespace))
 		}
 		parts = append(parts, fmt.Sprintf(
 			"kubectl -n %s create rolebinding %s --clusterrole=%s --serviceaccount=%s:%s 2>/dev/null",
@@ -613,7 +650,7 @@ func StartCloudShellGC() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
-			if ctx := currentContext(); ctx == "" || ctx == localContext {
+			if ctx := currentContext(); !terminalUsesCloudShell(ctx) {
 				continue
 			}
 			now := time.Now()
@@ -723,26 +760,39 @@ func TerminalWS(w http.ResponseWriter, r *http.Request) {
 
 	// Perfil do usuário desta sessão (erros de terminal vão para o skill dele).
 	uid := userID(r)
+	if !hostedTerminalIdentityReady(uid) {
+		conn.WriteMessage(websocket.TextMessage, []byte( //nolint:errcheck
+			"\x1b[1;31mTerminal indisponível: o ambiente Azure exige login por usuário.\x1b[0m\r\n"))
+		return
+	}
 
 	touchActivity()
 	atomic.AddInt32(&activeTerminals, 1)
 	defer atomic.AddInt32(&activeTerminals, -1)
 
-	// Make sure the branded rcfile exists before spawning the shell.
-	ensureLabRC()
-
-	// Alvo cloud (AKS)? Então o terminal deve rodar DENTRO do cluster,
-	// não no WSL local — igual aos ambientes de prova.
-	isCloud := false
+	// No Azure hospedado o shell sempre roda DENTRO do Kubernetes, inclusive
+	// quando o contexto atual é minikube. Assim uma falha de provisionamento
+	// nunca expõe o bash root do container privilegiado da aplicação.
+	kubeContext := currentContext()
+	isCloud := terminalUsesCloudShell(kubeContext)
 	var cloudNS, cloudPod string
-	if ctx := currentContext(); ctx != "" && ctx != localContext {
-		isCloud = true
+	if isCloud {
+		label := kubeContext
+		if label == "" {
+			label = "cluster local"
+		}
 		conn.WriteMessage(websocket.TextMessage, []byte(
-			"\x1b[38;2;56;189;248m☁ conectando ao cluster AKS ("+ctx+")...\x1b[0m\r\n"))
+			"\x1b[38;2;56;189;248mconectando ao shell Kubernetes isolado ("+label+")...\x1b[0m\r\n"))
 		ns, pod, err := ensureCloudShellPod(uid, func(msg string) {
 			conn.WriteMessage(websocket.TextMessage, []byte("\x1b[38;2;107;114;128m"+msg+"\x1b[0m\r\n")) //nolint:errcheck
 		})
 		if err != nil {
+			if !terminalLocalFallbackAllowed() {
+				conn.WriteMessage(websocket.TextMessage, []byte( //nolint:errcheck
+					"\x1b[1;31mNão foi possível abrir o shell Kubernetes isolado: "+err.Error()+"\x1b[0m\r\n"+
+						"\x1b[38;2;107;114;128mPor segurança, o terminal local não está disponível neste ambiente.\x1b[0m\r\n"))
+				return
+			}
 			conn.WriteMessage(websocket.TextMessage, []byte( //nolint:errcheck
 				"\x1b[1;31mNão foi possível abrir o shell no cluster: "+err.Error()+"\x1b[0m\r\n"+
 					"\x1b[38;2;107;114;128mO cluster está ligado? Caindo para o terminal local (kubectl ainda aponta para o AKS).\x1b[0m\r\n"))
@@ -763,6 +813,9 @@ func TerminalWS(w http.ResponseWriter, r *http.Request) {
 		shellCmd = fmt.Sprintf("kubectl exec -it -n %s %s -- bash --rcfile /tmp/.labrc -i",
 			cloudNS, cloudPod)
 	} else {
+		// The host rcfile is only created for local development. Hosted mode
+		// cannot reach this branch and fails closed above.
+		ensureLabRC()
 		shellCmd = "bash -c \"exec bash --rcfile ~/.k8slab_rc -i\""
 		// LAB_USER isola o workspace dos labs de IaC ($TFLAB no rcfile).
 		shellCmd = "LAB_USER=" + tutor.SanitizeID(uid) + " " + shellCmd

@@ -36,17 +36,27 @@ func isBroadLabRequest(msg string) bool {
 		detectTopic(msg) != ""
 }
 
-func inferCertFromMessage(msg, active string) string {
+// certNamedInMessage devolve a certificação citada EXPLICITAMENTE na mensagem
+// (registrada ou código conhecido), sem fallback para a cert ativa — quem
+// precisa distinguir "citou" de "herdou o chip" usa isto.
+func certNamedInMessage(msg string) (string, bool) {
 	if regexp.MustCompile(`(?i)\bCAPA\b`).MatchString(msg) {
-		return "CAPA"
+		return "CAPA", true
 	}
 	for _, c := range AllCerts() {
 		if regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(c) + `\b`).MatchString(msg) {
-			return c
+			return c, true
 		}
 	}
 	if m := certCodeRe.FindString(msg); m != "" {
-		return strings.ToUpper(strings.ReplaceAll(m, " ", "-"))
+		return strings.ToUpper(strings.ReplaceAll(m, " ", "-")), true
+	}
+	return "", false
+}
+
+func inferCertFromMessage(msg, active string) string {
+	if c, ok := certNamedInMessage(msg); ok {
+		return c
 	}
 	if active != "" {
 		return active
@@ -133,6 +143,9 @@ func GenerateSmartLabs(msg, activeCert string, level, count int) ([]models.Quest
 		}
 	}
 	if err := persist(qs); err != nil {
+		return nil, rep, err
+	}
+	if err := RecordLabCatalog(qs); err != nil {
 		return nil, rep, err
 	}
 	rep.Ingest.Labs = len(qs)

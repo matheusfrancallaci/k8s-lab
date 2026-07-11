@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -125,7 +126,71 @@ spec:
   podSelector: {}
   policyTypes:
   - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lab-allow-egress-except-imds
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 169.254.169.254/32
+  - to:
+    - ipBlock:
+        cidr: ::/0
 K8SLABPOLICY`, ns, envOr("LAB_PSA_ENFORCE", "baseline"), envOr("LAB_PSA_VERSION", "latest"), ns)
+}
+
+// imdsEgressNetworkPolicy allows regular IPv4/IPv6 traffic while excluding the
+// Azure Instance Metadata Service. Selecting every pod also covers the user's
+// cloud shell, which lives in the same isolated lab namespace.
+func imdsEgressNetworkPolicy(ns string) *networkingv1.NetworkPolicy {
+	return &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "lab-allow-egress-except-imds", Namespace: ns},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+			Egress: []networkingv1.NetworkPolicyEgressRule{
+				{To: []networkingv1.NetworkPolicyPeer{{IPBlock: &networkingv1.IPBlock{
+					CIDR: "0.0.0.0/0", Except: []string{"169.254.169.254/32"},
+				}}}},
+				{To: []networkingv1.NetworkPolicyPeer{{IPBlock: &networkingv1.IPBlock{CIDR: "::/0"}}}},
+			},
+		},
+	}
+}
+
+const imdsEgressPolicyManifest = `apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lab-allow-egress-except-imds
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 169.254.169.254/32
+  - to:
+    - ipBlock:
+        cidr: ::/0
+`
+
+// imdsEgressGuardrailCommand is used for additional namespaces in which an
+// active lab grants pod-management access (for example default or tools). A
+// base64 pipe avoids fragile nested heredocs in the larger provisioning script.
+func imdsEgressGuardrailCommand(ns string) string {
+	b64 := base64.StdEncoding.EncodeToString([]byte(imdsEgressPolicyManifest))
+	return fmt.Sprintf("echo %s | base64 -d | kubectl -n %s apply -f - >/dev/null 2>&1", b64, ns)
 }
 
 // ensureNamespaceLimits aplica um ResourceQuota + LimitRange no namespace do
@@ -222,5 +287,16 @@ func ensureNamespaceSecurity(ns string) {
 		_, _ = cs.NetworkingV1().NetworkPolicies(ns).Update(ctx, policy, metav1.UpdateOptions{})
 	} else {
 		_, _ = cs.NetworkingV1().NetworkPolicies(ns).Create(ctx, policy, metav1.CreateOptions{})
+	}
+
+	// Keep DNS, the Kubernetes API, registries and public documentation
+	// reachable, while preventing pods from obtaining managed-identity tokens
+	// from the VM's metadata endpoint.
+	egress := imdsEgressNetworkPolicy(ns)
+	if current, err := cs.NetworkingV1().NetworkPolicies(ns).Get(ctx, egress.Name, metav1.GetOptions{}); err == nil {
+		egress.ResourceVersion = current.ResourceVersion
+		_, _ = cs.NetworkingV1().NetworkPolicies(ns).Update(ctx, egress, metav1.UpdateOptions{})
+	} else {
+		_, _ = cs.NetworkingV1().NetworkPolicies(ns).Create(ctx, egress, metav1.CreateOptions{})
 	}
 }
