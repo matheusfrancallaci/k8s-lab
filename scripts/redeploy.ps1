@@ -36,7 +36,9 @@ function Die($m) { Write-Host "ERRO: $m" -ForegroundColor Red; exit 1 }
 # ── 1. Estado do git: SHA + working tree limpa ──────────────────────
 $sha = (git -C $repoRoot rev-parse --short HEAD).Trim()
 if (-not $sha) { Die "nao consegui obter o git SHA (esta num repo git?)" }
-$dirty = git -C $repoRoot status --porcelain
+# .claude/ fica de fora do check: as permissões de sessão do agente gravam ali
+# a cada aprovação e não entram na imagem — travavam deploy limpo à toa.
+$dirty = git -C $repoRoot status --porcelain | Where-Object { $_ -notmatch '\.claude/' }
 if ($dirty -and -not $AllowDirty) {
   Die "working tree suja — commite antes (ou use -AllowDirty). A imagem em prod deve corresponder a um commit."
 }

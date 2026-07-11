@@ -30,7 +30,10 @@
       "PowerShell(git config core.hooksPath .githooks)",
       "PowerShell(git config core.hooksPath)",
       "PowerShell(git commit -F \"C:\\\\Users\\\\mathe\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--desenv-estudo-app\\\\1c9f2dbf-5925-4e7c-87fd-7acd94ea07e5\\\\scratchpad\\\\commit-msg.txt\" 2>&1)",
-      "PowerShell(git add deploy/azure/vm-backup-install.sh .claude/settings.json; $env:SKIP_TESTS='1'; git commit -m 'chore: instalador de backup da VM \\(snapshot incremental + retencao\\) e permissoes de sessao' 2>&1 | Select-Object -Last 3; $env:SKIP_TESTS='')"
+      "PowerShell(git add deploy/azure/vm-backup-install.sh .claude/settings.json; $env:SKIP_TESTS='1'; git commit -m 'chore: instalador de backup da VM \\(snapshot incremental + retencao\\) e permissoes de sessao' 2>&1 | Select-Object -Last 3; $env:SKIP_TESTS='')",
+      "PowerShell(Get-Process | Where-Object { $_.Path -eq \"$PWD\\\\estudo-app.exe\" } | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; go build -o estudo-app.exe . ; if \\($?\\) { \"rebuild ok\" })",
+      "PowerShell(git add main.go)",
+      "PowerShell(git add scripts/redeploy.ps1 .claude/settings.json; $env:SKIP_TESTS='1'; git commit -m 'chore: redeploy ignora .claude/ no check de arvore suja \\(permissoes de sessao travavam deploy\\)' -m 'Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>' 2>&1 | Select-Object -Last 2; $env:SKIP_TESTS='')"
     ]
   }
 }
