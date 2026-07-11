@@ -230,7 +230,11 @@ func main() {
 	// atrás do login da app. "localhost:8090" não existe para quem acessa a
 	// instância hospedada — o proxy é o único caminho que funciona nos dois.
 	mux.HandleFunc("GET /argocd", argoCDPage(templatesFS))
-	mux.HandleFunc("/argocd/", handlers.ArgoCDProxyHandler)
+	// Por método: padrão sem método em "/argocd/" conflita com "GET /" no
+	// ServeMux do Go 1.22+ (panic no boot — pego no smoke local, não em prod).
+	for _, m := range []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"} {
+		mux.HandleFunc(m+" /argocd/", handlers.ArgoCDProxyHandler)
+	}
 	mux.HandleFunc("GET /api/argocd/status", handlers.ArgoCDStatusHandler)
 	mux.HandleFunc("GET /api/argocd/install", handlers.ArgoCDInstallHandler)
 	mux.HandleFunc("POST /api/argocd/portforward", handlers.ArgoCDPortForwardHandler)
