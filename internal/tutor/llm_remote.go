@@ -41,6 +41,9 @@ func remoteModelFor(role, requested string) string {
 }
 
 func remoteGenerate(prompt string, wantJSON bool, timeout time.Duration, maxTokens int, model string) (string, error) {
+	started := time.Now()
+	failed := true
+	defer func() { recordTutorLatency("llm.remote.generate", time.Since(started), 0, failed) }()
 	c, ok := remoteLLM()
 	if !ok {
 		return "", fmt.Errorf("provedor remoto nao configurado")
@@ -75,10 +78,14 @@ func remoteGenerate(prompt string, wantJSON bool, timeout time.Duration, maxToke
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || len(out.Choices) == 0 {
 		return "", fmt.Errorf("resposta remota vazia")
 	}
+	failed = false
 	return strings.TrimSpace(out.Choices[0].Message.Content), nil
 }
 
 func remoteStream(prompt string, timeout time.Duration, maxTokens int, model string, onChunk func(string)) error {
+	started := time.Now()
+	failed := true
+	defer func() { recordTutorLatency("llm.remote.stream", time.Since(started), 0, failed) }()
 	c, ok := remoteLLM()
 	if !ok {
 		return fmt.Errorf("provedor remoto nao configurado")
@@ -114,5 +121,7 @@ func remoteStream(prompt string, timeout time.Duration, maxTokens int, model str
 			onChunk(event.Choices[0].Delta.Content)
 		}
 	}
-	return s.Err()
+	err = s.Err()
+	failed = err != nil
+	return err
 }

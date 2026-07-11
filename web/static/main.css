@@ -2200,6 +2200,9 @@ body {
 .generation-state { display:inline-flex;align-items:center;gap:8px;color:var(--text-3);font-size:11px; }
 .generation-state b { color:inherit;font-weight:600; }
 .generation-state i { width:12px;height:12px;border-radius:50%;border:2px solid var(--border-3);border-top-color:var(--violet);animation:spin .8s linear infinite; }
+.answer-feedback { display:flex;align-items:center;gap:7px;margin-top:10px;color:var(--text-4);font-size:10px; }
+.answer-feedback button { border:1px solid var(--border-2);background:var(--surface-2);color:var(--text-3);border-radius:999px;padding:3px 8px;font-size:10px; }
+.answer-feedback button:hover { border-color:var(--violet);color:var(--text); }
 .evolution-card { margin-top:18px;padding:18px;border-radius:var(--r-md);border:1px solid rgba(52,211,153,.35);background:var(--surface-2);box-shadow:0 14px 40px var(--shadow-color); }
 .evolution-card h3 { margin:6px 0 5px;color:var(--text);font-size:17px; }
 .evolution-card p { margin:0 0 12px;color:var(--text-3);font-size:12px;line-height:1.55; }

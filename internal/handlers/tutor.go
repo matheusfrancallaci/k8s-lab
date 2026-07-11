@@ -148,6 +148,7 @@ func (h *TutorHandler) Event(w http.ResponseWriter, r *http.Request) {
 		QuestionID string `json:"question_id"`
 		Cert       string `json:"cert"`
 		Topic      string `json:"topic"`
+		MessageID  string `json:"message_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		json.NewEncoder(w).Encode(map[string]any{"ok": false}) //nolint:errcheck
@@ -164,6 +165,8 @@ func (h *TutorHandler) Event(w http.ResponseWriter, r *http.Request) {
 		}
 	case "dismiss":
 		tutor.MarkAdvised(userID(r), body.Cert, body.Topic)
+	case "helpful", "unhelpful":
+		_ = tutor.RecordTutorFeedback(userID(r), body.MessageID, body.Type, body.Cert, body.Topic)
 	}
 	json.NewEncoder(w).Encode(map[string]any{"ok": true}) //nolint:errcheck
 }

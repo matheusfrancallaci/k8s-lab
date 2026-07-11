@@ -11,6 +11,7 @@ type AdminQualityReport struct {
 	LabObservability   LabObservationSummary `json:"lab_observability"`
 	RAG                RAGStatusInfo         `json:"rag"`
 	Telemetry          TutorTelemetryReport  `json:"telemetry"`
+	Feedback           FeedbackSummary       `json:"feedback"`
 	GroundingScore     int                   `json:"grounding_score"`
 	SourceCoverage     int                   `json:"source_coverage"`
 	RefusalCorrectness int                   `json:"refusal_correctness"`
@@ -33,6 +34,7 @@ func BuildAdminQualityReport() AdminQualityReport {
 		LabObservability:   obs,
 		RAG:                RAGStatus(),
 		Telemetry:          TutorTelemetry(),
+		Feedback:           TutorFeedbackSummary(),
 		GroundingScore:     golden.GroundingScore,
 		SourceCoverage:     golden.SourceCoverage,
 		RefusalCorrectness: golden.RefusalCorrectness,

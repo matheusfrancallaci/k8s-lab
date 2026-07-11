@@ -415,6 +415,16 @@ function addTutor(html) {
 function addTyping() {
     return addTutor('<span class="typing"><i></i><i></i><i></i></span>');
 }
+function addFeedback(slot) {
+    if (!slot || slot.querySelector('.answer-feedback')) return;
+    const id = 'msg-' + Date.now().toString(36);
+    slot.insertAdjacentHTML('beforeend', `<div class="answer-feedback" data-id="${id}"><span>Essa resposta ajudou?</span><button onclick="rateAnswer(this,'helpful')" aria-label="Ajudou">Sim</button><button onclick="rateAnswer(this,'unhelpful')" aria-label="Nao ajudou">Nao</button></div>`);
+}
+function rateAnswer(btn, kind) {
+    const box = btn.closest('.answer-feedback');
+    fetch('/api/tutor/event', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:kind,message_id:box.dataset.id,cert:chatCert})}).catch(()=>{});
+    box.innerHTML = `<span>${kind === 'helpful' ? 'Obrigado — vou reforcar esse padrao.' : 'Obrigado — isso entrou na fila de melhoria.'}</span>`;
+}
 
 // ── painel do aluno ─────────────────────────────────────────
 function togglePainel() {
@@ -795,6 +805,7 @@ async function sendChat() {
         const [txt, action] = splitAction(out);
         slot.innerHTML = mdLite(txt || '...');
         if (action) renderAction(slot, action);
+        addFeedback(slot);
     } catch (e) {
         slot.innerHTML = 'algo deu errado por aqui — tenta de novo?';
     }
