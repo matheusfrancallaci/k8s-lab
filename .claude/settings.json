@@ -8,7 +8,21 @@
       "Bash(go vet *)",
       "Bash(wsl.exe -- bash -c \"kubectl get nodes --no-headers --request-timeout=5s 2>/dev/null | grep -q Ready\")",
       "Bash(wsl.exe -- bash -c \"kubectl config current-context; kubectl get nodes --no-headers\")",
-      "Bash(wsl.exe -- bash -c \"systemctl status minikube --no-pager 2>&1 | head -8; echo '---'; minikube status 2>&1 | head -6; echo '---docker---'; systemctl is-active docker 2>&1\")"
+      "Bash(wsl.exe -- bash -c \"systemctl status minikube --no-pager 2>&1 | head -8; echo '---'; minikube status 2>&1 | head -6; echo '---docker---'; systemctl is-active docker 2>&1\")",
+      "PowerShell(go test ./internal/tutor/ -run 'TestNegativeFeedback|TestFeedbackWithout|TestFailureSignature|TestExplainCache|TestBuildExamReport|TestIsEnvironmentFailure|TestEnvFailures|TestProfileHistory|TestLabObservability|TestPromptQuality|TestMasteryGate' -count=1)",
+      "Skill(dataviz)",
+      "Skill(dataviz:*)",
+      "PowerShell(go build -o \"$env:TEMP\\\\claude\\\\estudo-app-verify.exe\" . ; if \\($?\\) { \"build ok\" })",
+      "PowerShell($env:PORT='8123'; & \"$env:TEMP\\\\claude\\\\estudo-app-verify.exe\")",
+      "PowerShell(Start-Sleep -Seconds 2; try { \\(Invoke-WebRequest -UseBasicParsing http://localhost:8123/healthz -TimeoutSec 5\\).StatusCode } catch { $_.Exception.Message })",
+      "PowerShell(git check-ignore -v data/eval/regression_fixtures.json data/profiles/x.json 2>$null)",
+      "PowerShell(if \\(Test-Path data/eval/regression_fixtures.json\\) { Copy-Item data/eval/regression_fixtures.json \"$env:TEMP\\\\claude\\\\fixtures-backup.json\"; Get-Content data/eval/regression_fixtures.json -TotalCount 5 } else { \"sem fixtures ainda\" })",
+      "PowerShell(git add main.go internal/handlers/lab.go internal/handlers/tutor.go internal/tutor/admin_quality.go internal/tutor/eval.go internal/tutor/feedback.go internal/tutor/lab_metrics.go internal/tutor/llm.go internal/tutor/prompt_quality.go internal/tutor/quality_metrics.go internal/tutor/tracker.go internal/tutor/exam_report.go internal/tutor/exam_report_test.go internal/tutor/feedback_loop_test.go internal/tutor/lab_env_failure_test.go web/templates/tutor.html web/templates/lab.html)",
+      "PowerShell($busy = Test-NetConnection -ComputerName localhost -Port 8080 -InformationLevel Quiet -WarningAction SilentlyContinue; \"8080 ocupada: $busy\")",
+      "PowerShell(go build -o estudo-app.exe .)",
+      "PowerShell(if \\($?\\) { \"build ok\" })",
+      "PowerShell(& .\\\\estudo-app.exe)",
+      "PowerShell(git add .claude/settings.json)"
     ]
   }
 }
