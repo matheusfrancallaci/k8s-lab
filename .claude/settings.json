@@ -42,7 +42,15 @@
       "Bash(node -e ' *)",
       "PowerShell(git add -A; $env:SKIP_TESTS='1'; git commit -F \"C:\\\\Users\\\\mathe\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--desenv-estudo-app\\\\1c9f2dbf-5925-4e7c-87fd-7acd94ea07e5\\\\scratchpad\\\\commit-msg.txt\" 2>&1 | Select-Object -Last 1; $env:SKIP_TESTS=''; .\\\\scripts\\\\redeploy.ps1)",
       "PowerShell(Get-Process | Where-Object { $_.Path -eq \"$PWD\\\\estudo-app.exe\" } | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; go build -o estudo-app.exe . | Out-Null; \"rebuild ok\")",
-      "PowerShell(go build -o estudo-app.exe . | Out-Null; Get-Process | Where-Object { $_.Path -eq \"$PWD\\\\estudo-app.exe\" } | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; \"ok\")"
+      "PowerShell(go build -o estudo-app.exe . | Out-Null; Get-Process | Where-Object { $_.Path -eq \"$PWD\\\\estudo-app.exe\" } | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; \"ok\")",
+      "PowerShell(az cognitiveservices account list-skus --kind OpenAI --location eastus2 -o table 2>&1)",
+      "PowerShell(az cognitiveservices account create -n k8slab-aoai -g k8slab-rg --kind OpenAI --sku S0 -l eastus2 --custom-domain k8slab-aoai --yes -o none 2>&1)",
+      "PowerShell(az cognitiveservices account show -n k8slab-aoai -g k8slab-rg --query \"{state:properties.provisioningState, endpoint:properties.endpoint}\" -o json)",
+      "PowerShell(az cognitiveservices account list-models -n k8slab-aoai -g k8slab-rg --query \"[?contains\\(name,'gpt-4.1'\\) || contains\\(name,'gpt-4o'\\)].{name:name, version:version}\" -o table 2>$null)",
+      "PowerShell(az cognitiveservices account deployment create -g k8slab-rg -n k8slab-aoai --deployment-name gpt-4.1-mini --model-name gpt-4.1-mini --model-version \"2025-04-14\" --model-format OpenAI --sku-name GlobalStandard --sku-capacity 50 -o none)",
+      "PowerShell(az cognitiveservices account deployment list -g k8slab-rg -n k8slab-aoai --query \"[].{name:name, state:properties.provisioningState}\" -o table)",
+      "PowerShell(if \\($?\\) { \"deployment ok\" })",
+      "PowerShell(az cognitiveservices account list-models -n k8slab-aoai -g k8slab-rg --query \"[?!contains\\(name,'embed'\\) && !contains\\(name,'tts'\\) && !contains\\(name,'transcribe'\\) && !contains\\(name,'audio'\\) && !contains\\(name,'image'\\) && !contains\\(name,'dall'\\)].{name:name, version:version, deprecated:deprecation.inference}\" -o table 2>$null)"
     ]
   }
 }

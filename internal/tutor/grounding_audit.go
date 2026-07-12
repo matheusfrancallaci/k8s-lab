@@ -69,7 +69,10 @@ var groundedReplyCache = struct {
 }{Entries: map[string]groundedCacheEntry{}}
 
 func groundedReplyKey(msg, model string, report AnswerabilityReport) string {
-	return ragID(strings.ToLower(strings.TrimSpace(msg)), model, report.RAG, strings.Join(report.VerifiedSources(), "|"), report.CheckedAt)
+	// SEM CheckedAt na chave: é um timestamp por request, então o cache nunca
+	// acertava (medido em produção: 12s na repetição da MESMA pergunta). A
+	// identidade da resposta é pergunta+modelo+estado do RAG+fontes.
+	return ragID(strings.ToLower(strings.TrimSpace(msg)), model, report.RAG, strings.Join(report.VerifiedSources(), "|"))
 }
 
 func cachedGroundedReply(key string) (string, bool) {
