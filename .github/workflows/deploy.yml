@@ -70,6 +70,14 @@ jobs:
             --query "instanceView.statuses[?starts_with(code,'PowerState')].displayStatus" -o tsv)
           if [ "$power" != "VM running" ]; then az vm start -g "$RG" -n "$VM"; fi
 
+      - name: Sincroniza runtime persistente da VM
+        run: |
+          out=$(az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript \
+            --scripts @deploy/azure/sync-runtime.sh \
+            --query "value[0].message" -o tsv)
+          echo "$out"
+          echo "$out" | grep -q "RUNTIME_SYNC_OK" || { echo "::error::runtime persistente nao foi sincronizado"; exit 1; }
+
       - name: Restart na VM + confere a imagem exata
         run: |
           out=$(az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript \
@@ -77,6 +85,14 @@ jobs:
             --query "value[0].message" -o tsv)
           echo "$out"
           echo "$out" | grep -q "MATCH" || { echo "::error::container nao roda a imagem do SHA solicitado"; exit 1; }
+
+      - name: Confere modelos e configuracao real da VM
+        run: |
+          out=$(az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript \
+            --scripts @deploy/azure/verify-runtime.sh \
+            --query "value[0].message" -o tsv)
+          echo "$out"
+          echo "$out" | grep -q "RUNTIME_VERIFY_OK" || { echo "::error::runtime da VM divergiu da configuracao esperada"; exit 1; }
 
       - name: Smoke test do app publicado
         run: |

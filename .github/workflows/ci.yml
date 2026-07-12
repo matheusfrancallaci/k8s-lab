@@ -63,6 +63,9 @@ jobs:
       - name: npm audit
         run: npm audit --audit-level=moderate
 
+      - name: Azure runtime script syntax
+        run: bash -n deploy/azure/sync-runtime.sh deploy/azure/verify-runtime.sh
+
       - name: Playwright specs
         run: npm run test:e2e -- --list
 
