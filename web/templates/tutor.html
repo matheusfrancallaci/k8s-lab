@@ -69,6 +69,10 @@
 .domain-name { min-width:0; font-size:12px; font-weight:700; color:var(--text); line-height:1.35; }
 .domain-sub { display:block; margin-top:2px; font-family:var(--mono); font-size:9px; color:var(--text-4); }
 
+/* objetivo (onboarding) */
+.goal-input { width:100%; padding:7px 9px; border-radius:6px; border:1px solid var(--border-2); background:var(--surface); color:var(--text); font-size:12px; font-family:inherit; }
+.mastery-row.locked .btn { opacity:1; }
+
 /* tendência (sparkline) — série única: sem legenda, rótulos em texto */
 .spark-wrap { margin-top:8px; }
 .spark { display:block; width:100%; height:34px; }
@@ -303,6 +307,9 @@ const T = {
         caderno: 'caderno de erros', fraquezas: 'pontos fracos',
         retencao: 'retenção real', retencao_sub: 'acerto em tópicos REAPRESENTADOS após o intervalo de revisão — a medida de reter de verdade',
         tendencia: 'tendência diária', evolucao: 'evolução', evolucao_sub: 'score médio dos tópicos treinados — todas as certs',
+        objetivo: 'meu objetivo', objetivo_p: 'Qual prova você quer passar? Com a data eu monto o ritmo.', objetivo_btn: 'Definir objetivo',
+        para_prova: 'para a prova de', sem_data: 'sem data marcada — defina para ganhar contagem regressiva', dias_seguidos: 'dia(s) seguidos estudando',
+        fora_ordem: 'fora da ordem recomendada — a trilha sugere dominar o anterior antes',
         greet_m: 'Bom dia', greet_t: 'Boa tarde', greet_n: 'Boa noite', greet_q: 'Como posso te ajudar?',
         hero_sub: 'Peça labs por certificação, tópico exato ou URL oficial da documentação.',
         placeholder: 'Pergunte, peça um lab, ou cole uma URL de documentação...',
@@ -328,6 +335,9 @@ const T = {
         caderno: 'error notebook', fraquezas: 'weak spots',
         retencao: 'real retention', retencao_sub: 'accuracy on topics RE-PRESENTED after the review interval — the true measure of retention',
         tendencia: 'daily trend', evolucao: 'progress', evolucao_sub: 'average score of trained topics — all certs',
+        objetivo: 'my goal', objetivo_p: 'Which exam do you want to pass? With a date I set the pace.', objetivo_btn: 'Set goal',
+        para_prova: 'until the exam on', sem_data: 'no exam date — set one to get a countdown', dias_seguidos: 'day(s) study streak',
+        fora_ordem: 'off the recommended order — the path suggests mastering the previous topic first',
         greet_m: 'Good morning', greet_t: 'Good afternoon', greet_n: 'Good evening', greet_q: 'How can I help?',
         hero_sub: 'Ask for labs by certification, exact topic, or an official docs URL.',
         placeholder: 'Ask something, request a lab, or paste a docs URL...',
@@ -480,6 +490,42 @@ async function quickLab(btn, topic, level) {
     sendSuggestion(`crie um lab de ${topic.toLowerCase()} nível ${level || 2}`);
 }
 
+// ── objetivo do aluno (onboarding + contagem regressiva + streak) ──
+function objetivoCard(d) {
+    const j = d.journey || {};
+    const g = j.goal || {};
+    if (!g.cert && !g.exam_date) {
+        return `<div class="p-card p-acao"><div class="cc-title">${t('objetivo')}</div>
+            <p>${t('objetivo_p')}</p>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+                <select id="goal-cert" class="goal-input">${(d.certs || []).map(c => `<option ${c === chatCert ? 'selected' : ''}>${escH(c)}</option>`).join('')}</select>
+                <input id="goal-date" type="date" class="goal-input">
+                <select id="goal-level" class="goal-input"><option value="iniciante">iniciante</option><option value="intermediario" selected>intermediário</option><option value="avancado">avançado</option></select>
+                <button class="btn btn-primary btn-sm" onclick="saveGoal(this)">${t('objetivo_btn')}</button>
+            </div></div>`;
+    }
+    const days = (typeof j.days_to_exam === 'number') ? j.days_to_exam : -1;
+    const streak = (j.streak && j.streak.count) || 0;
+    return `<div class="p-card"><div class="cc-title">${t('objetivo')} · ${escH(g.cert || chatCert)}</div>
+        <div class="cov-line"><b style="color:var(--violet,#818cf8);">${days >= 0 ? days + 'd' : '—'}</b><span>${days >= 0 ? `${t('para_prova')} ${escH(g.exam_date)}` : t('sem_data')}</span></div>
+        ${streak ? `<div class="eval-sub">🔥 ${streak} ${t('dias_seguidos')}</div>` : ''}
+    </div>`;
+}
+async function saveGoal(btn) {
+    btn.disabled = true;
+    try {
+        await fetch('/api/tutor/goal', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                cert: document.getElementById('goal-cert').value,
+                exam_date: document.getElementById('goal-date').value,
+                level: document.getElementById('goal-level').value
+            })
+        });
+    } catch (e) {}
+    refreshPainel();
+}
+
 // A ação do dia decide por prioridade: recomendação nº1 (revisões vencidas
 // vêm primeiro do servidor) > fronteira da trilha > calibrar perfil.
 function acaoDoDia(d) {
@@ -522,8 +568,12 @@ function trilhaCard(d) {
             : st === 'mastered' ? t('dominado')
             : (x.due_reviews ? `${x.due_reviews} ${t('revisoes_seguram')}` : t('fronteira'));
         const score = x.attempts ? Math.round((x.score || 0) * 100) + '% · ' + x.attempts + 'x' : t('novo');
+        // Trilha RECOMENDA a ordem, não bloqueia: travado continua clicável
+        // (decisão do dono, 2026-07-12 — "avançar não deve bloquear conteúdo").
         const cta = st === 'current'
             ? `<button class="btn btn-primary btn-sm" onclick="quickLab(this, '${escH(x.topic || '')}', 2)">${t('treinar')}</button>`
+            : st === 'locked'
+            ? `<button class="btn btn-outline btn-sm" title="${escH(t('fora_ordem'))}" onclick="quickLab(this, '${escH(x.topic || '')}', 2)">${t('treinar')}</button>`
             : `<span class="mastery-score">${score}</span>`;
         return `<div class="mastery-row ${st}">
             <span class="mastery-icon" style="color:${color};">${icon}</span>
@@ -639,7 +689,7 @@ function fraquezasCard(d) {
 function renderPainel(d) {
     statusCache = d;
     document.getElementById('painel-body').innerHTML =
-        acaoDoDia(d) + trilhaCard(d) + retencaoCard(d) + evolucaoCard(d) + coberturaCard(d) + cadernoCard(d) + fraquezasCard(d);
+        objetivoCard(d) + acaoDoDia(d) + trilhaCard(d) + retencaoCard(d) + evolucaoCard(d) + coberturaCard(d) + cadernoCard(d) + fraquezasCard(d);
 }
 
 async function refreshPainel() {

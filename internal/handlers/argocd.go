@@ -211,15 +211,29 @@ func ArgoCDProxyHandler(w http.ResponseWriter, r *http.Request) {
 	proxy.ServeHTTP(w, r)
 }
 
-// ensureArgoCDRootpathLocked cura instalações feitas antes do proxy: adiciona
-// --rootpath=/argocd ao argocd-server se faltar (caller segura argoCDMu).
-func ensureArgoCDRootpathLocked() {
+// ensureArgoCDFlagsLocked cura instalações antigas do argocd-server (caller
+// segura argoCDMu): --insecure é OBRIGATÓRIO atrás do proxy — sem ele o
+// listener http responde 307 para https e o browser entra em loop infinito
+// (ERR_TOO_MANY_REDIRECTS, visto em produção 2026-07-12); --rootpath=/argocd
+// põe a UI sob o caminho da app. Guard por flag; rollout só se patchou.
+func ensureArgoCDFlagsLocked() {
 	out, err := wslShell("kubectl get deployment argocd-server -n argocd -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null").Output()
-	if err != nil || strings.Contains(string(out), "rootpath") {
+	if err != nil {
 		return
 	}
-	wslShell(`kubectl patch deployment argocd-server -n argocd --type=json -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--rootpath=/argocd"}]'`).Run() //nolint:errcheck
-	wslShell("kubectl rollout status deployment/argocd-server -n argocd --timeout=120s 2>/dev/null").Run()                                                                           //nolint:errcheck
+	args := string(out)
+	patched := false
+	if !strings.Contains(args, "insecure") {
+		wslShell(`kubectl patch deployment argocd-server -n argocd --type=json -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--insecure"}]'`).Run() //nolint:errcheck
+		patched = true
+	}
+	if !strings.Contains(args, "rootpath") {
+		wslShell(`kubectl patch deployment argocd-server -n argocd --type=json -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--rootpath=/argocd"}]'`).Run() //nolint:errcheck
+		patched = true
+	}
+	if patched {
+		wslShell("kubectl rollout status deployment/argocd-server -n argocd --timeout=120s 2>/dev/null").Run() //nolint:errcheck
+	}
 }
 
 // doStopPortForwardLocked kills the tracked subprocess. Caller must hold argoCDMu.
@@ -238,7 +252,7 @@ func doStartPortForward() error {
 	argoCDMu.Lock()
 	defer argoCDMu.Unlock()
 
-	ensureArgoCDRootpathLocked()
+	ensureArgoCDFlagsLocked()
 	doStopPortForwardLocked()
 	time.Sleep(400 * time.Millisecond)
 

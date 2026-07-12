@@ -84,7 +84,9 @@
             <div style="text-align:center;padding:0 24px;">
                 <div style="color:var(--green);margin-bottom:14px;line-height:0;"><svg class="lic" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.8 11.3 2 22l10.7-3.79"/><path d="M4 3h.01"/><path d="M22 8h.01"/><path d="M15 2h.01"/><path d="M22 20h.01"/><path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10"/><path d="m22 13-.82-.33c-.86-.34-1.82.2-1.98 1.11-.11.7-.72 1.22-1.43 1.22H17"/><path d="m11 2 .33.82c.34.86-.2 1.82-1.11 1.98-.7.11-1.22.72-1.22 1.43V7"/><path d="M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2Z"/></svg></div>
                 <h2 style="font-size:20px;font-weight:800;color:var(--text);margin-bottom:8px;">Sessão Concluída!</h2>
-                <p style="font-size:13px;color:var(--text-2);margin-bottom:4px;">Você completou todos os <strong style="color:var(--green);">{{.SessionTotal}}</strong> exercícios.</p>
+                <p style="font-size:13px;color:var(--text-2);margin-bottom:4px;">Você passou pelos <strong style="color:var(--green);">{{.SessionTotal}}</strong> exercícios.</p>
+                <!-- Resumo HONESTO: aprovado/pulou/dica/solução — concluir não é fingir gabarito -->
+                <div id="session-outcomes" style="display:none;max-width:300px;margin:0 auto 14px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:10px;padding:10px 14px;text-align:left;"></div>
                 <p style="font-size:12px;color:var(--text-3);margin-bottom:22px;">Ótimo trabalho!</p>
                 <div style="display:flex;gap:10px;justify-content:center;">
                     <a href="/lab" class="btn btn-outline btn-lg">Ver Todos os Labs</a>
@@ -1176,6 +1178,17 @@ async function nextQuestion() {
             // Exame terminado por completar as questões (não só pelo relógio):
             // o aluno merece o score report, não o overlay genérico de sessão.
             if (EXAM) { finishExam(); return; }
+            // Resumo honesto da sessão (aprovado/pulou/dica/solução/ambiente)
+            if (d.outcomes) {
+                const label = { aprovado: 'aprovadas', aprovado_com_solucao: 'aprovadas (com solução)', solucao: 'solução aberta', dica: 'com dica', tentou: 'tentadas sem aprovar', pulou: 'puladas', falha_ambiente: 'falha de ambiente', aberto: 'não iniciadas' };
+                const box = document.getElementById('session-outcomes');
+                if (box) {
+                    box.innerHTML = Object.entries(d.outcomes)
+                        .map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:12px;font-size:12px;padding:4px 0;"><span style="color:var(--text-2);">${label[k] || k}</span><b class="mono" style="color:${k.startsWith('aprovado') ? 'var(--green)' : 'var(--text-3)'};">${v}</b></div>`)
+                        .join('');
+                    box.style.display = 'block';
+                }
+            }
             document.getElementById('session-complete-overlay').classList.add('active');
         } else {
             examRecordCurrent();

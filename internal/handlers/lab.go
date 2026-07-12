@@ -166,13 +166,33 @@ func (h *LabHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 func (h *LabHandler) AdvanceSession(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	sid := r.PathValue("sid")
+	uid := userID(r)
+
+	// Estado honesto: avançar sem aprovar a questão atual registra "pulou" —
+	// não bloqueia, mas a jornada não mente conclusão.
+	var sessionQuestions []string
+	if sess, ok := h.labSessions.Get(sid); ok {
+		sessionQuestions = append(sessionQuestions, sess.Questions...)
+		if sess.Index >= 0 && sess.Index < len(sess.Questions) {
+			if q, found := h.repo.GetByID(sess.Questions[sess.Index]); found {
+				tutor.RecordSkip(uid, q)
+			}
+		}
+	}
+
 	idx, total, nextID, done := h.labSessions.Advance(sid)
-	json.NewEncoder(w).Encode(map[string]any{
+	resp := map[string]any{
 		"done":  done,
 		"next":  nextID,
 		"index": idx + 1,
 		"total": total,
-	})
+	}
+	if done && len(sessionQuestions) > 0 {
+		// Fim de sessão: resumo honesto (aprovado/pulou/dica/solução/...)
+		// para a UI mostrar a verdade, não só "concluído".
+		resp["outcomes"] = tutor.OutcomesFor(uid, sessionQuestions)
+	}
+	json.NewEncoder(w).Encode(resp)
 }
 
 func runCmd(cmdStr, userID string) (string, error) {
@@ -370,8 +390,11 @@ func (h *LabHandler) Validate(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	envIssue := !success && tutor.IsEnvironmentFailure(output)
 	tutor.RecordLabValidation(uid, q, goalIdx, validation.Command, success, output)
-	if !envIssue {
+	if envIssue {
+		tutor.RecordEnvFailure(uid, q) // jornada honesta: aconteceu, mas não conta contra o aluno
+	} else {
 		tutor.RecordGoal(uid, q, success)
+		tutor.RecordAttempt(uid, q, goalIdx, success)
 	}
 
 	resp := validateResponse{

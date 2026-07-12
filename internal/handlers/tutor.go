@@ -54,6 +54,7 @@ func (h *TutorHandler) Status(w http.ResponseWriter, r *http.Request) {
 		"domain_map":      tutor.DomainMap(userID(r), cert),
 		"review":          tutor.ReviewQueue(userID(r)),
 		"history":         tutor.History(userID(r)),
+		"journey":         tutor.Journey(userID(r)),
 		"mastery":         tutor.MasteryPathForCert(userID(r), cert),
 		"learning_memory": tutor.LearningMemoryFor(userID(r)),
 		"next_decision":   nextDecision,
@@ -65,6 +66,25 @@ func (h *TutorHandler) Status(w http.ResponseWriter, r *http.Request) {
 		"llm":             map[string]any{"available": llmOK, "model": llmModel},
 		"model_readiness": tutor.LLMModelReadiness(),
 	})
+}
+
+// Goal persiste o objetivo do aluno (onboarding): cert, data da prova e nível.
+func (h *TutorHandler) Goal(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var body struct {
+		Cert     string `json:"cert"`
+		ExamDate string `json:"exam_date"`
+		Level    string `json:"level"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"error": "payload inválido"}) //nolint:errcheck
+		return
+	}
+	if err := tutor.SetStudyGoal(userID(r), body.Cert, body.ExamDate, body.Level); err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"error": err.Error()}) //nolint:errcheck
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "journey": tutor.Journey(userID(r))}) //nolint:errcheck
 }
 
 // coverageOrNil evita mandar um relatório vazio para certs sem currículo
