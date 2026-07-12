@@ -216,6 +216,7 @@ func main() {
 	mux.HandleFunc("DELETE /api/tutor/conversations", tutorH.Conversations)
 	mux.HandleFunc("GET /api/tutor/agent-trace", tutorH.AgentTrace)
 	mux.HandleFunc("GET /api/tutor/model-experiments", tutorH.ModelExperiments)
+	mux.HandleFunc("GET /api/tutor/orchestration", tutorH.Orchestration)
 
 	// Perfil = conta logada (progresso do tutor isolado por usuário)
 	mux.HandleFunc("GET /api/profile", handlers.ProfileHandler)

@@ -118,6 +118,7 @@ type GroundingAudit struct {
 	InventedURLs []string        `json:"invented_urls,omitempty"`
 	Passed       bool            `json:"passed"`
 	Details      []ClaimEvidence `json:"details,omitempty"`
+	Pedagogy     *PedagogyAudit  `json:"pedagogy,omitempty"`
 }
 
 type ClaimEvidence struct {

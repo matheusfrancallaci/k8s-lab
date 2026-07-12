@@ -886,10 +886,14 @@ async function loadOperatorPanel() {
     if (opLoaded) return;
     opLoaded = true;
     const body = document.getElementById('op-body');
-    body.innerHTML = '<div class="p-card" id="agent-trace"><div class="cc-title">ferramentas do agente</div><div class="eval-sub">nenhuma inspeção executada</div></div><div class="p-card" id="model-experiments"><div class="cc-title">modelos e canary</div><div class="eval-sub">coletando resultados...</div></div>' + ragCard(statusCache) + obsCard(statusCache) +
+    body.innerHTML = '<div class="p-card" id="tutor-plan"><div class="cc-title">orquestração pedagógica</div><div class="eval-sub">aguardando um turno...</div></div><div class="p-card" id="agent-trace"><div class="cc-title">ferramentas do agente</div><div class="eval-sub">nenhuma inspeção executada</div></div><div class="p-card" id="model-experiments"><div class="cc-title">modelos e canary</div><div class="eval-sub">coletando resultados...</div></div>' + ragCard(statusCache) + obsCard(statusCache) +
         '<div class="p-card" id="op-eval"><div class="cc-title">golden eval IA</div><div class="eval-sub">rodando...</div></div>' +
         '<div class="p-card" id="op-quality"><div class="cc-title">dataset real de prompts</div><div class="eval-sub">ranqueando...</div></div>' +
         '<div class="p-card" id="op-admin"><div class="cc-title">painel admin</div><div class="eval-sub">checando...</div></div>';
+    try {
+        const r=await fetch('/api/tutor/orchestration'),p=await r.json(),phases=p.phases||[];
+        if(p.turn_id) document.getElementById('tutor-plan').innerHTML=`<div class="cc-title">orquestração pedagógica</div><div class="domain-name">${escH(p.strategy)} · ${escH(p.learner_level)}</div><div class="eval-sub">${escH(p.intent)}${p.target_topic?' · '+escH(p.target_topic):''} · até ${p.max_tool_calls} ferramentas</div>`+phases.map(x=>`<div class="quality-row"><div><strong>${escH(x.name)}</strong><span>${escH(x.purpose)}${x.gate?' · '+escH(x.gate):''}</span></div><code>${escH(x.status)}</code></div>`).join('');
+    } catch(e) {}
     try {
         const r=await fetch('/api/tutor/agent-trace'), d=await r.json(), steps=d.steps||[];
         if(steps.length) document.getElementById('agent-trace').innerHTML='<div class="cc-title">ferramentas do agente · somente leitura</div>'+steps.map(s=>`<div class="quality-row"><div><strong>${escH(s.tool)}</strong><span>${escH(s.purpose)}${s.observation?' · '+escH(s.observation.slice(0,180)):''}</span></div><code>${escH(s.status)}</code></div>`).join('');
@@ -1000,8 +1004,10 @@ function renderConversationSources() {
     messages.forEach(m=>(m.sources||[]).forEach(u=>{if(!seen.has(u)){seen.add(u);sources.push(u);}}));
     const body=document.getElementById('sources-body'); if(!body)return;
     const audits=messages.filter(m=>m.audit&&m.audit.details).flatMap(m=>m.audit.details).slice(-12);
+    const pedagogy=[...messages].reverse().find(m=>m.audit&&m.audit.pedagogy)?.audit?.pedagogy;
     const claims=audits.length?`<div class="p-card"><div class="cc-title">auditoria por afirmação</div>${audits.map(x=>`<div class="quality-row"><div><strong>${escH(x.claim)}</strong><span>${(x.source_ids||[]).map(escH).join(' ')||((x.anchors||[]).map(escH).join(' · '))||'sem âncora'}</span></div><code style="color:${x.supported?'var(--green)':'var(--red)'}">${x.supported?'comprovada':'bloqueada'}</code></div>`).join('')}</div>`:'';
-    body.innerHTML=`<div class="p-card"><div class="cc-title">fontes verificadas desta conversa</div>${sources.length?sources.map((u,i)=>`<div class="quality-row"><div><strong>[S${i+1}] ${escH(new URL(u).hostname)}</strong><span>${escH(u)}</span></div><a class="btn btn-outline btn-sm" href="${escH(u)}" target="_blank" rel="noopener">abrir</a></div>`).join(''):'<div class="eval-sub">Nenhuma fonte foi usada ainda.</div>'}</div>${claims}`;
+    const teaching=pedagogy?`<div class="p-card"><div class="cc-title">qualidade pedagógica</div><div class="eval-head"><div><div class="domain-name">${escH(pedagogy.strategy)}</div><div class="eval-sub">checkpoint ${pedagogy.has_checkpoint?'sim':'não'} · próximo passo ${pedagogy.has_next_step?'sim':'não'} · spoiler ${pedagogy.spoiler_risk?'risco':'controlado'}</div></div><div class="eval-score">${pedagogy.score}%</div></div></div>`:'';
+    body.innerHTML=`${teaching}<div class="p-card"><div class="cc-title">fontes verificadas desta conversa</div>${sources.length?sources.map((u,i)=>`<div class="quality-row"><div><strong>[S${i+1}] ${escH(new URL(u).hostname)}</strong><span>${escH(u)}</span></div><a class="btn btn-outline btn-sm" href="${escH(u)}" target="_blank" rel="noopener">abrir</a></div>`).join(''):'<div class="eval-sub">Nenhuma fonte foi usada ainda.</div>'}</div>${claims}`;
 }
 async function deleteConversation(ev,id){ev.stopPropagation();await fetch('/api/tutor/conversations?id='+encodeURIComponent(id),{method:'DELETE'});if(activeConversation===id){activeConversation='';resetChatSurface();}await loadConversations(true);}
 async function saveConversationSettings(){conversationMode=document.getElementById('response-mode').value;if(activeConversation)await fetch('/api/tutor/conversations',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:activeConversation,mode:conversationMode})});loadConversations(false);}

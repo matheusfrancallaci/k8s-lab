@@ -214,6 +214,11 @@ func (h *TutorHandler) ModelExperiments(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(tutor.ModelExperiments()) //nolint:errcheck
 }
 
+func (h *TutorHandler) Orchestration(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tutor.LastTutorOrchestration(userID(r))) //nolint:errcheck
+}
+
 // Explain usa o LLM local para explicar por que um goal falhou (tutoria real).
 func (h *TutorHandler) Explain(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -398,6 +403,7 @@ func (h *TutorHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	message := chatMessageWithAttachment(body.Message, body.Attachment)
 	message = chatMessageWithImage(r, message, body.AttachmentData, body.AttachmentMime)
+	plan := tutor.OrchestrateTutorTurn(uid, body.Message, body.Cert, body.Mode)
 	message = enrichWithReadOnlyAgentObservation(r, uid, message, body.Mode)
 	res := tutor.Chat(uid, message, body.Cert, func(ids []string) (string, string, int) {
 		sess := h.labSessions.Create(ids)
@@ -414,14 +420,18 @@ func (h *TutorHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	var sources []string
 	var audit *tutor.GroundingAudit
 	if res.NeedsLLM { // conversa livre: resolve o LLM síncrono (fallback = res.Reply)
-		if r, verified, checked, err := tutor.FreeChatConversationReplyContext(r.Context(), message, conversationHistory(uid, body.ConversationID, message), body.Mode); err == nil && r != "" {
+		if r, verified, checked, err := tutor.FreeChatConversationReplyContext(r.Context(), message, conversationTurnContext(uid, body.ConversationID, message, plan), body.Mode); err == nil && r != "" {
 			reply = r
 			sources = verified
 			audit = &checked
 		}
 	}
+	if audit != nil {
+		pedagogy := tutor.AuditTeachingResponse(reply, plan)
+		audit.Pedagogy = &pedagogy
+	}
 	persistConversationTurn(uid, body.ConversationID, message, reply, sources, audit)
-	json.NewEncoder(w).Encode(map[string]any{"reply": reply, "action": res.Action, "decision": res.Decision, "sources": sources, "grounding": audit}) //nolint:errcheck
+	json.NewEncoder(w).Encode(map[string]any{"reply": reply, "action": res.Action, "decision": res.Decision, "sources": sources, "grounding": audit, "orchestration": plan}) //nolint:errcheck
 }
 
 // chatActionMarker separa o texto da resposta do JSON da ação no stream. Usa um
@@ -450,6 +460,7 @@ func (h *TutorHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	message := chatMessageWithAttachment(body.Message, body.Attachment)
 	message = chatMessageWithImage(r, message, body.AttachmentData, body.AttachmentMime)
+	plan := tutor.OrchestrateTutorTurn(uid, body.Message, body.Cert, body.Mode)
 	message = enrichWithReadOnlyAgentObservation(r, uid, message, body.Mode)
 	res := tutor.Chat(uid, message, body.Cert, func(ids []string) (string, string, int) {
 		sess := h.labSessions.Create(ids)
@@ -468,7 +479,7 @@ func (h *TutorHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	if res.NeedsLLM && flusher != nil {
 		var got bool
 		var streamed strings.Builder
-		sources, audit, err := tutor.StreamConversationReplyContext(r.Context(), message, conversationHistory(uid, body.ConversationID, message), body.Mode, func(chunk string) {
+		sources, audit, err := tutor.StreamConversationReplyContext(r.Context(), message, conversationTurnContext(uid, body.ConversationID, message, plan), body.Mode, func(chunk string) {
 			if chunk == "" {
 				return
 			}
@@ -478,6 +489,8 @@ func (h *TutorHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		})
 		if err == nil && got {
+			pedagogy := tutor.AuditTeachingResponse(streamed.String(), plan)
+			audit.Pedagogy = &pedagogy
 			persistConversationTurn(uid, body.ConversationID, message, streamed.String(), sources, &audit)
 			return
 		}
@@ -485,7 +498,9 @@ func (h *TutorHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if res.NeedsLLM { // sem flusher (raro): resolve síncrono
-		if r, sources, audit, err := tutor.FreeChatConversationReplyContext(r.Context(), message, conversationHistory(uid, body.ConversationID, message), body.Mode); err == nil && r != "" {
+		if r, sources, audit, err := tutor.FreeChatConversationReplyContext(r.Context(), message, conversationTurnContext(uid, body.ConversationID, message, plan), body.Mode); err == nil && r != "" {
+			pedagogy := tutor.AuditTeachingResponse(r, plan)
+			audit.Pedagogy = &pedagogy
 			persistConversationTurn(uid, body.ConversationID, message, r, sources, &audit)
 			fmt.Fprint(w, r)
 			return
@@ -539,6 +554,14 @@ func conversationHistory(userID, id, current string) string {
 		return ""
 	}
 	return tutor.ConversationContext(c, current)
+}
+
+func conversationTurnContext(userID, id, current string, plan tutor.TutorOrchestration) string {
+	history := conversationHistory(userID, id, current)
+	if history != "" {
+		history += "\n"
+	}
+	return history + plan.PromptContext()
 }
 
 func persistConversationTurn(userID, id, message, reply string, sources []string, audit ...*tutor.GroundingAudit) {

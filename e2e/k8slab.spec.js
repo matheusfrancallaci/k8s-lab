@@ -115,6 +115,9 @@ test('tutor oferece conversas persistentes, modos e anexos acessiveis', async ({
   await expect(page.locator('#painel')).toHaveClass(/active/);
   await page.locator('.tutor-tab', { hasText: 'Fontes' }).click();
   await expect(page.locator('#sources-pane')).toHaveClass(/active/);
+  await page.locator('.tutor-tab', { hasText: 'Sistema' }).click();
+  await expect(page.locator('#system-pane')).toHaveClass(/active/);
+  await expect(page.locator('#tutor-plan')).toContainText('orquestração pedagógica');
   await expect(page.locator('body')).not.toContainText(/cache hit|cache miss/i);
   const before = await page.locator('.conversation-item').count();
   await page.locator('.new-chat').click();
