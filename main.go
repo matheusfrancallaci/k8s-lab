@@ -210,6 +210,10 @@ func main() {
 	mux.HandleFunc("GET /api/tutor/deploy-gate", tutorH.DeployGate)
 	mux.HandleFunc("POST /api/tutor/chat", tutorH.Chat)
 	mux.HandleFunc("POST /api/tutor/chat/stream", tutorH.ChatStream)
+	mux.HandleFunc("GET /api/tutor/conversations", tutorH.Conversations)
+	mux.HandleFunc("POST /api/tutor/conversations", tutorH.Conversations)
+	mux.HandleFunc("PATCH /api/tutor/conversations", tutorH.Conversations)
+	mux.HandleFunc("DELETE /api/tutor/conversations", tutorH.Conversations)
 
 	// Perfil = conta logada (progresso do tutor isolado por usuário)
 	mux.HandleFunc("GET /api/profile", handlers.ProfileHandler)

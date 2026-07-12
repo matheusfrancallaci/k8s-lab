@@ -104,6 +104,17 @@ test('painel de desempenho mostra RAG, observabilidade e golden eval', async ({ 
   await expect(page.locator('.eval-card')).toContainText(/CKA HPA|AWS SQS|CAPA ArgoCD/i, { timeout: 90000 });
 });
 
+test('tutor oferece conversas persistentes, modos e anexos acessiveis', async ({ page }) => {
+  await ensureLoggedIn(page);
+  await page.goto('/tutor');
+  await expect(page.locator('.conversation-rail')).toBeVisible();
+  await expect(page.locator('#response-mode')).toHaveValue(/didactic|short|deep|diagnostic|exam/);
+  await expect(page.locator('button', { hasText: 'Anexar YAML' })).toBeVisible();
+  const before = await page.locator('.conversation-item').count();
+  await page.locator('.new-chat').click();
+  await expect.poll(() => page.locator('.conversation-item').count()).toBeGreaterThanOrEqual(before + 1);
+});
+
 test('login, cria lab pelo tutor, abre terminal e valida comando real', async ({ page }) => {
   await ensureLoggedIn(page);
 

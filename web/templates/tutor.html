@@ -4,10 +4,20 @@
 
 /* ── duas colunas: conversa + painel persistente ── */
 .tutor-cols {
-    height:100%; max-width:1240px; margin:0 auto;
-    display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:0 22px; padding:0 20px;
+    height:100%; max-width:1480px; margin:0 auto;
+    display:grid; grid-template-columns:230px minmax(0,1fr) 340px; gap:0 20px; padding:0 20px;
 }
 .chat-wrap { height:100%; min-width:0; display:flex; flex-direction:column; }
+.conversation-rail { min-width:0; border-right:1px solid var(--border); padding:14px 14px 20px 0; display:flex; flex-direction:column; gap:10px; }
+.conversation-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.conversation-head strong { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); }
+.new-chat { width:31px; height:31px; border-radius:9px; border:1px solid var(--violet-glow); background:var(--violet-dim); color:var(--violet); cursor:pointer; font-size:18px; }
+.conversation-list { display:flex; flex-direction:column; gap:5px; overflow:auto; }
+.conversation-item { position:relative; width:100%; border:1px solid transparent; background:transparent; color:var(--text-3); border-radius:9px; padding:10px 30px 10px 10px; text-align:left; cursor:pointer; }
+.conversation-item:hover,.conversation-item.active { border-color:var(--border-2); background:var(--surface-2); color:var(--text); }
+.conversation-item b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
+.conversation-item small { display:block; margin-top:3px; font-family:var(--mono); color:var(--text-4); font-size:9px; }
+.conversation-delete { position:absolute; right:7px; top:8px; color:var(--text-4); border:0; background:transparent; cursor:pointer; }
 
 /* ── header discreto ── */
 .chat-top {
@@ -175,6 +185,12 @@
 
 /* ── barra de entrada ── */
 .chat-input-zone { flex-shrink:0; padding:8px 0 18px; }
+.response-tools { display:flex; align-items:center; gap:7px; margin-bottom:8px; }
+.response-mode,.attach-btn { border:1px solid var(--border-2); border-radius:999px; background:var(--surface-2); color:var(--text-3); padding:5px 9px; font:10px var(--mono); }
+.attach-btn { cursor:pointer; }
+.attachment-preview { display:none; margin:0 0 8px; padding:8px 10px; border:1px solid var(--sky-glow); border-radius:8px; color:var(--sky); font:10px var(--mono); }
+.attachment-preview.visible { display:flex; justify-content:space-between; gap:10px; }
+.chat-log[aria-busy="true"] { cursor:progress; }
 .cert-row { display:flex; align-items:center; gap:6px; margin-bottom:8px; padding:0 4px; flex-wrap:wrap; max-height:74px; overflow:auto; }
 .cert-chip {
     padding:3px 10px; border-radius:999px; font-family:var(--mono); font-size:10px; font-weight:600;
@@ -211,6 +227,7 @@
 /* ── mobile: painel vira gaveta ── */
 @media (max-width:1080px){
     .tutor-cols { grid-template-columns:minmax(0,1fr); }
+    .conversation-rail { display:none; }
     .painel-toggle { display:inline-flex; }
     .painel {
         position:fixed; top:0; right:0; bottom:0; z-index:60; width:min(86vw,360px);
@@ -227,6 +244,11 @@
 <div class="shell-main tutor-root">
 
 <div class="tutor-cols">
+
+<nav class="conversation-rail" aria-label="Conversas do tutor">
+    <div class="conversation-head"><strong>Conversas</strong><button class="new-chat" onclick="newConversation()" aria-label="Nova conversa">+</button></div>
+    <div class="conversation-list" id="conversation-list"><span class="eval-sub">carregando...</span></div>
+</nav>
 
 <div class="chat-wrap">
 
@@ -253,6 +275,14 @@
     </div>
 
     <div class="chat-input-zone">
+        <div class="response-tools">
+            <select id="response-mode" class="response-mode" aria-label="Profundidade da resposta" onchange="saveConversationSettings()">
+                <option value="didactic">Didática</option><option value="short">Curta</option><option value="deep">Aprofundada</option><option value="diagnostic">Diagnóstico</option><option value="exam">Modo prova</option>
+            </select>
+            <button class="attach-btn" onclick="document.getElementById('chat-file').click()">Anexar YAML, log ou código</button>
+            <input id="chat-file" type="file" hidden accept=".txt,.log,.yaml,.yml,.json,.tf,.hcl,.md,.sh,.go,.py" onchange="loadChatFile(this)">
+        </div>
+        <div class="attachment-preview" id="attachment-preview"></div>
         <div class="cert-row" id="cert-row">
             <span style="font-family:var(--mono);font-size:9px;color:var(--text-4);letter-spacing:.1em;">FOCO:</span>
             <!-- chips renderizados dinamicamente do registro de certificações -->
@@ -290,6 +320,9 @@ let chatCert = 'CKA';
 let chatBusy = false;
 let statusCache = null;
 let opLoaded = false;
+let activeConversation = '';
+let conversationMode = 'didactic';
+let chatAttachment = '';
 
 // ── i18n local da página (termos de K8s/cert ficam SEMPRE em inglês) ──
 const T = {
@@ -907,6 +940,30 @@ function splitAction(s) {
     return [s.slice(0, i), action];
 }
 
+async function loadConversations(selectFirst = true) {
+    const list = document.getElementById('conversation-list');
+    try {
+        const r = await fetch('/api/tutor/conversations'); const items = await r.json();
+        list.innerHTML = (items || []).map(c => `<button class="conversation-item ${c.id === activeConversation ? 'active' : ''}" onclick="openConversation('${escH(c.id)}')"><b>${escH(c.title || 'Nova conversa')}</b><small>${escH(c.cert || 'CKA')} · ${escH(c.mode || 'didactic')}</small><span class="conversation-delete" onclick="deleteConversation(event,'${escH(c.id)}')" aria-label="Excluir conversa">×</span></button>`).join('') || '<span class="eval-sub">Nenhuma conversa ainda</span>';
+        if (selectFirst && !activeConversation && items && items.length) await openConversation(items[0].id);
+    } catch (e) { list.innerHTML = '<span class="eval-sub">histórico indisponível</span>'; }
+}
+async function newConversation() {
+    const r = await fetch('/api/tutor/conversations', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cert:chatCert,mode:conversationMode})});
+    const c = await r.json(); activeConversation=c.id; conversationMode=c.mode||'didactic'; document.getElementById('response-mode').value=conversationMode;
+    resetChatSurface(); await loadConversations(false); document.getElementById('chat-text').focus();
+}
+async function openConversation(id) {
+    const r=await fetch('/api/tutor/conversations?id='+encodeURIComponent(id)); if(!r.ok)return; const c=await r.json();
+    activeConversation=c.id; conversationMode=c.mode||'didactic'; chatCert=c.cert||chatCert; document.getElementById('response-mode').value=conversationMode; resetChatSurface();
+    (c.messages||[]).forEach(m=>m.role==='user'?addUser(m.content):addTutor(mdLite(m.content))); await loadConversations(false); scrollBottom();
+}
+async function deleteConversation(ev,id){ev.stopPropagation();await fetch('/api/tutor/conversations?id='+encodeURIComponent(id),{method:'DELETE'});if(activeConversation===id){activeConversation='';resetChatSurface();}await loadConversations(true);}
+async function saveConversationSettings(){conversationMode=document.getElementById('response-mode').value;if(activeConversation)await fetch('/api/tutor/conversations',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:activeConversation,mode:conversationMode})});loadConversations(false);}
+function resetChatSurface(){document.getElementById('chat-log').innerHTML='<div class="chat-hero" id="chat-hero"><div style="display:flex;justify-content:center;"><img class="tutor-avatar official-avatar" src="/static/vendor/kubernetes.svg" alt="Kubernetes"></div><h1 class="t-greet">Como posso te ajudar?</h1><p class="t-sub">Esta conversa mantém contexto com segurança.</p></div>';}
+function loadChatFile(input){const file=input.files&&input.files[0];if(!file)return;if(file.size>10000){alert('O anexo deve ter no máximo 10 KB.');input.value='';return;}const reader=new FileReader();reader.onload=()=>{chatAttachment=String(reader.result||'');const p=document.getElementById('attachment-preview');p.classList.add('visible');p.innerHTML=`<span>${escH(file.name)} · ${file.size} bytes</span><button class="conversation-delete" style="position:static" onclick="clearAttachment()">remover</button>`;};reader.readAsText(file);}
+function clearAttachment(){chatAttachment='';document.getElementById('chat-file').value='';document.getElementById('attachment-preview').classList.remove('visible');}
+
 // ── histórico do chat: sobrevive ao reload (localStorage, cap 40) ──
 function chatLogPush(role, text) {
     try {
@@ -922,10 +979,10 @@ function restoreChatLog() {
         log.forEach(m => { m.r === 'u' ? addUser(m.t) : addTutor(mdLite(m.t)); });
     } catch (e) {}
 }
-function clearChatLog() {
+async function clearChatLog() {
+    if (activeConversation) { await fetch('/api/tutor/conversations?id=' + encodeURIComponent(activeConversation), {method:'DELETE'}); activeConversation=''; }
     try { localStorage.removeItem('k8slab-chat-log'); } catch (e) {}
-    document.getElementById('chat-log').innerHTML = '';
-    location.reload();
+    await newConversation();
 }
 
 // ── cancelar / tentar de novo ──
@@ -940,14 +997,26 @@ function retryChat() {
     document.getElementById('chat-text').value = lastChatText;
     sendChat();
 }
+function copyAnswer(btn) {
+    const slot=btn.closest('.t-content'), clone=slot.cloneNode(true);
+    clone.querySelectorAll('.answer-actions,.answer-feedback,.chat-card').forEach(x=>x.remove());
+    navigator.clipboard?.writeText(clone.innerText.trim()); btn.textContent='copiado'; setTimeout(()=>btn.textContent='copiar',1200);
+}
+function answerActions(slot, text) {
+    if(!slot||slot.querySelector('.answer-actions')) return;
+    const subject=String(text||'').replace(/[\n\r]+/g,' ').slice(0,500).replace(/'/g,'');
+    slot.insertAdjacentHTML('beforeend',`<div class="answer-actions"><button onclick="copyAnswer(this)">copiar</button><button onclick="sendSuggestion('Explique de forma mais simples: ${escH(subject)}')">simplificar</button><button onclick="sendSuggestion('Aprofunde com exemplos e trade-offs: ${escH(subject)}')">aprofundar</button><button onclick="sendSuggestion('Transforme este assunto em um lab hands-on seguro: ${escH(subject)}')">criar lab</button></div>`);
+}
 
 async function sendChat() {
     const ta = document.getElementById('chat-text');
     const text = ta.value.trim();
     if (!text || chatBusy) return;
+    if (!activeConversation) await newConversation();
     chatBusy = true;
     lastChatText = text;
     chatAbort = new AbortController();
+    document.getElementById('chat-log').setAttribute('aria-busy', 'true');
     const sendBtn = document.getElementById('send-btn');
     if (!sendBtnHTML) sendBtnHTML = sendBtn.innerHTML;
     // enquanto gera, o botão vira PARAR — geração longa não pode ser beco
@@ -971,7 +1040,7 @@ async function sendChat() {
     try {
         const r = await fetch('/api/tutor/chat/stream', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text, cert: chatCert }),
+            body: JSON.stringify({ message: text, cert: chatCert, conversation_id: activeConversation, mode: conversationMode, attachment: chatAttachment }),
             signal: chatAbort.signal
         });
         const reader = r.body?.getReader();
@@ -991,9 +1060,12 @@ async function sendChat() {
         // Recorta o texto da ação (o backend anexa a ação no fim do stream).
         const [txt, action] = splitAction(out);
         slot.innerHTML = mdLite(txt || '...');
+        answerActions(slot, text);
         chatLogPush('t', txt || '');
         if (action) renderAction(slot, action);
         addFeedback(slot, text);
+        clearAttachment();
+        loadConversations(false);
     } catch (e) {
         // cancelado ≠ erro: os dois oferecem retomar sem redigitar
         slot.innerHTML = (e && e.name === 'AbortError')
@@ -1002,6 +1074,7 @@ async function sendChat() {
     }
     clearInterval(waitTicker);
     chatBusy = false;
+    document.getElementById('chat-log').setAttribute('aria-busy', 'false');
     chatAbort = null;
     const sb = document.getElementById('send-btn');
     sb.disabled = false;
@@ -1100,7 +1173,8 @@ window.addEventListener('k8slab-lang', applyLang);
 // ── boot: painel + LLM pill + nudge proativo ────────────────
 (async function init() {
     applyLang();
-    restoreChatLog(); // a conversa sobrevive ao reload — reabrir não é recomeçar
+    await loadConversations(true);
+    if (!activeConversation) await newConversation();
     window.addEventListener('resize', tunePlaceholder);
     document.getElementById('op-details').addEventListener('toggle', function () {
         if (this.open) loadOperatorPanel();

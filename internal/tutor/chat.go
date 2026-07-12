@@ -107,6 +107,18 @@ func FreeChatReplyContext(ctx context.Context, msg string) (string, error) {
 	return llmChatReplyContext(ctx, msg)
 }
 
+func FreeChatConversationReplyContext(ctx context.Context, msg, history, mode string) (string, []string, error) {
+	prompt, report := BuildGroundedChatPromptWithContext(msg, history, mode)
+	if technicalQuestion(msg) && !report.Answerable {
+		return report.Refusal(), report.VerifiedSources(), nil
+	}
+	reply, err := llmGenerateContext(ctx, prompt, false, 90*time.Second, chatTokenBudget(msg)+400, chatModel())
+	if err != nil {
+		return "", nil, err
+	}
+	return FinalizeGroundedReply(reply, report), report.VerifiedSources(), nil
+}
+
 // sinônimos PT-BR → tópico do gerador
 var topicSynonyms = []struct {
 	re    *regexp.Regexp
