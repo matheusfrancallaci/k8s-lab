@@ -195,6 +195,24 @@ func (h *LabHandler) AdvanceSession(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// State devolve o progresso persistido do aluno nesta questão: os goals já
+// aprovados voltam verdes ao recarregar a página.
+func (h *LabHandler) State(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	o, ok := tutor.OutcomeFor(userID(r), r.PathValue("id"))
+	if !ok {
+		json.NewEncoder(w).Encode(map[string]any{"known": false}) //nolint:errcheck
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
+		"known":        true,
+		"approved":     o.Approved,
+		"passed_goals": o.PassedGoals,
+		"attempts":     o.Attempts,
+		"state":        o.State(),
+	})
+}
+
 func runCmd(cmdStr, userID string) (string, error) {
 	touchActivity()
 	cmd := wslShell(cmdStr)

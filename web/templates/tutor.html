@@ -232,6 +232,7 @@
 
     <div class="chat-top">
         <button class="painel-toggle" id="painel-toggle" onclick="togglePainel()">📋 <span data-t="painel">painel</span></button>
+        <button class="painel-toggle" style="display:inline-flex;" onclick="clearChatLog()" title="Apaga o histórico local desta conversa">🧹 limpar</button>
         <div class="llm-pill">
             <div id="llm-dot" style="width:6px;height:6px;border-radius:50%;background:var(--text-4);flex-shrink:0;"></div>
             <span id="llm-text">verificando IA local...</span>
@@ -906,15 +907,57 @@ function splitAction(s) {
     return [s.slice(0, i), action];
 }
 
+// ── histórico do chat: sobrevive ao reload (localStorage, cap 40) ──
+function chatLogPush(role, text) {
+    try {
+        const log = JSON.parse(localStorage.getItem('k8slab-chat-log') || '[]');
+        log.push({ r: role, t: String(text).slice(0, 2000) });
+        localStorage.setItem('k8slab-chat-log', JSON.stringify(log.slice(-40)));
+    } catch (e) {}
+}
+function restoreChatLog() {
+    try {
+        const log = JSON.parse(localStorage.getItem('k8slab-chat-log') || '[]');
+        if (!log.length) return;
+        log.forEach(m => { m.r === 'u' ? addUser(m.t) : addTutor(mdLite(m.t)); });
+    } catch (e) {}
+}
+function clearChatLog() {
+    try { localStorage.removeItem('k8slab-chat-log'); } catch (e) {}
+    document.getElementById('chat-log').innerHTML = '';
+    location.reload();
+}
+
+// ── cancelar / tentar de novo ──
+let chatAbort = null;
+let lastChatText = '';
+let sendBtnHTML = ''; // ícone original do enviar (SVG), restaurado pós-geração
+function cancelChat() {
+    if (chatAbort) chatAbort.abort();
+}
+function retryChat() {
+    if (chatBusy || !lastChatText) return;
+    document.getElementById('chat-text').value = lastChatText;
+    sendChat();
+}
+
 async function sendChat() {
     const ta = document.getElementById('chat-text');
     const text = ta.value.trim();
     if (!text || chatBusy) return;
     chatBusy = true;
-    document.getElementById('send-btn').disabled = true;
+    lastChatText = text;
+    chatAbort = new AbortController();
+    const sendBtn = document.getElementById('send-btn');
+    if (!sendBtnHTML) sendBtnHTML = sendBtn.innerHTML;
+    // enquanto gera, o botão vira PARAR — geração longa não pode ser beco
+    sendBtn.innerHTML = '■';
+    sendBtn.onclick = cancelChat;
+    sendBtn.setAttribute('aria-label', 'Cancelar geração');
     ta.value = ''; autoGrow(ta);
 
     addUser(text);
+    chatLogPush('u', text);
     const slot = addTyping();
     const labIntent = /\b(lab|laborat|hands.?on|pr[aá]tica|trilha)\b/i.test(text);
     const waitStates = labIntent ? ['Entendendo o lab...', 'Buscando evidencias...', 'Montando tarefas e validadores...', 'Rodando preflight...'] : ['Entendendo sua pergunta...', 'Consultando o contexto...', 'Preparando a resposta...'];
@@ -928,7 +971,8 @@ async function sendChat() {
     try {
         const r = await fetch('/api/tutor/chat/stream', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text, cert: chatCert })
+            body: JSON.stringify({ message: text, cert: chatCert }),
+            signal: chatAbort.signal
         });
         const reader = r.body?.getReader();
         const decoder = new TextDecoder();
@@ -947,14 +991,23 @@ async function sendChat() {
         // Recorta o texto da ação (o backend anexa a ação no fim do stream).
         const [txt, action] = splitAction(out);
         slot.innerHTML = mdLite(txt || '...');
+        chatLogPush('t', txt || '');
         if (action) renderAction(slot, action);
         addFeedback(slot, text);
     } catch (e) {
-        slot.innerHTML = 'algo deu errado por aqui — tenta de novo?';
+        // cancelado ≠ erro: os dois oferecem retomar sem redigitar
+        slot.innerHTML = (e && e.name === 'AbortError')
+            ? `geração cancelada. <button class="term-btn" style="color:var(--violet);padding:0 4px;" onclick="retryChat()">tentar de novo</button>`
+            : `algo deu errado por aqui. <button class="term-btn" style="color:var(--violet);padding:0 4px;" onclick="retryChat()">tentar de novo</button>`;
     }
     clearInterval(waitTicker);
     chatBusy = false;
-    document.getElementById('send-btn').disabled = false;
+    chatAbort = null;
+    const sb = document.getElementById('send-btn');
+    sb.disabled = false;
+    if (sendBtnHTML) sb.innerHTML = sendBtnHTML;
+    sb.onclick = sendChat;
+    sb.setAttribute('aria-label', 'Enviar');
     ta.focus();
     scrollBottom();
 }
@@ -1047,6 +1100,7 @@ window.addEventListener('k8slab-lang', applyLang);
 // ── boot: painel + LLM pill + nudge proativo ────────────────
 (async function init() {
     applyLang();
+    restoreChatLog(); // a conversa sobrevive ao reload — reabrir não é recomeçar
     window.addEventListener('resize', tunePlaceholder);
     document.getElementById('op-details').addEventListener('toggle', function () {
         if (this.open) loadOperatorPanel();

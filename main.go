@@ -165,6 +165,7 @@ func main() {
 	mux.HandleFunc("GET /lab/{id}/validate", lab.Validate)
 	mux.HandleFunc("POST /lab/{id}/validate", lab.Validate)
 	mux.HandleFunc("GET /lab/{id}/setup", lab.Setup)
+	mux.HandleFunc("GET /lab/{id}/state", lab.State)
 	mux.HandleFunc("POST /lab/{id}/teardown", lab.Teardown)
 
 	// Terminal WebSocket

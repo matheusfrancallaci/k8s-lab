@@ -141,6 +141,12 @@ func AuditGroundedReply(reply string, report AnswerabilityReport) GroundingAudit
 		}
 	}
 	maxSource := len(report.VerifiedSources())
+	// Corpus de evidência para ancoragem: o modelo local responde em PT sobre
+	// fontes em EN — identificadores técnicos (replicaset, kubelet, pod)
+	// sobrevivem à tradução. Exigir [Sn] em CADA frase mutilava respostas
+	// corretas com fontes verificadas anexas (falso positivo pego em validação
+	// ao vivo 2026-07-12): citação inline OU ancoragem no corpus contam.
+	corpus := strings.ToLower(report.Evidence + " " + report.Context)
 	for _, sentence := range regexp.MustCompile(`[.!?\n]+`).Split(reply, -1) {
 		sentence = strings.TrimSpace(sentence)
 		if sentence == "" || !technicalQuestion(sentence) {
@@ -156,6 +162,14 @@ func AuditGroundedReply(reply string, report AnswerabilityReport) GroundingAudit
 				valid = true
 			} else {
 				audit.InvalidRefs = append(audit.InvalidRefs, ref[0])
+			}
+		}
+		if !valid && corpus != "" {
+			for _, tok := range contentTokens(sentence) {
+				if strings.Contains(corpus, tok) {
+					valid = true
+					break
+				}
 			}
 		}
 		if valid {

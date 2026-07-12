@@ -222,7 +222,10 @@
                     {{if .Goals}}
                     <div class="goals-header">
                         <span class="task-label" style="margin-bottom:0;">Goals</span>
-                        <span class="goals-progress" id="goals-progress">0 / {{len .Goals}} completados</span>
+                        <span style="display:flex;align-items:center;gap:10px;">
+                            <button class="term-btn" style="color:var(--violet);" onclick="checkAllGoals(this)" title="Roda todos os validadores pendentes de uma vez">▶▶ verificar todos</button>
+                            <span class="goals-progress" id="goals-progress">0 / {{len .Goals}} completados</span>
+                        </span>
                     </div>
                     <div id="goals-list">
                         {{range $i, $g := .Goals}}
@@ -644,6 +647,42 @@ function markStreak() {
 fetch('/api/tutor/status').then(r => r.json())
     .then(d => { LLM_OK = !!(d.llm && d.llm.available); })
     .catch(() => {});
+
+// ─────────────────────────────────────────────────────────────
+// Restaura goals já aprovados (persistidos no perfil): recarregar a página
+// não zera o progresso visível — a jornada é do servidor, não da aba.
+// ─────────────────────────────────────────────────────────────
+function markGoalPassed(idx) {
+    const card = document.getElementById('goal-card-' + idx);
+    const btn = document.getElementById('goal-btn-' + idx);
+    if (!card || !btn || btn.classList.contains('success')) return;
+    card.className = 'goal-card state-success';
+    btn.className = 'goal-check-btn success';
+    btn.textContent = '✓ Correto!';
+    btn.disabled = true;
+    completedGoals++;
+    const prog = document.getElementById('goals-progress');
+    if (prog) prog.textContent = completedGoals + ' / ' + totalGoals + ' completados';
+}
+(async function restoreGoals() {
+    if (EXAM) return; // exame é estrito: começa do zero
+    try {
+        const d = await fetch('/lab/{{.Question.ID}}/state').then(r => r.json());
+        if (!d.known) return;
+        const passed = d.passed_goals || [];
+        if (passed.length) passed.forEach(markGoalPassed);
+        else if (d.approved) for (let i = 0; i < totalGoals; i++) markGoalPassed(i);
+    } catch (e) {}
+})();
+
+// Roda todos os validadores pendentes de uma vez (cada CHECK é independente).
+function checkAllGoals(btn) {
+    btn.disabled = true;
+    document.querySelectorAll('.goal-check-btn.idle, .goal-check-btn.fail').forEach((b, i) => {
+        setTimeout(() => b.click(), i * 350); // escalona para não afogar o cluster
+    });
+    setTimeout(() => { btn.disabled = false; }, 2000);
+}
 
 // Explica um goal que falhou usando o LLM local (sem custo, sem nuvem)
 async function tutorExplain(idx, btnEl) {

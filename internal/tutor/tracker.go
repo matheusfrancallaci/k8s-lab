@@ -639,6 +639,19 @@ func Journey(userID string) JourneySummary {
 	return js
 }
 
+// OutcomeFor devolve o estado persistido de UMA questão — restaura os goals
+// verdes ao recarregar a página do lab (a jornada é do servidor, não da aba).
+func OutcomeFor(userID, questionID string) (QuestionOutcome, bool) {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	o := p.Activity[strings.TrimSpace(questionID)]
+	if o == nil {
+		return QuestionOutcome{}, false
+	}
+	return *o, true
+}
+
 // OutcomesFor devolve o estado honesto de um conjunto de questões (fim de
 // sessão): quantas aprovadas, puladas, com solução aberta etc.
 func OutcomesFor(userID string, questionIDs []string) map[string]int {
