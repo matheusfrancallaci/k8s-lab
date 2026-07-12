@@ -218,8 +218,8 @@ func ensureArgoCDRootpathLocked() {
 	if err != nil || strings.Contains(string(out), "rootpath") {
 		return
 	}
-	wslShell(`kubectl patch deployment argocd-server -n argocd --type=json -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--rootpath=/argocd"}]'`).Run()          //nolint:errcheck
-	wslShell("kubectl rollout status deployment/argocd-server -n argocd --timeout=120s 2>/dev/null").Run() //nolint:errcheck
+	wslShell(`kubectl patch deployment argocd-server -n argocd --type=json -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--rootpath=/argocd"}]'`).Run() //nolint:errcheck
+	wslShell("kubectl rollout status deployment/argocd-server -n argocd --timeout=120s 2>/dev/null").Run()                                                                           //nolint:errcheck
 }
 
 // doStopPortForwardLocked kills the tracked subprocess. Caller must hold argoCDMu.
