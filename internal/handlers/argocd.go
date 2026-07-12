@@ -197,8 +197,9 @@ func ArgoCDProxyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	argoCDMu.Lock()
 	scheme := argoCDPFScheme
+	port := argoCDLocalPort // sob o mutex: a porta rotaciona a cada restart
 	argoCDMu.Unlock()
-	target, err := url.Parse(fmt.Sprintf("%s://127.0.0.1:%d", scheme, argoCDLocalPort))
+	target, err := url.Parse(fmt.Sprintf("%s://127.0.0.1:%d", scheme, port))
 	if err != nil {
 		http.Error(w, "proxy indisponível", http.StatusServiceUnavailable)
 		return
@@ -259,6 +260,15 @@ func doStartPortForward() error {
 	// Try port 80 (HTTP, requires --insecure patch) then fall back to 443 (HTTPS).
 	// --address=0.0.0.0 ensures the port is reachable from Windows even without WSL
 	// mirrored-networking, because it binds on all WSL interfaces.
+	// A porta LOCAL rotaciona a cada start (8090-8093): o kill do pf anterior
+	// pode deixar o socket preso (TIME_WAIT/filho órfão do sh) e o rebind na
+	// MESMA porta falhava para sempre — "reiniciar port-forward" matava o
+	// ArgoCD até reiniciar o app (visto em produção 2026-07-12). Status e
+	// proxy leem argoCDLocalPort sob o mutex, então seguem a rotação.
+	argoCDLocalPort++
+	if argoCDLocalPort > 8093 || argoCDLocalPort < 8090 {
+		argoCDLocalPort = 8090
+	}
 	for _, target := range []struct {
 		svcPort int
 		scheme  string

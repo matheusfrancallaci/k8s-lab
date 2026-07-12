@@ -38,7 +38,9 @@
       "PowerShell(az snapshot list -g k8slab-rg --query \"[?starts_with\\(name, 'k8slab-autobackup'\\)].{name:name, gb:diskSizeGb, state:provisioningState}\" -o table)",
       "PowerShell(curl.exe -s --max-time 15 https://k8slab-b9ue3.eastus2.cloudapp.azure.com/healthz)",
       "Bash(curl -sk -o /dev/null -D - --max-time 15 \"https://k8slab-b9ue3.eastus2.cloudapp.azure.com/argocd/\")",
-      "PowerShell(git add -A; $env:SKIP_TESTS='1'; git commit -F \"C:\\\\Users\\\\mathe\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--desenv-estudo-app\\\\1c9f2dbf-5925-4e7c-87fd-7acd94ea07e5\\\\scratchpad\\\\commit-msg.txt\" 2>&1 | Select-Object -Last 2; $env:SKIP_TESTS=''; git log --oneline -1)"
+      "PowerShell(git add -A; $env:SKIP_TESTS='1'; git commit -F \"C:\\\\Users\\\\mathe\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--desenv-estudo-app\\\\1c9f2dbf-5925-4e7c-87fd-7acd94ea07e5\\\\scratchpad\\\\commit-msg.txt\" 2>&1 | Select-Object -Last 2; $env:SKIP_TESTS=''; git log --oneline -1)",
+      "Bash(node -e ' *)",
+      "PowerShell(git add -A; $env:SKIP_TESTS='1'; git commit -F \"C:\\\\Users\\\\mathe\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--desenv-estudo-app\\\\1c9f2dbf-5925-4e7c-87fd-7acd94ea07e5\\\\scratchpad\\\\commit-msg.txt\" 2>&1 | Select-Object -Last 1; $env:SKIP_TESTS=''; .\\\\scripts\\\\redeploy.ps1)"
     ]
   }
 }

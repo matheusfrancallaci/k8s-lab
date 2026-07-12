@@ -568,14 +568,15 @@ function trilhaCard(d) {
             : st === 'mastered' ? t('dominado')
             : (x.due_reviews ? `${x.due_reviews} ${t('revisoes_seguram')}` : t('fronteira'));
         const score = x.attempts ? Math.round((x.score || 0) * 100) + '% · ' + x.attempts + 'x' : t('novo');
-        // Trilha RECOMENDA a ordem, não bloqueia: travado continua clicável
-        // (decisão do dono, 2026-07-12 — "avançar não deve bloquear conteúdo").
+        // Trilha RECOMENDA a ordem, não bloqueia: travado continua clicável —
+        // mas pela LINHA (menos ruído que um botão por linha; feedback do dono).
         const cta = st === 'current'
             ? `<button class="btn btn-primary btn-sm" onclick="quickLab(this, '${escH(x.topic || '')}', 2)">${t('treinar')}</button>`
-            : st === 'locked'
-            ? `<button class="btn btn-outline btn-sm" title="${escH(t('fora_ordem'))}" onclick="quickLab(this, '${escH(x.topic || '')}', 2)">${t('treinar')}</button>`
             : `<span class="mastery-score">${score}</span>`;
-        return `<div class="mastery-row ${st}">
+        const rowClick = st === 'locked'
+            ? ` style="cursor:pointer;" title="${escH(t('fora_ordem'))}" onclick="quickLab(this.querySelector('.mastery-topic'), '${escH(x.topic || '')}', 2)"`
+            : '';
+        return `<div class="mastery-row ${st}"${rowClick}>
             <span class="mastery-icon" style="color:${color};">${icon}</span>
             <div class="mastery-topic">${escH(x.topic)}<small>${sub}</small></div>
             ${cta}
@@ -688,8 +689,13 @@ function fraquezasCard(d) {
 
 function renderPainel(d) {
     statusCache = d;
+    // Menos na mesma tela (feedback do dono): o essencial fica visível
+    // (objetivo → ação do dia → trilha); métricas e listas secundárias vivem
+    // colapsadas — quem quer detalhe abre.
+    const extras = retencaoCard(d) + evolucaoCard(d) + coberturaCard(d) + cadernoCard(d) + fraquezasCard(d);
     document.getElementById('painel-body').innerHTML =
-        objetivoCard(d) + acaoDoDia(d) + trilhaCard(d) + retencaoCard(d) + evolucaoCard(d) + coberturaCard(d) + cadernoCard(d) + fraquezasCard(d);
+        objetivoCard(d) + acaoDoDia(d) + trilhaCard(d) +
+        (extras ? `<details class="op-details"><summary>📊 métricas e revisões</summary><div class="op-body">${extras}</div></details>` : '');
 }
 
 async function refreshPainel() {
