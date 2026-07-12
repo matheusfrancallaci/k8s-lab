@@ -1,0 +1,17 @@
+title = "K8s Study Lab secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Vendored minified xterm distribution"
+targetRules = ["generic-api-key"]
+paths = ['''web/static/vendor/xterm\.js''']
+
+[[allowlists]]
+description = "Explicit dummy credentials used by the CKAD Secret exercise"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+regexes = ['''API_(KEY|SECRET)=(abc123|xyz789)''']
+paths = ['''questions/ckad/lab\.yaml''']
