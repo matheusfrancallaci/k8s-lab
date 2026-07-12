@@ -312,7 +312,13 @@ func persist(qs []models.Question) error {
 		return err
 	}
 	name := fmt.Sprintf("gen-%s.yaml", time.Now().Format("20060102-150405"))
-	return os.WriteFile(filepath.Join(dir, name), b, 0o644)
+	if err := os.WriteFile(filepath.Join(dir, name), b, 0o644); err != nil {
+		return err
+	}
+	// Juiz amostral: modelo FORTE (gateway remoto) audita uma fração do que o
+	// gerador publica — controle de qualidade contínuo a custo de centavos.
+	maybeJudgeLabs(qs)
+	return nil
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

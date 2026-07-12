@@ -101,6 +101,59 @@ var glossary = map[string]string{
 // distratores de flags para quizzes cloze de comandos
 var flagPool = []string{"--replicas", "--image", "--port", "--namespace", "--selector", "--dry-run", "--force", "--grace-period", "--from-literal", "--target-port", "--type", "--verb", "--resource", "--labels", "--all"}
 
+// confusionSets: alternativa errada BOA é a que o aluno de verdade confunde na
+// prova — não uma flag aleatória. Cada conjunto agrupa termos que se confundem
+// entre si; quando a resposta certa pertence a um conjunto, os distratores
+// saem DELE primeiro (o pool aleatório vira só o complemento).
+var confusionSets = [][]string{
+	{"--replicas", "--scale", "--instances"},
+	{"--namespace", "--context", "--cluster"},
+	{"--dry-run", "--validate", "--force"},
+	{"--from-literal", "--from-file", "--from-env-file"},
+	{"--port", "--target-port", "--node-port", "--container-port"},
+	{"--selector", "--labels", "--field-selector"},
+	{"ClusterIP", "NodePort", "LoadBalancer", "ExternalName"},
+	{"kubectl", "kubeadm", "kubelet", "kube-proxy"},
+	{"requests", "limits", "quotas"},
+	{"ConfigMap", "Secret", "DownwardAPI"},
+	{"Deployment", "StatefulSet", "DaemonSet", "ReplicaSet"},
+	{"PersistentVolume", "PersistentVolumeClaim", "StorageClass"},
+	{"Role", "ClusterRole", "RoleBinding", "ClusterRoleBinding"},
+	{"taint", "toleration", "affinity", "nodeSelector"},
+	{"Ingress", "Service", "EndpointSlice", "NetworkPolicy"},
+	{"liveness", "readiness", "startup"},
+}
+
+// confusionDistractors devolve distratores do conjunto de confusão da resposta
+// (case-insensitive), sem incluir a própria resposta nem termos já no contexto.
+func confusionDistractors(answer, context string, max int) []string {
+	var out []string
+	ctxLower := strings.ToLower(context)
+	for _, set := range confusionSets {
+		inSet := false
+		for _, term := range set {
+			if strings.EqualFold(term, answer) {
+				inSet = true
+				break
+			}
+		}
+		if !inSet {
+			continue
+		}
+		for _, term := range set {
+			if len(out) >= max {
+				break
+			}
+			if strings.EqualFold(term, answer) || strings.Contains(ctxLower, strings.ToLower(term)) {
+				continue
+			}
+			out = append(out, term)
+		}
+		break
+	}
+	return out
+}
+
 // Ingest analisa o texto e gera até wantLabs labs + wantQuiz quizzes.
 // Retorna as questões geradas + relatório do que foi visto e do que falta.
 func Ingest(text, cert, topic string, level, wantLabs, wantQuiz int) ([]models.Question, IngestReport, error) {
@@ -549,12 +602,15 @@ func quizFromCommand(cmd, cert, topic string) (models.Question, bool) {
 	target := flags[rand.IntN(len(flags))][1]
 	masked := strings.Replace(cmd, target, "____", 1)
 
+	// Distratores: primeiro os do conjunto de CONFUSÃO real (o que o aluno
+	// mistura na prova), depois o pool genérico só para completar 4.
 	opts := []string{target}
+	opts = append(opts, confusionDistractors(target, cmd, 3)...)
 	for _, f := range flagPool {
 		if len(opts) >= 4 {
 			break
 		}
-		if f != target && !strings.Contains(cmd, f) {
+		if f != target && !strings.Contains(cmd, f) && !containsFold(opts, f) {
 			opts = append(opts, f)
 		}
 	}

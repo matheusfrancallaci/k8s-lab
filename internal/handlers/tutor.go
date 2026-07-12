@@ -68,6 +68,29 @@ func (h *TutorHandler) Status(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Author engorda o banco em lote: labs nível prova com verificação executável
+// OBRIGATÓRIA (reprovado não entra). Usa o gateway remoto quando configurado.
+func (h *TutorHandler) Author(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var body struct {
+		Cert  string `json:"cert"`
+		Topic string `json:"topic"`
+		Count int    `json:"count"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"error": "payload inválido"}) //nolint:errcheck
+		return
+	}
+	qs, rep, err := tutor.AuthorExamBatch(body.Cert, body.Topic, body.Count)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"error": err.Error(), "report": rep}) //nolint:errcheck
+		return
+	}
+	h.repo.Add(qs)
+	PrewarmLabImages(qs)
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "report": rep}) //nolint:errcheck
+}
+
 // Goal persiste o objetivo do aluno (onboarding): cert, data da prova e nível.
 func (h *TutorHandler) Goal(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

@@ -70,6 +70,11 @@ func (h *LabHandler) Show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q = tutor.PrepareLabForDelivery(q)
+	// Gabarito PROVADO quebrado pela execução não chega ao aluno.
+	if reason := tutor.DeliveryBlockReason(q); reason != "" {
+		http.Error(w, "este lab gerado foi reprovado na verificação executável ("+reason+") — gere outro pelo tutor", http.StatusConflict)
+		return
+	}
 	prevID, nextID := h.repo.GetLabNeighbors(id)
 
 	// Contexto do tutor: eventos do terminal serão atribuídos a esta questão.

@@ -288,6 +288,20 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 		}
 	}
 
+	// 1.9. Lab composto estilo prova — cenário multi-tarefa com crédito parcial
+	if regexp.MustCompile(`(?i)\b(estilo prova|desafio composto|quest[aã]o composta|lab de prova|multi.?tarefa)\b`).MatchString(l) {
+		q, err := GenerateExamComposite(cert, 3)
+		if err != nil {
+			return ChatResult{Reply: "Não consegui compor um lab estilo prova agora: " + err.Error()}
+		}
+		sid, first, total := createSession([]string{q.ID})
+		return ChatResult{
+			Reply:     fmt.Sprintf("🎯 Montei um **lab estilo prova de %s**: %d tarefas independentes com crédito parcial por goal — como na certificação real. Sem pressa, mas sem dica.", cert, len(q.Goals)),
+			Action:    sessionAction(sid, first, total, []models.Question{q}),
+			Questions: []models.Question{q},
+		}
+	}
+
 	// 2. Modo incidente
 	if regexp.MustCompile(`incidente|troubleshoot|quebra|fora do ar|diagn[oó]stic`).MatchString(l) {
 		qs, err := GenerateIncidents(cert, detectCount(msg, 2))

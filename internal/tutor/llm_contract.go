@@ -48,6 +48,14 @@ func llmContractSchema(contract string) any {
 				"reason": stringField,
 			},
 		},
+		"judge": map[string]any{
+			"type": "object", "additionalProperties": false, "required": []string{"verdict", "nivel", "problema"},
+			"properties": map[string]any{
+				"verdict":  map[string]any{"type": "string", "enum": []string{"aprovado", "reprovado"}},
+				"nivel":    map[string]any{"type": "integer", "minimum": 1, "maximum": 5},
+				"problema": map[string]any{"type": "string"},
+			},
+		},
 		"curriculum": map[string]any{
 			"type": "object", "additionalProperties": false, "required": []string{"domains"},
 			"properties": map[string]any{"domains": map[string]any{
@@ -95,6 +103,13 @@ func validateLLMContract(contract, raw string) error {
 	required := map[string][]string{
 		"lab-spec":        {"question", "solution", "validation", "expected", "hint", "explanation"},
 		"topic-selection": {"topics", "reason"},
+	}
+	if contract == "judge" {
+		v, _ := obj["verdict"].(string)
+		if v != "aprovado" && v != "reprovado" {
+			return fmt.Errorf("contrato judge requer verdict aprovado|reprovado")
+		}
+		return nil
 	}
 	if contract == "curriculum" {
 		// domains vazio é resposta VÁLIDA ("o material não é guia de exame") —

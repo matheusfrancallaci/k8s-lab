@@ -1,0 +1,297 @@
+questions:
+    - id: custom-4a9bcbde
+      cert: CKA
+      topic: Estilo Prova
+      difficulty: hard
+      type: lab
+      source: generated
+      question: "**Cenário de prova (CKA)** — você assumiu um cluster do time e precisa executar 3 tarefas independentes. Cada tarefa pontua separadamente (crédito parcial), como na prova real.\n\n**Tarefa 1 · Troubleshooting** — \U0001F6A8 **INCIDENTE** — monitoramento alerta: **0 réplicas** respondendo para **lunar-gateway**. Um deploy de sexta-feira deixou o serviço zerado.\n\nInvestigue e restaure **pelo menos 2 réplicas** saudáveis.\n\nFoco do treino: **Troubleshooting**.\n\n**Tarefa 2 · Scheduling** — Treino CKA de scheduling: taint o primeiro node com **dedicated=debug:NoSchedule** e crie o Pod **quartz-worker-tol** com toleration correspondente.\n\n**Tarefa 3 · Autoscaling** — Crie um HPA para o Deployment **quartz-portal**: **min=2**, **max=5**, **CPU 50%**.\n\nFoco do treino: **Autoscaling**.\n\nFoco do treino: **Estilo Prova**.\n\nResolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION."
+      options: []
+      answer: 0
+      explanation: Lab composto estilo prova cobrindo Troubleshooting, Scheduling, Autoscaling. Na certificação real as questões encadeiam restrições de tópicos diferentes — treine alternar de contexto sem perder o namespace e o nome exato de cada recurso.
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: |-
+        # Tarefa 1 — Troubleshooting
+        kubectl scale deployment lunar-gateway --replicas=2
+
+        # Tarefa 2 — Scheduling
+        kubectl taint node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') dedicated=debug:NoSchedule --overwrite; kubectl apply -f pod.yaml
+
+        # Tarefa 3 — Autoscaling
+        kubectl autoscale deployment quartz-portal --name=quartz-portal-hpa --cpu-percent=50 --min=2 --max=5
+      validation: null
+      goals:
+        - description: '[Tarefa 1] **lunar-gateway** com **2+ réplicas prontas** (serviço restaurado)'
+          hint: ""
+          validation:
+            command: R=$(kubectl get deploy lunar-gateway -o jsonpath='{.status.readyReplicas}' 2>/dev/null); [ "${R:-0}" -ge 2 ] && echo RECOVERED-$R || echo DOWN
+            expected_contains: RECOVERED
+            expected_output: ""
+        - description: '[Tarefa 2] Primeiro node tem taint **dedicated=debug:NoSchedule**'
+          hint: Use kubectl taint node <node> key=value:NoSchedule --overwrite.
+          validation:
+            command: kubectl get node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') -o jsonpath='{.spec.taints[?(@.key=="dedicated")].value}:{.spec.taints[?(@.key=="dedicated")].effect}' 2>/dev/null
+            expected_contains: debug:NoSchedule
+            expected_output: ""
+        - description: '[Tarefa 2] Pod **quartz-worker-tol** tolera o taint e esta Running'
+          hint: Adicione spec.tolerations no manifesto do Pod.
+          validation:
+            command: kubectl -n kube-system get pod quartz-worker-tol -o jsonpath='{.spec.tolerations[?(@.key=="dedicated")].value}:{.status.phase}' 2>/dev/null
+            expected_contains: debug:Running
+            expected_output: ""
+        - description: '[Tarefa 3] HPA **quartz-portal-hpa** aponta para o Deployment **quartz-portal**'
+          hint: kubectl autoscale deployment ... --name ...
+          validation:
+            command: kubectl -n kube-system get hpa quartz-portal-hpa -o jsonpath='{.spec.scaleTargetRef.name}:{.spec.minReplicas}:{.spec.maxReplicas}' 2>/dev/null
+            expected_contains: quartz-portal:2:5
+            expected_output: ""
+        - description: '[Tarefa 3] HPA usa alvo de **50% CPU**'
+          hint: Confira o campo averageUtilization.
+          validation:
+            command: kubectl -n kube-system get hpa quartz-portal-hpa -o jsonpath='{.spec.metrics[0].resource.target.averageUtilization}' 2>/dev/null
+            expected_contains: "50"
+            expected_output: ""
+      setup:
+        - description: Provisionando a aplicação...
+          command: kubectl -n kube-system create deployment lunar-gateway --image=nginx:1.21 --replicas=2 2>/dev/null || true
+        - description: "\U0001F4A5 Injetando a falha..."
+          command: kubectl -n kube-system scale deployment lunar-gateway --replicas=0 2>/dev/null || true
+        - description: Instalando Metrics Server se necessario...
+          command: kubectl get deploy metrics-server -n kube-system >/dev/null 2>&1 || kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml 2>&1 | tail -3; kubectl get deploy metrics-server -n kube-system -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null | grep -q -- '--kubelet-insecure-tls' || kubectl patch deployment metrics-server -n kube-system --type=json -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]' 2>/dev/null || true; kubectl rollout status deployment/metrics-server -n kube-system --timeout=180s 2>/dev/null || true
+        - description: Criando workload alvo quartz-portal com requests de CPU...
+          command: kubectl -n kube-system create deployment quartz-portal --image=registry.k8s.io/hpa-example --port=80 2>/dev/null || true; kubectl set resources deployment/quartz-portal --requests=cpu=100m --limits=cpu=200m 2>/dev/null || true; kubectl rollout status deployment/quartz-portal --timeout=120s 2>/dev/null || true
+      teardown:
+        - kubectl -n kube-system delete deployment lunar-gateway --ignore-not-found=true
+        - kubectl -n kube-system delete pod quartz-worker-tol --ignore-not-found=true
+        - kubectl taint node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') dedicated- 2>/dev/null || true
+        - kubectl -n kube-system delete hpa quartz-portal-hpa --ignore-not-found=true
+        - kubectl -n kube-system delete deployment quartz-portal --ignore-not-found=true
+      lab_spec:
+        objective: Criar e validar autoscaling com HorizontalPodAutoscaler
+        scenario: 'Pedido do aluno: lab estilo prova'
+        namespace: kube-system
+        validation_mode: compiled
+        skills:
+            - CKA
+            - Estilo Prova
+            - metrics-server
+            - autoscaling
+        estimated_minutes: 31
+        dependencies:
+            - name: metrics-server
+              kind: kubernetes addon
+              install_action: auto setup
+              status_command: kubectl get deploy metrics-server -n kube-system
+              required: true
+        sources:
+            - title: Troubleshooting
+              url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/
+              section: Troubleshooting
+            - title: Troubleshooting
+              url: https://kubernetes.io/docs/tasks/debug/debug-cluster/
+              section: Troubleshooting
+            - title: Troubleshooting
+              url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/
+              section: Troubleshooting
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+              section: Workloads & Scheduling
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+              section: Cluster Architecture, Installation & Configuration
+        evidence:
+            - domain: Troubleshooting
+              weight: 30
+              confidence: 100
+              matched_terms:
+                - troubleshooting
+                - kubernetes
+                - debug
+                - cluster
+              sources:
+                - title: Troubleshooting
+                  url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/
+                  section: Troubleshooting
+                - title: Troubleshooting
+                  url: https://kubernetes.io/docs/tasks/debug/debug-cluster/
+                  section: Troubleshooting
+                - title: Troubleshooting
+                  url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/
+                  section: Troubleshooting
+            - domain: Workloads & Scheduling
+              weight: 15
+              confidence: 100
+              matched_terms:
+                - workloads & scheduling
+                - scheduling
+                - kubernetes
+                - deployment
+                - pod
+                - autoscale
+                - node
+                - taint
+              sources:
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+                  section: Workloads & Scheduling
+            - domain: Cluster Architecture, Installation & Configuration
+              weight: 25
+              confidence: 50
+              matched_terms:
+                - cluster
+                - kubernetes
+                - resources
+              sources:
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+                  section: Cluster Architecture, Installation & Configuration
+        evidence_score: 100
+        chunks:
+            - id: 09faff71705c
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` kubectl set image deployment.v1.apps/nginx-deployment nginx=nginx:1.16.1 ``` or use the following command: ``` kubectl set image deployment/nginx-deployment nginx=nginx:1.16.1...'
+              relevance: 49
+            - id: 3684a5a7d077
+              domain: Troubleshooting
+              title: kubernetes.io / debug pods
+              url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/
+              excerpt: Look at the state of the containers in the pod. Are they all Running? Have there been recent restarts? Continue debugging depending on the state of the pods. My pod stays pending...
+              relevance: 46
+            - id: 1beb51332bfa
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` deployment "nginx-deployment" successfully rolled out ``` Get more details on your updated Deployment: After the rollout succeeds, you can view the Deployment by running kubec...'
+              relevance: 45
+        plan:
+            - 'Preparar: Provisionando a aplicação...'
+            - "Preparar: \U0001F4A5 Injetando a falha..."
+            - 'Preparar: Instalando Metrics Server se necessario...'
+            - 'Preparar: Criando workload alvo quartz-portal com requests de CPU...'
+            - 'Validar: [Tarefa 1] **lunar-gateway** com **2+ réplicas prontas** (serviço restaurado)'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - '[Tarefa 1] **lunar-gateway** com **2+ réplicas prontas** (serviço restaurado)'
+            - '[Tarefa 2] Primeiro node tem taint **dedicated=debug:NoSchedule**'
+            - '[Tarefa 2] Pod **quartz-worker-tol** tolera o taint e esta Running'
+            - '[Tarefa 3] HPA **quartz-portal-hpa** aponta para o Deployment **quartz-portal**'
+            - '[Tarefa 3] HPA usa alvo de **50% CPU**'
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        lab_plan:
+            exact_topic: Estilo Prova
+            cert: CKA
+            checked_at: "2026-07-12"
+            source_version: fontes internas/RAG, verificado 2026-07-12
+            namespace: kube-system
+            resources:
+                - pod
+                - deployment
+                - hpa
+            validations:
+                - R=$(kubectl get deploy lunar-gateway -o jsonpath='{.status.readyReplicas}' 2>/dev/null); [ "${R:-0}" -ge 2 ] && echo RECOVERED-$R || echo DOWN
+                - kubectl get node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') -o jsonpath='{.spec.taints[?(@.key=="dedicated")].value}:{.spec.taints[?(@.key=="dedicated")].effect}' 2>/dev/null
+                - kubectl -n kube-system get pod quartz-worker-tol -o jsonpath='{.spec.tolerations[?(@.key=="dedicated")].value}:{.status.phase}' 2>/dev/null
+                - kubectl -n kube-system get hpa quartz-portal-hpa -o jsonpath='{.spec.scaleTargetRef.name}:{.spec.minReplicas}:{.spec.maxReplicas}' 2>/dev/null
+                - kubectl -n kube-system get hpa quartz-portal-hpa -o jsonpath='{.spec.metrics[0].resource.target.averageUtilization}' 2>/dev/null
+            risks: []
+            preflight_checks:
+                - enunciado em modo desafio
+                - 5 goal(s) declarados
+                - 5 validador(es) automaticos
+                - solucao reproduzivel declarada
+                - 'namespace alinhado: kube-system'
+                - cleanup declarado
+                - fonte/evidencia rastreavel
+            sources:
+                - title: Troubleshooting
+                  url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/
+                  section: Troubleshooting
+                - title: Troubleshooting
+                  url: https://kubernetes.io/docs/tasks/debug/debug-cluster/
+                  section: Troubleshooting
+                - title: Troubleshooting
+                  url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/
+                  section: Troubleshooting
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+                  section: Workloads & Scheduling
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+                  section: Cluster Architecture, Installation & Configuration
+        quality:
+            score: 100
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - goal 1 tem resultado verificavel
+                - goal 2 tem resultado verificavel
+                - goal 3 tem resultado verificavel
+                - goal 4 tem resultado verificavel
+                - goal 5 tem resultado verificavel
+                - teardown definido
+                - fonte oficial associada
+                - chunks RAG associados
+                - evidencia curricular forte
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+                - setup automatizado
+                - namespace de validacao definido
+                - validacao compilada
+                - plano do lab compilado
+            warnings: []
+        readiness:
+            state: compiled
+            version: "2"
+            content_digest: sha256:ea34fa22a63d82dfe18a76aff2ab928562f70a9da4c98fb72ac1cc424855d590
+            checked_at: "2026-07-12T09:18:20Z"
+            executable: false
+            setup_verified: false
+            solve_verified: false
+            checks_verified: false
+            cleanup_verified: false
+            warnings:
+                - verificacao executavel ainda nao concluida

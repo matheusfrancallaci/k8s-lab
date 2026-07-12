@@ -12,6 +12,11 @@ if [ -f /sys/fs/cgroup/cgroup.controllers ]; then
         > /sys/fs/cgroup/cgroup.subtree_control 2>/dev/null || true
 fi
 
+# Verificação executável de labs gerados LIGADA por padrão na imagem: aqui há
+# k3s embutido, então nenhum lab gerado chega ao aluno sem a solução ter sido
+# executada num namespace efêmero. Dev local/testes seguem opt-in via env.
+export K8S_LAB_VERIFY_GENERATED="${K8S_LAB_VERIFY_GENERATED:-1}"
+
 echo "[entrypoint] iniciando cluster k3s local..."
 # --snapshotter=native: overlayfs não monta dentro do Docker (DinD).
 k3s server \
