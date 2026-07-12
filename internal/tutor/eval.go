@@ -182,6 +182,15 @@ func runHistoricalRegressionPrompt(h PromptQualityCase) GoldenEvalCaseResult {
 	}
 
 	cert := routeCertForLabRequest(h.ActiveCert, h.Prompt, h.Topic)
+	// Baseline histórico pode ter congelado um BUG de roteamento (ex.: KCNA
+	// caía em CKA). Se o prompt cita explicitamente uma cert e o roteamento
+	// novo vai para ELA, isso é correção, não regressão — o caso passa com a
+	// nota registrada e sai do replay literal.
+	if named, ok := certNamedInMessage(h.Prompt); ok && !strings.EqualFold(h.Cert, named) && strings.EqualFold(cert, named) {
+		res.Cert = cert
+		check(true, "roteamento corrigido para a cert citada no prompt ("+named+") — baseline histórico ("+h.Cert+") era o bug")
+		return finishGoldenResult(res, totalChecks, okChecks)
+	}
 	topic := exactTopicForRequest(cert, h.Prompt)
 	if topic == "" {
 		topic = detectTopic(h.Prompt)

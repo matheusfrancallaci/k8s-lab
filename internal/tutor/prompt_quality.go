@@ -312,6 +312,11 @@ func HistoricalRegressionPrompts(limit int) []PromptQualityCase {
 		if c.Prompt == "" || c.Cert == "" || c.Topic == "" || c.ActionType != "session" {
 			continue
 		}
+		// Prompt com URL depende de rede+LLM na reexecução — não é replay
+		// determinístico do gerador; essa cobertura vive no eval de grounding.
+		if urlRe.MatchString(c.Prompt) {
+			continue
+		}
 		if seen[c.ID] {
 			continue
 		}
