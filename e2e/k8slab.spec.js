@@ -109,7 +109,13 @@ test('tutor oferece conversas persistentes, modos e anexos acessiveis', async ({
   await page.goto('/tutor');
   await expect(page.locator('.conversation-rail')).toBeVisible();
   await expect(page.locator('#response-mode')).toHaveValue(/didactic|short|deep|diagnostic|exam/);
-  await expect(page.locator('button', { hasText: 'Anexar YAML' })).toBeVisible();
+  await expect(page.locator('button', { hasText: 'Anexar arquivo' })).toBeVisible();
+  await expect(page.locator('.tutor-tab')).toHaveCount(4);
+  await page.locator('.tutor-tab', { hasText: 'Progresso' }).click();
+  await expect(page.locator('#painel')).toHaveClass(/active/);
+  await page.locator('.tutor-tab', { hasText: 'Fontes' }).click();
+  await expect(page.locator('#sources-pane')).toHaveClass(/active/);
+  await expect(page.locator('body')).not.toContainText(/cache hit|cache miss/i);
   const before = await page.locator('.conversation-item').count();
   await page.locator('.new-chat').click();
   await expect.poll(() => page.locator('.conversation-item').count()).toBeGreaterThanOrEqual(before + 1);

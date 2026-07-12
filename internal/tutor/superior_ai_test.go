@@ -45,6 +45,14 @@ func TestGroundingAuditRejectsInjectionAndInventedClaims(t *testing.T) {
 	}
 }
 
+func TestGroundingAuditReturnsClaimLevelEvidence(t *testing.T) {
+	report := AnswerabilityReport{Sources: []string{"https://kubernetes.io/docs/concepts/workloads/pods/"}, Evidence: "Pods execute containers", Cert: "CKA"}
+	audit := AuditGroundedReply("Pods executam containers [S1].", report)
+	if !audit.Passed || len(audit.Details) != 1 || !audit.Details[0].Supported || len(audit.Details[0].SourceIDs) != 1 {
+		t.Fatalf("evidencia por claim inesperada: %+v", audit)
+	}
+}
+
 func TestLabReadinessDigestChangesWithContent(t *testing.T) {
 	q := models.Question{ID: "ready-1", Cert: models.CKA, Topic: "Workloads", Type: models.Lab, Source: models.SourceGenerated, Question: "Escale o workload", AnswerCommand: "kubectl scale deploy web --replicas=2"}
 	a := compiledLabReadiness(q)

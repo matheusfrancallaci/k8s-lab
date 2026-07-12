@@ -5,10 +5,16 @@
 /* ── duas colunas: conversa + painel persistente ── */
 .tutor-cols {
     height:100%; max-width:1480px; margin:0 auto;
-    display:grid; grid-template-columns:230px minmax(0,1fr) 340px; gap:0 20px; padding:0 20px;
+    display:grid; grid-template-columns:220px minmax(0,1fr); grid-template-rows:52px minmax(0,1fr); gap:0 18px; padding:0 20px;
 }
-.chat-wrap { height:100%; min-width:0; display:flex; flex-direction:column; }
-.conversation-rail { min-width:0; border-right:1px solid var(--border); padding:14px 14px 20px 0; display:flex; flex-direction:column; gap:10px; }
+.chat-wrap { grid-column:2; grid-row:2; height:100%; min-width:0; display:flex; flex-direction:column; }
+.conversation-rail { grid-column:1; grid-row:1 / 3; min-width:0; border-right:1px solid var(--border); padding:14px 14px 20px 0; display:flex; flex-direction:column; gap:10px; }
+.tutor-tabbar { grid-column:2; grid-row:1; display:flex; align-items:center; gap:4px; border-bottom:1px solid var(--border); }
+.tutor-tab { border:0; border-radius:8px; background:transparent; color:var(--text-4); padding:7px 11px; cursor:pointer; font:10px var(--mono); }
+.tutor-tab:hover,.tutor-tab.active { background:var(--surface-2); color:var(--text); }
+.tutor-tab.active { box-shadow:inset 0 -2px var(--violet); }
+.tutor-tab-pane { grid-column:2; grid-row:2; min-width:0; height:100%; overflow:auto; padding:14px 2px 20px; display:none; }
+.tutor-tab-pane.active { display:block; }
 .conversation-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .conversation-head strong { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); }
 .new-chat { width:31px; height:31px; border-radius:9px; border:1px solid var(--violet-glow); background:var(--violet-dim); color:var(--violet); cursor:pointer; font-size:18px; }
@@ -37,9 +43,10 @@
 
 /* ── painel do aluno (persistente) ── */
 .painel {
-    height:100%; overflow-y:auto; padding:14px 2px 20px;
-    display:flex; flex-direction:column; gap:10px;
+    grid-column:2; grid-row:2; height:100%; overflow-y:auto; padding:14px 2px 20px;
+    display:none; flex-direction:column; gap:10px;
 }
+.painel.active { display:flex; }
 .p-card {
     border-radius:8px; border:1px solid var(--border-2);
     background:var(--surface-2); padding:13px 14px; flex-shrink:0;
@@ -226,8 +233,11 @@
 
 /* ── mobile: painel vira gaveta ── */
 @media (max-width:1080px){
-    .tutor-cols { grid-template-columns:minmax(0,1fr); }
+    .tutor-cols { grid-template-columns:minmax(0,1fr); grid-template-rows:48px minmax(0,1fr); }
     .conversation-rail { display:none; }
+    .tutor-tabbar,.chat-wrap,.tutor-tab-pane,.painel { grid-column:1; }
+    .tutor-tabbar { grid-row:1; overflow-x:auto; }
+    .chat-wrap,.tutor-tab-pane,.painel { grid-row:2; }
     .painel-toggle { display:inline-flex; }
     .painel {
         position:fixed; top:0; right:0; bottom:0; z-index:60; width:min(86vw,360px);
@@ -249,6 +259,13 @@
     <div class="conversation-head"><strong>Conversas</strong><button class="new-chat" onclick="newConversation()" aria-label="Nova conversa">+</button></div>
     <div class="conversation-list" id="conversation-list"><span class="eval-sub">carregando...</span></div>
 </nav>
+
+<div class="tutor-tabbar" role="tablist" aria-label="Áreas do tutor">
+    <button class="tutor-tab active" data-tab="chat" onclick="switchTutorTab('chat')" role="tab">Conversa</button>
+    <button class="tutor-tab" data-tab="progress" onclick="switchTutorTab('progress')" role="tab">Progresso</button>
+    <button class="tutor-tab" data-tab="sources" onclick="switchTutorTab('sources')" role="tab">Fontes</button>
+    <button class="tutor-tab" data-tab="system" onclick="switchTutorTab('system')" role="tab">Sistema</button>
+</div>
 
 <div class="chat-wrap">
 
@@ -279,8 +296,8 @@
             <select id="response-mode" class="response-mode" aria-label="Profundidade da resposta" onchange="saveConversationSettings()">
                 <option value="didactic">Didática</option><option value="short">Curta</option><option value="deep">Aprofundada</option><option value="diagnostic">Diagnóstico</option><option value="exam">Modo prova</option>
             </select>
-            <button class="attach-btn" onclick="document.getElementById('chat-file').click()">Anexar YAML, log ou código</button>
-            <input id="chat-file" type="file" hidden accept=".txt,.log,.yaml,.yml,.json,.tf,.hcl,.md,.sh,.go,.py" onchange="loadChatFile(this)">
+            <button class="attach-btn" onclick="document.getElementById('chat-file').click()">Anexar arquivo ou imagem</button>
+            <input id="chat-file" type="file" hidden accept=".txt,.log,.yaml,.yml,.json,.tf,.hcl,.md,.sh,.go,.py,image/png,image/jpeg,image/webp" onchange="loadChatFile(this)">
         </div>
         <div class="attachment-preview" id="attachment-preview"></div>
         <div class="cert-row" id="cert-row">
@@ -304,11 +321,10 @@
     <div id="painel-body">
         <div class="p-card"><div class="cc-title" data-t="painel_carregando">seu treino</div></div>
     </div>
-    <details class="op-details" id="op-details">
-        <summary>⚙ <span data-t="diagnostico">diagnóstico do sistema (operador)</span></summary>
-        <div class="op-body" id="op-body"></div>
-    </details>
 </aside>
+
+<section class="tutor-tab-pane" id="sources-pane" aria-label="Fontes verificadas"><div id="sources-body"><div class="p-card"><div class="cc-title">fontes verificadas</div><div class="eval-sub">As fontes citadas nesta conversa aparecerão aqui.</div></div></div></section>
+<section class="tutor-tab-pane" id="system-pane" aria-label="Qualidade do sistema"><div class="op-body" id="op-body"></div></section>
 
 </div>
 </div>
@@ -323,6 +339,9 @@ let opLoaded = false;
 let activeConversation = '';
 let conversationMode = 'didactic';
 let chatAttachment = '';
+let chatAttachmentData = '';
+let chatAttachmentMime = '';
+let activeTutorTab = 'chat';
 
 // ── i18n local da página (termos de K8s/cert ficam SEMPRE em inglês) ──
 const T = {
@@ -486,7 +505,17 @@ function rateAnswer(btn, kind) {
 
 // ── painel do aluno ─────────────────────────────────────────
 function togglePainel() {
-    document.getElementById('painel').classList.toggle('open');
+    switchTutorTab('progress');
+}
+function switchTutorTab(tab) {
+    activeTutorTab = tab;
+    document.querySelectorAll('.tutor-tab').forEach(x => x.classList.toggle('active', x.dataset.tab === tab));
+    document.querySelector('.chat-wrap').style.display = tab === 'chat' ? 'flex' : 'none';
+    document.getElementById('painel').classList.toggle('active', tab === 'progress');
+    document.getElementById('sources-pane').classList.toggle('active', tab === 'sources');
+    document.getElementById('system-pane').classList.toggle('active', tab === 'system');
+    if (tab === 'system') loadOperatorPanel();
+    if (tab === 'sources') renderConversationSources();
 }
 function pulsePainel() {
     const first = document.querySelector('#painel-body .p-card');
@@ -857,10 +886,18 @@ async function loadOperatorPanel() {
     if (opLoaded) return;
     opLoaded = true;
     const body = document.getElementById('op-body');
-    body.innerHTML = ragCard(statusCache) + obsCard(statusCache) +
+    body.innerHTML = '<div class="p-card" id="agent-trace"><div class="cc-title">ferramentas do agente</div><div class="eval-sub">nenhuma inspeção executada</div></div><div class="p-card" id="model-experiments"><div class="cc-title">modelos e canary</div><div class="eval-sub">coletando resultados...</div></div>' + ragCard(statusCache) + obsCard(statusCache) +
         '<div class="p-card" id="op-eval"><div class="cc-title">golden eval IA</div><div class="eval-sub">rodando...</div></div>' +
         '<div class="p-card" id="op-quality"><div class="cc-title">dataset real de prompts</div><div class="eval-sub">ranqueando...</div></div>' +
         '<div class="p-card" id="op-admin"><div class="cc-title">painel admin</div><div class="eval-sub">checando...</div></div>';
+    try {
+        const r=await fetch('/api/tutor/agent-trace'), d=await r.json(), steps=d.steps||[];
+        if(steps.length) document.getElementById('agent-trace').innerHTML='<div class="cc-title">ferramentas do agente · somente leitura</div>'+steps.map(s=>`<div class="quality-row"><div><strong>${escH(s.tool)}</strong><span>${escH(s.purpose)}${s.observation?' · '+escH(s.observation.slice(0,180)):''}</span></div><code>${escH(s.status)}</code></div>`).join('');
+    } catch(e) {}
+    try {
+        const r=await fetch('/api/tutor/model-experiments'),d=await r.json(),entries=Object.entries(d.models||{});
+        document.getElementById('model-experiments').innerHTML='<div class="cc-title">modelos e canary</div>'+(entries.length?entries.map(([m,s])=>`<div class="quality-row"><div><strong>${escH(m)}</strong><span>${s.passed||0}/${s.requests||0} respostas aprovadas · cobertura ${s.avg_coverage||0}%</span></div><code>${d.candidate===m?'canary':'ativo'}</code></div>`).join(''):'<div class="eval-sub">Aguardando respostas avaliadas.</div>')+(d.rollback_recommended?'<div class="quality-row"><div><strong>Rollback recomendado</strong><span>o candidato caiu abaixo do contrato de qualidade</span></div><code>bloquear</code></div>':'');
+    } catch(e) {}
     try {
         const r = await fetch('/api/tutor/eval');
         document.getElementById('op-eval').innerHTML = renderEvalReport(await r.json());
@@ -956,13 +993,21 @@ async function newConversation() {
 async function openConversation(id) {
     const r=await fetch('/api/tutor/conversations?id='+encodeURIComponent(id)); if(!r.ok)return; const c=await r.json();
     activeConversation=c.id; conversationMode=c.mode||'didactic'; chatCert=c.cert||chatCert; document.getElementById('response-mode').value=conversationMode; resetChatSurface();
-    (c.messages||[]).forEach(m=>m.role==='user'?addUser(m.content):addTutor(mdLite(m.content))); await loadConversations(false); scrollBottom();
+    window.activeConversationData=c; (c.messages||[]).forEach(m=>m.role==='user'?addUser(m.content):addTutor(mdLite(m.content))); renderConversationSources(); await loadConversations(false); scrollBottom();
+}
+function renderConversationSources() {
+    const messages=(window.activeConversationData&&window.activeConversationData.messages)||[], seen=new Set(), sources=[];
+    messages.forEach(m=>(m.sources||[]).forEach(u=>{if(!seen.has(u)){seen.add(u);sources.push(u);}}));
+    const body=document.getElementById('sources-body'); if(!body)return;
+    const audits=messages.filter(m=>m.audit&&m.audit.details).flatMap(m=>m.audit.details).slice(-12);
+    const claims=audits.length?`<div class="p-card"><div class="cc-title">auditoria por afirmação</div>${audits.map(x=>`<div class="quality-row"><div><strong>${escH(x.claim)}</strong><span>${(x.source_ids||[]).map(escH).join(' ')||((x.anchors||[]).map(escH).join(' · '))||'sem âncora'}</span></div><code style="color:${x.supported?'var(--green)':'var(--red)'}">${x.supported?'comprovada':'bloqueada'}</code></div>`).join('')}</div>`:'';
+    body.innerHTML=`<div class="p-card"><div class="cc-title">fontes verificadas desta conversa</div>${sources.length?sources.map((u,i)=>`<div class="quality-row"><div><strong>[S${i+1}] ${escH(new URL(u).hostname)}</strong><span>${escH(u)}</span></div><a class="btn btn-outline btn-sm" href="${escH(u)}" target="_blank" rel="noopener">abrir</a></div>`).join(''):'<div class="eval-sub">Nenhuma fonte foi usada ainda.</div>'}</div>${claims}`;
 }
 async function deleteConversation(ev,id){ev.stopPropagation();await fetch('/api/tutor/conversations?id='+encodeURIComponent(id),{method:'DELETE'});if(activeConversation===id){activeConversation='';resetChatSurface();}await loadConversations(true);}
 async function saveConversationSettings(){conversationMode=document.getElementById('response-mode').value;if(activeConversation)await fetch('/api/tutor/conversations',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:activeConversation,mode:conversationMode})});loadConversations(false);}
 function resetChatSurface(){document.getElementById('chat-log').innerHTML='<div class="chat-hero" id="chat-hero"><div style="display:flex;justify-content:center;"><img class="tutor-avatar official-avatar" src="/static/vendor/kubernetes.svg" alt="Kubernetes"></div><h1 class="t-greet">Como posso te ajudar?</h1><p class="t-sub">Esta conversa mantém contexto com segurança.</p></div>';}
-function loadChatFile(input){const file=input.files&&input.files[0];if(!file)return;if(file.size>10000){alert('O anexo deve ter no máximo 10 KB.');input.value='';return;}const reader=new FileReader();reader.onload=()=>{chatAttachment=String(reader.result||'');const p=document.getElementById('attachment-preview');p.classList.add('visible');p.innerHTML=`<span>${escH(file.name)} · ${file.size} bytes</span><button class="conversation-delete" style="position:static" onclick="clearAttachment()">remover</button>`;};reader.readAsText(file);}
-function clearAttachment(){chatAttachment='';document.getElementById('chat-file').value='';document.getElementById('attachment-preview').classList.remove('visible');}
+function loadChatFile(input){const file=input.files&&input.files[0];if(!file)return;const image=file.type.startsWith('image/'),limit=image?2*1024*1024:10000;if(file.size>limit){alert(image?'A imagem deve ter no máximo 2 MB.':'O anexo textual deve ter no máximo 10 KB.');input.value='';return;}const reader=new FileReader();reader.onload=()=>{if(image){chatAttachmentData=String(reader.result||'');chatAttachmentMime=file.type;chatAttachment='';}else{chatAttachment=String(reader.result||'');chatAttachmentData='';chatAttachmentMime='';}const p=document.getElementById('attachment-preview');p.classList.add('visible');p.innerHTML=`<span>${escH(file.name)} · ${file.size} bytes${image?' · visão':''}</span><button class="conversation-delete" style="position:static" onclick="clearAttachment()">remover</button>`;};image?reader.readAsDataURL(file):reader.readAsText(file);}
+function clearAttachment(){chatAttachment='';chatAttachmentData='';chatAttachmentMime='';document.getElementById('chat-file').value='';document.getElementById('attachment-preview').classList.remove('visible');}
 
 // ── histórico do chat: sobrevive ao reload (localStorage, cap 40) ──
 function chatLogPush(role, text) {
@@ -1040,7 +1085,7 @@ async function sendChat() {
     try {
         const r = await fetch('/api/tutor/chat/stream', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text, cert: chatCert, conversation_id: activeConversation, mode: conversationMode, attachment: chatAttachment }),
+            body: JSON.stringify({ message: text, cert: chatCert, conversation_id: activeConversation, mode: conversationMode, attachment: chatAttachment, attachment_data: chatAttachmentData, attachment_mime: chatAttachmentMime }),
             signal: chatAbort.signal
         });
         const reader = r.body?.getReader();
@@ -1176,9 +1221,7 @@ window.addEventListener('k8slab-lang', applyLang);
     await loadConversations(true);
     if (!activeConversation) await newConversation();
     window.addEventListener('resize', tunePlaceholder);
-    document.getElementById('op-details').addEventListener('toggle', function () {
-        if (this.open) loadOperatorPanel();
-    });
+    switchTutorTab('chat');
     try {
         const d = await refreshPainel();
         const dot = document.getElementById('llm-dot');

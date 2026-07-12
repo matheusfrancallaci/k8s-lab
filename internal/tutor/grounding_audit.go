@@ -111,12 +111,20 @@ var (
 )
 
 type GroundingAudit struct {
-	Claims       int      `json:"claims"`
-	CitedClaims  int      `json:"cited_claims"`
-	Coverage     int      `json:"coverage"`
-	InvalidRefs  []string `json:"invalid_refs,omitempty"`
-	InventedURLs []string `json:"invented_urls,omitempty"`
-	Passed       bool     `json:"passed"`
+	Claims       int             `json:"claims"`
+	CitedClaims  int             `json:"cited_claims"`
+	Coverage     int             `json:"coverage"`
+	InvalidRefs  []string        `json:"invalid_refs,omitempty"`
+	InventedURLs []string        `json:"invented_urls,omitempty"`
+	Passed       bool            `json:"passed"`
+	Details      []ClaimEvidence `json:"details,omitempty"`
+}
+
+type ClaimEvidence struct {
+	Claim     string   `json:"claim"`
+	SourceIDs []string `json:"source_ids,omitempty"`
+	Anchors   []string `json:"anchors,omitempty"`
+	Supported bool     `json:"supported"`
 }
 
 func sanitizeRetrievedText(text string) string {
@@ -158,11 +166,13 @@ func AuditGroundedReply(reply string, report AnswerabilityReport) GroundingAudit
 		audit.Claims++
 		refs := citationRe.FindAllStringSubmatch(sentence, -1)
 		valid := false
+		detail := ClaimEvidence{Claim: compactText(sentence, 280)}
 		for _, ref := range refs {
 			var n int
 			_, _ = fmt.Sscanf(ref[1], "%d", &n)
 			if n >= 1 && n <= maxSource {
 				valid = true
+				detail.SourceIDs = append(detail.SourceIDs, ref[0])
 			} else {
 				audit.InvalidRefs = append(audit.InvalidRefs, ref[0])
 			}
@@ -171,10 +181,14 @@ func AuditGroundedReply(reply string, report AnswerabilityReport) GroundingAudit
 			for _, tok := range contentTokens(sentence) {
 				if strings.Contains(corpus, tok) {
 					valid = true
-					break
+					if len(detail.Anchors) < 5 {
+						detail.Anchors = append(detail.Anchors, tok)
+					}
 				}
 			}
 		}
+		detail.Supported = valid
+		audit.Details = append(audit.Details, detail)
 		if valid {
 			audit.CitedClaims++
 		}

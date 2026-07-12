@@ -12,11 +12,12 @@ import (
 )
 
 type ConversationMessage struct {
-	ID        string    `json:"id"`
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	Sources   []string  `json:"sources,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        string          `json:"id"`
+	Role      string          `json:"role"`
+	Content   string          `json:"content"`
+	Sources   []string        `json:"sources,omitempty"`
+	Audit     *GroundingAudit `json:"audit,omitempty"`
+	CreatedAt time.Time       `json:"created_at"`
 }
 
 type Conversation struct {
@@ -108,7 +109,7 @@ func CreateConversation(userID, cert, mode string) (Conversation, error) {
 	return c, saveConversationsLocked(d)
 }
 
-func AppendConversationMessage(userID, id, role, content string, sources []string) (Conversation, error) {
+func AppendConversationMessage(userID, id, role, content string, sources []string, audit ...*GroundingAudit) (Conversation, error) {
 	if role != "user" && role != "assistant" {
 		return Conversation{}, errors.New("papel de mensagem invalido")
 	}
@@ -129,7 +130,11 @@ func AppendConversationMessage(userID, id, role, content string, sources []strin
 			continue
 		}
 		now := time.Now().UTC()
-		c.Messages = append(c.Messages, ConversationMessage{ID: ragID(id + role + now.String()), Role: role, Content: content, Sources: limitedStrings(sources, 8), CreatedAt: now})
+		var claimAudit *GroundingAudit
+		if len(audit) > 0 {
+			claimAudit = audit[0]
+		}
+		c.Messages = append(c.Messages, ConversationMessage{ID: ragID(id + role + now.String()), Role: role, Content: content, Sources: limitedStrings(sources, 8), Audit: claimAudit, CreatedAt: now})
 		if len(c.Messages) > 80 {
 			c.Messages = c.Messages[len(c.Messages)-80:]
 		}

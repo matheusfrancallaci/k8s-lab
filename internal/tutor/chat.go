@@ -107,16 +107,20 @@ func FreeChatReplyContext(ctx context.Context, msg string) (string, error) {
 	return llmChatReplyContext(ctx, msg)
 }
 
-func FreeChatConversationReplyContext(ctx context.Context, msg, history, mode string) (string, []string, error) {
+func FreeChatConversationReplyContext(ctx context.Context, msg, history, mode string) (string, []string, GroundingAudit, error) {
 	prompt, report := BuildGroundedChatPromptWithContext(msg, history, mode)
+	route := RouteConversationModel(msg, mode)
 	if technicalQuestion(msg) && !report.Answerable {
-		return report.Refusal(), report.VerifiedSources(), nil
+		return report.Refusal(), report.VerifiedSources(), GroundingAudit{Passed: true, Coverage: 100}, nil
 	}
-	reply, err := llmGenerateContext(ctx, prompt, false, 90*time.Second, chatTokenBudget(msg)+400, chatModel())
+	reply, err := llmGenerateContext(ctx, prompt, false, 90*time.Second, chatTokenBudget(msg)+400, route.Model)
 	if err != nil {
-		return "", nil, err
+		return "", nil, GroundingAudit{}, err
 	}
-	return FinalizeGroundedReply(reply, report), report.VerifiedSources(), nil
+	final := FinalizeGroundedReply(reply, report)
+	audit := AuditGroundedReply(final, report)
+	RecordModelOutcome(route, audit)
+	return final, report.VerifiedSources(), audit, nil
 }
 
 // sinônimos PT-BR → tópico do gerador
