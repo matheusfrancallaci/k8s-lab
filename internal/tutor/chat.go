@@ -69,6 +69,11 @@ type ChatAction struct {
 	DurationMin  int      `json:"duration_min,omitempty"`
 	NoHints      bool     `json:"no_hints,omitempty"`
 	Mode         string   `json:"mode,omitempty"`
+	CheckpointID string   `json:"checkpoint_id,omitempty"`
+	Question     string   `json:"question,omitempty"`
+	Outcome      string   `json:"outcome,omitempty"`
+	Score        int      `json:"score,omitempty"`
+	NextPrompt   string   `json:"next_prompt,omitempty"`
 }
 
 // ChatResult é a resposta completa do tutor.

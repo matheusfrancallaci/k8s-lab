@@ -401,6 +401,13 @@ func (h *TutorHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uid := userID(r)
+	if ev, ok := tutor.EvaluateTutorCheckpoint(uid, body.ConversationID, body.Message); ok {
+		reply := checkpointFeedback(ev)
+		action := &tutor.ChatAction{Type: "checkpoint_result", CheckpointID: ev.CheckpointID, Outcome: ev.Outcome, Score: ev.Score, NextPrompt: ev.NextPrompt}
+		persistConversationTurn(uid, body.ConversationID, body.Message, reply, nil)
+		json.NewEncoder(w).Encode(map[string]any{"reply": reply, "action": action}) //nolint:errcheck
+		return
+	}
 	message := chatMessageWithAttachment(body.Message, body.Attachment)
 	message = chatMessageWithImage(r, message, body.AttachmentData, body.AttachmentMime)
 	plan := tutor.OrchestrateTutorTurn(uid, body.Message, body.Cert, body.Mode)
@@ -430,6 +437,11 @@ func (h *TutorHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		pedagogy := tutor.AuditTeachingResponse(reply, plan)
 		audit.Pedagogy = &pedagogy
 	}
+	if res.NeedsLLM && res.Action == nil {
+		if cp, ok := tutor.RegisterTutorCheckpoint(uid, body.ConversationID, plan); ok {
+			res.Action = &tutor.ChatAction{Type: "checkpoint", CheckpointID: cp.ID, Question: cp.Question}
+		}
+	}
 	persistConversationTurn(uid, body.ConversationID, message, reply, sources, audit)
 	json.NewEncoder(w).Encode(map[string]any{"reply": reply, "action": res.Action, "decision": res.Decision, "sources": sources, "grounding": audit, "orchestration": plan}) //nolint:errcheck
 }
@@ -458,6 +470,16 @@ func (h *TutorHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uid := userID(r)
+	if ev, ok := tutor.EvaluateTutorCheckpoint(uid, body.ConversationID, body.Message); ok {
+		reply := checkpointFeedback(ev)
+		fmt.Fprint(w, reply)
+		action := &tutor.ChatAction{Type: "checkpoint_result", CheckpointID: ev.CheckpointID, Outcome: ev.Outcome, Score: ev.Score, NextPrompt: ev.NextPrompt}
+		if b, err := json.Marshal(action); err == nil {
+			fmt.Fprint(w, chatActionMarker+string(b))
+		}
+		persistConversationTurn(uid, body.ConversationID, body.Message, reply, nil)
+		return
+	}
 	message := chatMessageWithAttachment(body.Message, body.Attachment)
 	message = chatMessageWithImage(r, message, body.AttachmentData, body.AttachmentMime)
 	plan := tutor.OrchestrateTutorTurn(uid, body.Message, body.Cert, body.Mode)
@@ -492,6 +514,13 @@ func (h *TutorHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 			pedagogy := tutor.AuditTeachingResponse(streamed.String(), plan)
 			audit.Pedagogy = &pedagogy
 			persistConversationTurn(uid, body.ConversationID, message, streamed.String(), sources, &audit)
+			if cp, ok := tutor.RegisterTutorCheckpoint(uid, body.ConversationID, plan); ok {
+				action := tutor.ChatAction{Type: "checkpoint", CheckpointID: cp.ID, Question: cp.Question}
+				if b, e := json.Marshal(action); e == nil {
+					fmt.Fprint(w, chatActionMarker+string(b))
+					flusher.Flush()
+				}
+			}
 			return
 		}
 		fmt.Fprint(w, res.Reply) // LLM falhou → fallback de capacidades
@@ -570,6 +599,17 @@ func persistConversationTurn(userID, id, message, reply string, sources []string
 	}
 	_, _ = tutor.AppendConversationMessage(userID, id, "user", message, nil)
 	_, _ = tutor.AppendConversationMessage(userID, id, "assistant", reply, sources, audit...)
+}
+
+func checkpointFeedback(ev tutor.CheckpointEvaluation) string {
+	reply := ev.Feedback + fmt.Sprintf("\n\n**Pontuacao do checkpoint: %d%%.**", ev.Score)
+	if len(ev.Matched) > 0 {
+		reply += "\nReconheci: " + strings.Join(ev.Matched, ", ") + "."
+	}
+	if len(ev.Missing) > 0 {
+		reply += "\nAinda falta conectar: " + strings.Join(ev.Missing, ", ") + "."
+	}
+	return reply
 }
 
 func enrichWithReadOnlyAgentObservation(r *http.Request, userID, message, mode string) string {

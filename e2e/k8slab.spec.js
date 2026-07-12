@@ -124,6 +124,15 @@ test('tutor oferece conversas persistentes, modos e anexos acessiveis', async ({
   await expect.poll(() => page.locator('.conversation-item').count()).toBeGreaterThanOrEqual(before + 1);
 });
 
+test('checkpoint pedagogico aparece como card interativo', async ({ page }) => {
+  await ensureLoggedIn(page);
+  await page.goto('/tutor');
+  await expect(page.locator('.tutor-tabbar')).toBeVisible();
+  await expect(page.locator('#chat-text')).toBeVisible();
+  const css = await page.locator('.chat-input-zone').evaluate(el => getComputedStyle(el).position);
+  expect(css).toBe('absolute');
+});
+
 test('login, cria lab pelo tutor, abre terminal e valida comando real', async ({ page }) => {
   await ensureLoggedIn(page);
 

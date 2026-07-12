@@ -1,15 +1,15 @@
 {{define "content"}}
 <style>
-.tutor-root { height:100vh; background:var(--bg); overflow:hidden; }
+.tutor-root { height:100vh; background:radial-gradient(circle at 55% -20%,rgba(129,140,248,.08),transparent 38%),var(--bg); overflow:hidden; }
 
 /* ── duas colunas: conversa + painel persistente ── */
 .tutor-cols {
     height:100%; max-width:1480px; margin:0 auto;
     display:grid; grid-template-columns:220px minmax(0,1fr); grid-template-rows:52px minmax(0,1fr); gap:0 18px; padding:0 20px;
 }
-.chat-wrap { grid-column:2; grid-row:2; height:100%; min-width:0; display:flex; flex-direction:column; }
-.conversation-rail { grid-column:1; grid-row:1 / 3; min-width:0; border-right:1px solid var(--border); padding:14px 14px 20px 0; display:flex; flex-direction:column; gap:10px; }
-.tutor-tabbar { grid-column:2; grid-row:1; display:flex; align-items:center; gap:4px; border-bottom:1px solid var(--border); }
+.chat-wrap { grid-column:2; grid-row:2; height:100%; min-width:0; display:flex; flex-direction:column; position:relative; }
+.conversation-rail { grid-column:1; grid-row:1 / 3; min-width:0; border-right:1px solid var(--border); padding:14px 14px 20px 0; display:flex; flex-direction:column; gap:10px; background:linear-gradient(180deg,rgba(255,255,255,.018),transparent); }
+.tutor-tabbar { grid-column:2; grid-row:1; display:flex; align-items:center; justify-content:center; gap:4px; border-bottom:1px solid var(--border); backdrop-filter:blur(16px); }
 .tutor-tab { border:0; border-radius:8px; background:transparent; color:var(--text-4); padding:7px 11px; cursor:pointer; font:10px var(--mono); }
 .tutor-tab:hover,.tutor-tab.active { background:var(--surface-2); color:var(--text); }
 .tutor-tab.active { box-shadow:inset 0 -2px var(--violet); }
@@ -48,8 +48,8 @@
 }
 .painel.active { display:flex; }
 .p-card {
-    border-radius:8px; border:1px solid var(--border-2);
-    background:var(--surface-2); padding:13px 14px; flex-shrink:0;
+    border-radius:12px; border:1px solid var(--border-2);
+    background:color-mix(in srgb,var(--surface-2) 88%,transparent); padding:14px 15px; flex-shrink:0;
 }
 .p-card .cc-title { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--text-4); margin-bottom:10px; font-family:var(--mono); }
 .p-card.pulse { animation:pPulse 1.2s ease 2; }
@@ -133,7 +133,7 @@
 .quality-row code { font-family:var(--mono); font-size:11px; color:var(--text-3); background:transparent; padding:0; }
 
 /* ── área de conversa ── */
-.chat-log { flex:1; overflow-y:auto; padding:18px 2px 12px; scroll-behavior:smooth; }
+.chat-log { flex:1; overflow-y:auto; padding:24px max(12px,calc((100% - 780px)/2)) 138px; scroll-behavior:smooth; scrollbar-width:thin; }
 
 /* saudação (estado vazio) */
 .chat-hero { text-align:center; padding:9vh 12px 20px; animation:fadeUp .4s ease both; }
@@ -157,7 +157,7 @@
 @media (max-width:600px){ .sugg-grid { grid-template-columns:1fr; } }
 
 /* mensagens */
-.msg { display:flex; gap:12px; margin-bottom:22px; animation:fadeUp .28s ease both; }
+.msg { display:flex; gap:12px; margin-bottom:24px; animation:fadeUp .28s ease both; }
 .msg.user { justify-content:flex-end; }
 .msg.user .bubble {
     max-width:78%; padding:11px 16px; border-radius:18px 18px 4px 18px;
@@ -167,7 +167,7 @@
 }
 .msg.tutor .t-ava { flex-shrink:0; margin-top:2px; }
 .msg.tutor .t-ava img { display:block; }
-.msg.tutor .t-content { max-width:85%; font-size:13.5px; color:var(--text-2); line-height:1.65; }
+.msg.tutor .t-content { max-width:calc(100% - 42px); font-size:14px; color:var(--text-2); line-height:1.72; }
 .msg.tutor .t-content strong { color:var(--text); }
 .msg.tutor .t-content code {
     font-family:var(--mono); font-size:12px; background:var(--surface-3);
@@ -180,9 +180,10 @@
 
 /* cards dentro do chat (respostas conversacionais) */
 .chat-card {
-    margin-top:10px; border-radius:8px; border:1px solid var(--border-2);
-    background:var(--surface-2); padding:14px 16px;
+    margin-top:12px; border-radius:12px; border:1px solid var(--border-2);
+    background:linear-gradient(145deg,rgba(255,255,255,.025),transparent),var(--surface-2); padding:15px 16px;
 }
+.checkpoint-card { border-color:var(--violet-glow); box-shadow:0 14px 50px -35px var(--violet); }
 .chat-card .cc-title { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--text-4); margin-bottom:10px; font-family:var(--mono); }
 .agent-card { background:linear-gradient(135deg,rgba(129,140,248,.10),rgba(56,189,248,.05)),var(--surface-2); }
 .agent-card-kicker { font-family:var(--mono); font-size:9px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:var(--violet); margin-bottom:3px; }
@@ -191,7 +192,7 @@
 .agent-card-foot small { color:var(--text-3); font-size:11px; line-height:1.45; }
 
 /* ── barra de entrada ── */
-.chat-input-zone { flex-shrink:0; padding:8px 0 18px; }
+.chat-input-zone { position:absolute; z-index:8; left:50%; bottom:0; width:min(780px,calc(100% - 24px)); transform:translateX(-50%); padding:10px 10px 16px; border-radius:20px 20px 0 0; background:linear-gradient(180deg,transparent,var(--bg) 24%); }
 .response-tools { display:flex; align-items:center; gap:7px; margin-bottom:8px; }
 .response-mode,.attach-btn { border:1px solid var(--border-2); border-radius:999px; background:var(--surface-2); color:var(--text-3); padding:5px 9px; font:10px var(--mono); }
 .attach-btn { cursor:pointer; }
@@ -208,7 +209,7 @@
 .chat-input {
     position:relative; display:flex; align-items:flex-end; gap:8px;
     border-radius:22px; border:1px solid var(--border-2); background:var(--surface-2);
-    padding:8px 8px 8px 20px; transition:border-color .2s, box-shadow .25s;
+    padding:8px 8px 8px 18px; transition:border-color .2s, box-shadow .25s; box-shadow:0 18px 55px -26px rgba(0,0,0,.8);
 }
 .chat-input:focus-within {
     border-color:var(--violet-b);
@@ -1164,6 +1165,12 @@ function renderAction(slot, a) {
         refreshCerts();
     } else if (a.type === 'stats') {
         renderStatsCard(slot);
+    } else if (a.type === 'checkpoint') {
+        slot.insertAdjacentHTML('beforeend', `<div class="chat-card agent-card checkpoint-card"><div class="agent-card-kicker">Checkpoint rápido</div><div class="agent-card-title">${escH(a.question||'Explique com suas palavras.')}</div><div class="agent-card-foot"><small>Responda na próxima mensagem. O tutor avaliará seu raciocínio, não palavras exatas.</small><button class="btn btn-outline btn-sm" onclick="document.getElementById('chat-text').focus()">Responder</button></div></div>`);
+    } else if (a.type === 'checkpoint_result') {
+        const color=a.outcome==='release'?'var(--green)':a.outcome==='deepen'?'var(--amber)':'var(--violet)';
+        const label=a.outcome==='release'?'Prática liberada':a.outcome==='deepen'?'Aprofundar':'Reforçar base';
+        slot.insertAdjacentHTML('beforeend', `<div class="chat-card"><div class="eval-head"><div><div class="agent-card-kicker">Resultado do checkpoint</div><div class="agent-card-title">${label}</div></div><div class="eval-score" style="color:${color};border-color:${color}">${a.score||0}%</div></div>${a.next_prompt?`<button class="btn btn-primary btn-sm" onclick="sendSuggestion('${escH(a.next_prompt)}')">Começar lab</button>`:''}</div>`);
     }
     scrollBottom();
 }
