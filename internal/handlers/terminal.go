@@ -252,7 +252,6 @@ var (
 	labNSFlagRe   = regexp.MustCompile(`(?i)(?:^|\s)(?:-n|--namespace)\s+([a-z0-9]([-a-z0-9]*[a-z0-9])?)\b`)
 	labNSEqRe     = regexp.MustCompile(`(?i)(?:^|\s)--namespace=([a-z0-9]([-a-z0-9]*[a-z0-9])?)\b`)
 	labCreateNSRe = regexp.MustCompile(`(?i)\bkubectl\s+create\s+(?:ns|namespace)\s+([a-z0-9]([-a-z0-9]*[a-z0-9])?)\b`)
-	labAllPodsRe  = regexp.MustCompile(`(?i)\bkubectl\s+(?:get|describe)\s+(?:pods?|po)\b[^\n;]*(?:-A\b|--all-namespaces\b)`)
 )
 
 func cloudShellAccessRules(userNS string, q *models.Question) []cloudShellAccess {
@@ -263,7 +262,14 @@ func cloudShellAccessPlanFor(userNS string, q *models.Question) cloudShellAccess
 	rules := []cloudShellAccess{
 		{Namespace: userNS, ClusterRole: "admin", EnsureNamespace: true},
 	}
-	var cluster []cloudShellClusterAccess
+	// O AKS ainda e compartilhado, portanto escrita continua namespaced. Leitura
+	// de Pods/logs e segura em todo o cluster e necessaria para troubleshooting
+	// CKA, independentemente do enunciado do lab (`kubectl get pods -A`).
+	cluster := []cloudShellClusterAccess{{
+		Name:      "pod-reader",
+		Resources: []string{"pods", "pods/log"},
+		Verbs:     []string{"get", "list", "watch"},
+	}}
 	text := cloudShellAccessText(q)
 	if containsAny(text, "aws", "s3", "sqs", "iam", "localstack", "awslocal", "terraform", "tofu") {
 		rules = append(rules, cloudShellAccess{Namespace: userNS + "-tools", ClusterRole: "admin", EnsureNamespace: true})
@@ -294,15 +300,6 @@ func cloudShellAccessPlanFor(userNS string, q *models.Question) cloudShellAccess
 		cluster = append(cluster, cloudShellClusterAccess{
 			Name:      "node-reader",
 			Resources: []string{"nodes", "nodes/status"},
-			Verbs:     []string{"get", "list", "watch"},
-		})
-	}
-	// A consulta `kubectl get pods -A` e cluster-scoped. Conceda somente
-	// leitura e apenas aos labs que declaram explicitamente esse comando.
-	if labAllPodsRe.MatchString(text) {
-		cluster = append(cluster, cloudShellClusterAccess{
-			Name:      "pod-reader",
-			Resources: []string{"pods", "pods/log"},
 			Verbs:     []string{"get", "list", "watch"},
 		})
 	}

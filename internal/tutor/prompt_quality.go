@@ -188,6 +188,11 @@ func RecordPromptQuality(userID, prompt, activeCert string, res ChatResult) {
 	if prompt == "" {
 		return
 	}
+	// Pedir dominio/competencia e o resultado correto de um pedido vago, nao um
+	// lab defeituoso. O dataset de qualidade avalia somente labs materializados.
+	if res.Action != nil && res.Action.Type == "choices" {
+		return
+	}
 	isSession := res.Action != nil && res.Action.Type == "session"
 	if !isSession && !isBroadLabRequest(prompt) {
 		return

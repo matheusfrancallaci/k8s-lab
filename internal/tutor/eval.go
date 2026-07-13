@@ -202,6 +202,7 @@ func runHistoricalRegressionPrompt(h PromptQualityCase) GoldenEvalCaseResult {
 		return finishGoldenResult(res, totalChecks, okChecks)
 	}
 	topic := exactTopicForRequest(cert, h.Prompt)
+	exactTopic := topic
 	if topic == "" {
 		topic = detectTopic(h.Prompt)
 	}
@@ -213,7 +214,16 @@ func runHistoricalRegressionPrompt(h PromptQualityCase) GoldenEvalCaseResult {
 	}
 	res.Cert, res.Topic = cert, topic
 	check(strings.EqualFold(cert, h.Cert), "certificacao historica permanece "+h.Cert)
-	check(strings.EqualFold(topic, h.Topic), "topico historico permanece "+h.Topic)
+	topicMatches := strings.EqualFold(topic, h.Topic)
+	_, historicalTopicSupported := templates[h.Topic]
+	_, resolvedTopicSupported := templates[topic]
+	topicRefined := !topicMatches && resolvedTopicSupported &&
+		(exactTopic != "" || !historicalTopicSupported)
+	if topicRefined {
+		check(true, "roteamento refinado do topico historico "+h.Topic+" para "+topic)
+	} else {
+		check(topicMatches, "topico historico permanece "+h.Topic)
+	}
 	if _, ok := templates[topic]; !ok {
 		check(false, "topico historico suportado pelo gerador")
 		return finishGoldenResult(res, totalChecks, okChecks)
@@ -245,8 +255,13 @@ func runHistoricalRegressionPrompt(h PromptQualityCase) GoldenEvalCaseResult {
 		// do mínimo absoluto continua reprovando (check acima).
 		res.Warnings = append(res.Warnings, fmt.Sprintf("aviso: score %d abaixo do baseline historico %d (nao fatal: gate absoluto aprovado)", res.Quality, baseline))
 	}
-	for _, dep := range limitedStrings(h.Dependencies, 3) {
-		check(containsFold(res.Dependencies, dep), "dependencia historica "+dep+" preservada")
+	// Uma categoria historica sem gerador (por exemplo "Estilo Prova") podia
+	// carregar dependencias de um lab escolhido ao acaso. Quando ela e refinada
+	// para um topico real, essas dependencias nao formam um contrato valido.
+	if historicalTopicSupported || topicMatches {
+		for _, dep := range limitedStrings(h.Dependencies, 3) {
+			check(containsFold(res.Dependencies, dep), "dependencia historica "+dep+" preservada")
+		}
 	}
 	return finishGoldenResult(res, totalChecks, okChecks)
 }

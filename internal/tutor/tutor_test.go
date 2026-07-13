@@ -476,6 +476,31 @@ func TestPromptQualityRanksRealPrompts(t *testing.T) {
 	}
 }
 
+func TestPromptQualityIgnoresCurriculumClarification(t *testing.T) {
+	resetPromptQualityForTest()
+	RecordPromptQuality("alice", "Crie um lab para CKA", "CKA", ChatResult{
+		Action: &ChatAction{Type: "choices", Cert: "CKA"},
+	})
+	if rep := PromptQualityReport(); rep.Total != 0 {
+		t.Fatalf("clarificacao de curriculo nao deve virar regressao de lab: %+v", rep)
+	}
+}
+
+func TestHistoricalRegressionAcceptsTopicRefinement(t *testing.T) {
+	result := runHistoricalRegressionPrompt(PromptQualityCase{
+		Prompt:       "quero um lab estilo prova",
+		ActiveCert:   "CKA",
+		Cert:         "CKA",
+		Topic:        "Estilo Prova",
+		ActionType:   "session",
+		LastQuality:  100,
+		Dependencies: []string{"metrics-server"},
+	})
+	if !result.Passed || result.Score < 75 {
+		t.Fatalf("categoria antiga deve ser refinada para topico geravel: %+v", result)
+	}
+}
+
 func TestGoldenEvalIncludesHistoricalRegression(t *testing.T) {
 	t.Setenv("PROMPT_QUALITY_PATH", filepath.Join(t.TempDir(), "quality.json"))
 	resetPromptQualityForTest()
