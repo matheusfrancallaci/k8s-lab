@@ -49,8 +49,8 @@ RUN ENC=$(echo "$K3S_VERSION" | sed 's/+/%2B/') && \
 # vCluster OSS: cada aluno recebe um Kubernetes virtual com API server, RBAC e
 # CRDs próprios sobre o node pool compartilhado do AKS. A versão e o checksum
 # ficam fixos para o ambiente criado hoje ser reproduzível no próximo deploy.
-ARG HELM_VERSION=3.20.2
-ARG HELM_SHA256=258e830a9e613c8a7a302d6059b4bb3b9758f2f3e1bb8ea0d707ce10a9a72fea
+ARG HELM_VERSION=3.21.3
+ARG HELM_SHA256=15e041a93a590dce8100f39385cd98c84a765c9e36aeeb9e2dc6ff9e4769e2e0
 RUN curl -fL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tgz \
     && echo "${HELM_SHA256}  /tmp/helm.tgz" | sha256sum -c - \
     && tar -xzf /tmp/helm.tgz -C /tmp \
