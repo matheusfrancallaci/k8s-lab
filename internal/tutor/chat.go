@@ -55,25 +55,27 @@ func curriculumSession(target, msg string, level int, createSession func(ids []s
 
 // ChatAction diz à UI o que fazer além de exibir a resposta.
 type ChatAction struct {
-	Type         string   `json:"type"`            // session | stats | exam | none
-	First        string   `json:"first,omitempty"` // primeira questão (session)
-	ID           string   `json:"id,omitempty"`    // id da sessão
-	Total        int      `json:"total,omitempty"` //
-	Cert         string   `json:"cert,omitempty"`
-	Topic        string   `json:"topic,omitempty"`
-	Quality      int      `json:"quality,omitempty"`
-	Sources      []string `json:"sources,omitempty"`
-	Dependencies []string `json:"dependencies,omitempty"`
-	Evidence     []string `json:"evidence,omitempty"`
-	Chunks       []string `json:"chunks,omitempty"`
-	DurationMin  int      `json:"duration_min,omitempty"`
-	NoHints      bool     `json:"no_hints,omitempty"`
-	Mode         string   `json:"mode,omitempty"`
-	CheckpointID string   `json:"checkpoint_id,omitempty"`
-	Question     string   `json:"question,omitempty"`
-	Outcome      string   `json:"outcome,omitempty"`
-	Score        int      `json:"score,omitempty"`
-	NextPrompt   string   `json:"next_prompt,omitempty"`
+	Type         string             `json:"type"`            // session | stats | exam | none
+	First        string             `json:"first,omitempty"` // primeira questão (session)
+	ID           string             `json:"id,omitempty"`    // id da sessão
+	Total        int                `json:"total,omitempty"` //
+	Cert         string             `json:"cert,omitempty"`
+	Topic        string             `json:"topic,omitempty"`
+	Quality      int                `json:"quality,omitempty"`
+	Sources      []string           `json:"sources,omitempty"`
+	Dependencies []string           `json:"dependencies,omitempty"`
+	Evidence     []string           `json:"evidence,omitempty"`
+	Chunks       []string           `json:"chunks,omitempty"`
+	DurationMin  int                `json:"duration_min,omitempty"`
+	NoHints      bool               `json:"no_hints,omitempty"`
+	Mode         string             `json:"mode,omitempty"`
+	CheckpointID string             `json:"checkpoint_id,omitempty"`
+	Question     string             `json:"question,omitempty"`
+	Outcome      string             `json:"outcome,omitempty"`
+	Score        int                `json:"score,omitempty"`
+	NextPrompt   string             `json:"next_prompt,omitempty"`
+	Title        string             `json:"title,omitempty"`
+	Options      []CurriculumChoice `json:"options,omitempty"`
 }
 
 // ChatResult é a resposta completa do tutor.
@@ -113,8 +115,11 @@ func FreeChatReplyContext(ctx context.Context, msg string) (string, error) {
 }
 
 func FreeChatConversationReplyContext(ctx context.Context, msg, history, mode string) (string, []string, GroundingAudit, error) {
+	return FreeChatConversationReplyWithRouteContext(ctx, msg, history, mode, RouteConversationModel(msg, mode))
+}
+
+func FreeChatConversationReplyWithRouteContext(ctx context.Context, msg, history, mode string, route ModelRoute) (string, []string, GroundingAudit, error) {
 	prompt, report := BuildGroundedChatPromptWithContext(msg, history, mode)
-	route := RouteConversationModel(msg, mode)
 	if technicalQuestion(msg) && !report.Answerable {
 		return report.Refusal(), report.VerifiedSources(), GroundingAudit{Passed: true, Coverage: 100}, nil
 	}
@@ -233,6 +238,32 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 			reply += fmt.Sprintf("Agora me alimenta: cole a **URL da página oficial do exame** ou da documentação com o chip de %s selecionado — eu extraio os temas, busco cada um na doc oficial e cito a linha exata de onde cada questão saiu.", name)
 		}
 		return ChatResult{Reply: reply, Action: &ChatAction{Type: "certs"}}
+	}
+
+	// A certificacao sozinha nao e contexto suficiente para um lab util. O
+	// tutor caminha por dominio e competencia antes de gerar qualquer sessao.
+	routeCert := inferCertFromMessage(msg, cert)
+	if domain, ok := curriculumDomainInMessage(routeCert, msg); ok && isBroadLabRequest(msg) &&
+		topicFromCurriculumOrRequest(routeCert, msg) == "" && exactTopicForRequest(routeCert, msg) == "" {
+		return ChatResult{
+			Reply:  fmt.Sprintf("Voce escolheu **%s** em **%s**. Qual competencia quer praticar? Itens sem lab seguro continuam visiveis, mas nao podem ser iniciados.", domain.Domain, routeCert),
+			Action: &ChatAction{Type: "choices", Cert: routeCert, Title: domain.Domain, Options: domain.Competencies},
+		}
+	}
+	if isBareCertificationLabRequest(msg, routeCert) {
+		if view, ok := CurriculumViewFor(routeCert); ok {
+			options := make([]CurriculumChoice, 0, len(view.Domains))
+			for _, domain := range view.Domains {
+				options = append(options, CurriculumChoice{
+					Label: domain.Domain, Description: fmt.Sprintf("%d%% do curriculo", domain.Weight),
+					Prompt: "Quero criar um lab de " + routeCert + " no dominio " + domain.Domain, Available: true,
+				})
+			}
+			return ChatResult{
+				Reply:  fmt.Sprintf("Antes de gerar, escolha o **dominio de %s** que voce quer treinar. Depois eu mostro as competencias exatas desse dominio.", routeCert),
+				Action: &ChatAction{Type: "choices", Cert: routeCert, Title: "Escolha um dominio", Options: options},
+			}
+		}
 	}
 
 	// 0.5. Montar currículo oficial — o tutor pesquisa os temas da prova nas
@@ -358,6 +389,22 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 				cert = reg
 			}
 		}
+		requestedTopic := topicFromCurriculumOrRequest(cert, msg)
+		if requestedTopic == "" {
+			requestedTopic = exactTopicForRequest(cert, msg)
+		}
+		if requestedTopic != "" && labAskRe.MatchString(msg) {
+			qs, rep, err := GenerateSmartLabs(msg, cert, detectLevel(msg), detectCount(msg, 5))
+			if err != nil {
+				return ChatResult{Reply: "Nao consegui criar o lab exato dessa secao: " + err.Error()}
+			}
+			sid, first, total := createSession(questionIDs(qs))
+			reply := fmt.Sprintf("Li a pagina informada e criei **%d lab(s) especificamente sobre %s**.", total, requestedTopic)
+			if len(rep.Ingest.Sources) > 0 {
+				reply += fmt.Sprintf(" Usei %d fonte(s) oficial(is) e mantive a secao pedida como escopo.", len(rep.Ingest.Sources))
+			}
+			return ChatResult{Reply: reply, Action: sessionAction(sid, first, total, qs), Questions: qs}
+		}
 		topic := detectTopic(msg)
 		if topic == "" {
 			topic = "Custom"
@@ -409,8 +456,12 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 		}
 	}
 
-	routeCert := routeCertForLabRequest(cert, msg, "")
-	if topic := exactTopicForRequest(routeCert, msg); topic != "" && regexp.MustCompile(`lab|exerc|quest|pergunta|praticar|treinar|criar?|gera`).MatchString(l) {
+	routeCert = routeCertForLabRequest(cert, msg, "")
+	topic := topicFromCurriculumOrRequest(routeCert, msg)
+	if topic == "" {
+		topic = exactTopicForRequest(routeCert, msg)
+	}
+	if topic != "" && regexp.MustCompile(`lab|exerc|quest|pergunta|praticar|treinar|criar?|gera`).MatchString(l) {
 		level := detectLevel(msg)
 		cert = routeCertForLabRequest(cert, msg, topic)
 		qs, err := Generate(topic, cert, level, detectCount(msg, 5))

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"estudo-app/internal/models"
 	"estudo-app/internal/repository"
@@ -210,6 +212,13 @@ func (h *LabHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	if req.Count > 50 {
 		req.Count = 50
 	}
+	clusterCtx, cancelCluster := context.WithTimeout(r.Context(), 10*time.Minute)
+	defer cancelCluster()
+	if err := EnsureClusterReady(clusterCtx); err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]any{"error": "a sessao nao foi criada porque o cluster nao subiu: " + err.Error()}) //nolint:errcheck
+		return
+	}
 
 	questions := h.repo.FilterLabs(req.Certs, req.Difficulty, req.Topics)
 	if len(questions) == 0 {
@@ -336,6 +345,14 @@ func (h *LabHandler) Setup(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	clusterCtx, cancelCluster := context.WithTimeout(r.Context(), 10*time.Minute)
+	defer cancelCluster()
+	if err := EnsureClusterReady(clusterCtx); err != nil {
+		msg, _ := json.Marshal(map[string]any{"type": "error", "msg": "cluster nao subiu: " + err.Error()})
+		fmt.Fprintf(w, "data: %s\n\n", msg)
+		flusher.Flush()
+		return
+	}
 
 	id := r.PathValue("id")
 	q, ok := h.repo.GetByID(id)

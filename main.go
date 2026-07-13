@@ -196,6 +196,7 @@ func main() {
 	// Tutor (IA local adaptativa) routes
 	mux.HandleFunc("GET /tutor", tutorH.Page)
 	mux.HandleFunc("GET /api/tutor/status", tutorH.Status)
+	mux.HandleFunc("POST /api/tutor/curriculum/verify", tutorH.VerifyCurriculum)
 	mux.HandleFunc("POST /api/tutor/event", tutorH.Event)
 	mux.HandleFunc("POST /api/tutor/generate", tutorH.Generate)
 	mux.HandleFunc("POST /api/tutor/ingest", tutorH.Ingest)

@@ -199,17 +199,46 @@
 .agent-card-title { font-size:13px; font-weight:800; color:var(--text); line-height:1.35; margin-bottom:10px; }
 .agent-card-foot { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .agent-card-foot small { color:var(--text-3); font-size:11px; line-height:1.45; }
+.choice-list { display:grid; gap:8px; margin-top:10px; }
+.choice-btn { width:100%; text-align:left; border:1px solid var(--border-2); background:var(--surface); color:var(--text-2); border-radius:10px; padding:10px 12px; cursor:pointer; }
+.choice-btn:hover { border-color:var(--violet); color:var(--text); }
+.choice-btn:disabled { cursor:not-allowed; opacity:.5; }
+.choice-btn strong,.choice-btn small { display:block; }
+.choice-btn small { margin-top:3px; color:var(--text-4); }
+.curriculum-panel { display:none; margin:0 0 10px; padding:14px; border:1px solid var(--border-2); border-radius:16px; background:color-mix(in srgb,var(--surface-2) 96%,transparent); box-shadow:0 20px 55px -35px rgba(0,0,0,.95); }
+.curriculum-panel.open { display:block; }
+.curriculum-controls { display:grid; grid-template-columns:1fr 1.5fr auto auto auto; gap:8px; }
+.curriculum-controls input,.curriculum-controls select { min-width:0; border:1px solid var(--border-2); background:var(--surface); color:var(--text); border-radius:8px; padding:8px; font-size:11px; }
+.curriculum-results { max-height:260px; overflow:auto; margin-top:10px; display:grid; gap:8px; }
+.curriculum-domain { border-top:1px solid var(--border); padding-top:8px; }
+@media(max-width:760px){.curriculum-controls{grid-template-columns:1fr 1fr}.curriculum-controls input{grid-column:1/-1}.curriculum-controls button{grid-column:1/-1}}
 
 /* ── barra de entrada ── */
-.chat-input-zone { position:absolute; z-index:8; left:50%; bottom:0; width:min(860px,calc(100% - 24px)); transform:translateX(-50%); padding:14px 12px 18px; border-radius:24px 24px 0 0; background:linear-gradient(180deg,transparent,var(--bg) 28%); }
-.response-tools { display:flex; align-items:center; gap:7px; margin-bottom:8px; }
-.response-mode,.attach-btn { border:1px solid var(--border-2); border-radius:999px; background:var(--surface-2); color:var(--text-3); padding:5px 9px; font:10px var(--mono); }
-.attach-btn { cursor:pointer; }
+.chat-input-zone { position:absolute; z-index:8; left:50%; bottom:0; width:min(860px,calc(100% - 24px)); transform:translateX(-50%); padding:18px 12px 14px; border-radius:28px 28px 0 0; background:linear-gradient(180deg,transparent,var(--bg) 24%); }
+.composer-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.composer-actions { position:relative; min-width:0; display:flex; align-items:center; gap:4px; }
+.composer-icon,.composer-pill,.response-mode { height:32px; border:0; border-radius:9px; background:transparent; color:var(--text-3); font:10px var(--mono); transition:background .15s,color .15s; }
+.composer-icon { width:32px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+.composer-icon svg { width:17px; height:17px; }
+.composer-icon:hover,.composer-icon[aria-expanded="true"],.composer-pill:hover,.composer-pill[aria-expanded="true"],.response-mode:hover { background:var(--surface-3); color:var(--text); }
+.composer-pill { display:inline-flex; align-items:center; gap:6px; padding:0 9px; cursor:pointer; white-space:nowrap; }
+.composer-pill span { color:var(--text-4); }
+.composer-pill strong { color:var(--text-2); font-weight:700; }
+.composer-pill svg { width:12px; height:12px; }
+.response-mode { max-width:122px; padding:0 8px; cursor:pointer; outline:none; }
+.response-mode option { background:var(--surface-2); color:var(--text); }
+.composer-popover { display:none; position:absolute; z-index:20; left:0; bottom:40px; width:240px; padding:6px; border:1px solid var(--border-2); border-radius:13px; background:var(--surface-2); box-shadow:0 22px 60px -22px rgba(0,0,0,.95); }
+.composer-popover.open { display:grid; gap:3px; }
+.composer-menu-item { display:flex; align-items:center; gap:10px; width:100%; padding:9px 10px; border:0; border-radius:9px; background:transparent; color:var(--text-2); text-align:left; cursor:pointer; font:11px var(--mono); }
+.composer-menu-item:hover { background:var(--surface-3); color:var(--text); }
+.composer-menu-item svg { width:16px; height:16px; color:var(--text-3); }
 .attachment-preview { display:none; margin:0 0 8px; padding:8px 10px; border:1px solid var(--sky-glow); border-radius:8px; color:var(--sky); font:10px var(--mono); }
 .attachment-preview.visible { display:flex; justify-content:space-between; gap:10px; }
 .chat-log[aria-busy="true"] { cursor:progress; }
-.cert-row { display:flex; align-items:center; gap:5px; margin-bottom:8px; padding:0 4px 3px; flex-wrap:nowrap; max-height:34px; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; }
-.cert-row > span { flex:0 0 auto; }
+.cert-picker { position:relative; }
+.cert-row { display:none; position:absolute; z-index:20; left:0; bottom:40px; width:min(330px,calc(100vw - 44px)); max-height:228px; overflow-y:auto; padding:8px; flex-wrap:wrap; align-items:center; gap:5px; border:1px solid var(--border-2); border-radius:13px; background:var(--surface-2); box-shadow:0 22px 60px -22px rgba(0,0,0,.95); scrollbar-width:thin; }
+.cert-row.open { display:flex; }
+.cert-row > span { flex:0 0 100%; padding:3px 5px 6px; }
 .cert-chip {
     padding:3px 10px; border-radius:999px; font-family:var(--mono); font-size:10px; font-weight:600;
     color:var(--text-4); border:1px solid transparent; background:transparent; cursor:pointer;
@@ -217,9 +246,9 @@
 }
 .cert-chip.active { color:var(--violet); border-color:var(--violet-glow); background:var(--violet-dim); }
 .chat-input {
-    position:relative; display:flex; align-items:flex-end; gap:8px;
+    position:relative; display:flex; flex-direction:column; gap:5px;
     border-radius:22px; border:1px solid var(--border-2); background:var(--surface-2);
-    padding:8px 8px 8px 18px; transition:border-color .2s, box-shadow .25s; box-shadow:0 18px 55px -26px rgba(0,0,0,.8);
+    padding:11px 10px 9px 14px; transition:border-color .2s, box-shadow .25s; box-shadow:0 18px 55px -26px rgba(0,0,0,.8);
 }
 .chat-input:focus-within {
     border-color:var(--violet-b);
@@ -228,20 +257,20 @@
 .chat-input textarea {
     flex:1; resize:none; border:none; outline:none; background:transparent;
     color:var(--text); font-family:var(--sans); font-size:13.5px; line-height:1.5;
-    max-height:130px; padding:6px 0;
+    width:100%; max-height:130px; padding:3px 4px 5px;
 }
 .chat-input textarea::placeholder { color:var(--text-4); }
 .send-btn {
-    width:38px; height:38px; border-radius:50%; border:none; flex-shrink:0;
+    width:34px; height:34px; border-radius:50%; border:none; flex-shrink:0;
     display:flex; align-items:center; justify-content:center; cursor:pointer;
     background:linear-gradient(135deg,#7c82f7,#5b5fef); color:#fff;
     transition:transform .15s, opacity .15s, box-shadow .2s;
 }
 .send-btn:hover { transform:scale(1.06); box-shadow:0 6px 18px -6px rgba(91,95,239,.7); }
 .send-btn:disabled { opacity:.35; cursor:default; transform:none; }
-.send-btn svg { width:16px; height:16px; }
-.chat-foot { text-align:center; font-size:10px; color:var(--text-4); margin-top:8px; font-family:var(--mono); }
-@media (max-width:520px){ .chat-log{padding-top:20px;padding-bottom:164px}.msg.user .bubble{max-width:92%}.msg.tutor .t-content{font-size:14px}.tutor-heading{display:none}.tutor-tab{padding-inline:9px}.chat-foot{font-size:9px} }
+.send-btn svg { width:15px; height:15px; }
+.chat-foot { text-align:center; font-size:9px; color:var(--text-4); margin-top:7px; font-family:var(--mono); }
+@media (max-width:520px){ .chat-log{padding-top:20px;padding-bottom:164px}.msg.user .bubble{max-width:92%}.msg.tutor .t-content{font-size:14px}.tutor-heading{display:none}.tutor-tab{padding-inline:9px}.chat-foot{font-size:9px}.composer-pill span{display:none}.response-mode{max-width:98px}.curriculum-panel{max-height:52vh;overflow:auto} }
 
 /* ── mobile: painel vira gaveta ── */
 @media (max-width:1080px){
@@ -312,24 +341,46 @@
     </div>
 
     <div class="chat-input-zone">
-        <div class="response-tools">
-            <select id="response-mode" class="response-mode" aria-label="Profundidade da resposta" onchange="saveConversationSettings()">
-                <option value="didactic">Didática</option><option value="short">Curta</option><option value="deep">Aprofundada</option><option value="diagnostic">Diagnóstico</option><option value="exam">Modo prova</option>
-            </select>
-            <button class="attach-btn" onclick="document.getElementById('chat-file').click()">Anexar arquivo ou imagem</button>
-            <input id="chat-file" type="file" hidden accept=".txt,.log,.yaml,.yml,.json,.tf,.hcl,.md,.sh,.go,.py,image/png,image/jpeg,image/webp" onchange="loadChatFile(this)">
+        <div class="curriculum-panel" id="curriculum-panel">
+            <div class="curriculum-controls">
+                <select id="verify-cert" aria-label="Certificacao"></select>
+                <input id="verify-source" type="url" placeholder="URL oficial do exame (opcional)">
+                <select id="verify-count" aria-label="Quantidade de labs"><option value="1">1 lab</option><option value="3" selected>3 labs</option><option value="5">5 labs</option><option value="8">8 labs</option></select>
+                <select id="verify-level" aria-label="Nivel"><option value="1">Desafio</option><option value="2" selected>Guiado</option><option value="3">Passo a passo</option></select>
+                <button class="btn btn-primary btn-sm" id="verify-btn" onclick="verifyCertification()">Verificar</button>
+            </div>
+            <div class="curriculum-results" id="curriculum-results"><span class="eval-sub">Escolha uma certificacao. Para uma nova, informe a pagina oficial do exame.</span></div>
         </div>
         <div class="attachment-preview" id="attachment-preview"></div>
-        <div class="cert-row" id="cert-row">
-            <span style="font-family:var(--mono);font-size:9px;color:var(--text-4);letter-spacing:.1em;">FOCO:</span>
-            <!-- chips renderizados dinamicamente do registro de certificações -->
-        </div>
         <div class="chat-input">
             <textarea id="chat-text" rows="1" placeholder="Pergunte, peça um lab, ou cole uma URL de documentação..."
                 onkeydown="chatKey(event)" oninput="autoGrow(this)"></textarea>
-            <button class="send-btn" id="send-btn" onclick="sendChat()" aria-label="Enviar">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
-            </button>
+            <div class="composer-toolbar">
+                <div class="composer-actions">
+                    <button class="composer-icon" id="composer-tools-btn" onclick="toggleComposerMenu(event)" aria-label="Adicionar contexto" aria-expanded="false">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                    </button>
+                    <div class="composer-popover" id="composer-menu">
+                        <button class="composer-menu-item" onclick="openAttachmentPicker()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.4 11.6 12 21a6 6 0 0 1-8.5-8.5l10-10a4 4 0 0 1 5.7 5.7l-10 10a2 2 0 0 1-2.8-2.8l9.3-9.3"/></svg>Anexar arquivo ou imagem</button>
+                        <button class="composer-menu-item" onclick="openCurriculumVerifier()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5V4.8A2.8 2.8 0 0 1 6.8 2H20v17H6.8A2.8 2.8 0 0 0 4 21.8"/><path d="M8 7h8M8 11h6"/></svg>Verificar certificacao</button>
+                    </div>
+                    <input id="chat-file" type="file" hidden accept=".txt,.log,.yaml,.yml,.json,.tf,.hcl,.md,.sh,.go,.py,image/png,image/jpeg,image/webp" onchange="loadChatFile(this)">
+                    <select id="response-mode" class="response-mode" aria-label="Profundidade da resposta" onchange="saveConversationSettings()">
+                        <option value="auto" selected>Automatica</option>
+                        <option value="didactic">Didatica</option><option value="short">Curta</option><option value="deep">Aprofundada</option><option value="diagnostic">Diagnostico</option><option value="exam">Modo prova</option>
+                    </select>
+                    <div class="cert-picker">
+                        <button class="composer-pill" id="cert-picker-btn" onclick="toggleCertPicker(event)" aria-label="Selecionar certificacao" aria-expanded="false"><span>Foco</span><strong id="cert-active-label">CKA</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 10 5 5 5-5"/></svg></button>
+                        <div class="cert-row" id="cert-row">
+                            <span style="font-family:var(--mono);font-size:9px;color:var(--text-4);letter-spacing:.1em;">ESCOLHA O FOCO</span>
+                            <!-- chips renderizados dinamicamente do registro de certificações -->
+                        </div>
+                    </div>
+                </div>
+                <button class="send-btn" id="send-btn" onclick="sendChat()" aria-label="Enviar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
+                </button>
+            </div>
         </div>
         <p class="chat-foot" id="chat-foot">Enter envia · Shift+Enter quebra linha · 100% local, custo zero</p>
     </div>
@@ -357,7 +408,7 @@ let chatBusy = false;
 let statusCache = null;
 let opLoaded = false;
 let activeConversation = '';
-let conversationMode = 'didactic';
+let conversationMode = 'auto';
 let chatAttachment = '';
 let chatAttachmentData = '';
 let chatAttachmentMime = '';
@@ -945,9 +996,52 @@ async function loadOperatorPanel() {
 }
 
 // ── certs / entrada ─────────────────────────────────────────
+function closeComposerPopovers() {
+    const tools = document.getElementById('composer-menu');
+    const certs = document.getElementById('cert-row');
+    const toolsBtn = document.getElementById('composer-tools-btn');
+    const certBtn = document.getElementById('cert-picker-btn');
+    if (tools) tools.classList.remove('open');
+    if (certs) certs.classList.remove('open');
+    if (toolsBtn) toolsBtn.setAttribute('aria-expanded', 'false');
+    if (certBtn) certBtn.setAttribute('aria-expanded', 'false');
+}
+function toggleComposerMenu(event) {
+    if (event) event.stopPropagation();
+    const menu = document.getElementById('composer-menu');
+    const open = !menu.classList.contains('open');
+    closeComposerPopovers();
+    menu.classList.toggle('open', open);
+    document.getElementById('composer-tools-btn').setAttribute('aria-expanded', String(open));
+}
+function toggleCertPicker(event) {
+    if (event) event.stopPropagation();
+    const row = document.getElementById('cert-row');
+    const open = !row.classList.contains('open');
+    closeComposerPopovers();
+    row.classList.toggle('open', open);
+    document.getElementById('cert-picker-btn').setAttribute('aria-expanded', String(open));
+}
+function openAttachmentPicker() {
+    closeComposerPopovers();
+    document.getElementById('chat-file').click();
+}
+function openCurriculumVerifier() {
+    closeComposerPopovers();
+    const panel = document.getElementById('curriculum-panel');
+    panel.classList.add('open');
+    const select = document.getElementById('verify-cert');
+    if (select && [...select.options].some(o => o.value === chatCert)) select.value = chatCert;
+}
+function syncComposerCert() {
+    const label = document.getElementById('cert-active-label');
+    if (label) label.textContent = chatCert;
+    document.querySelectorAll('.cert-chip').forEach(c => c.classList.toggle('active', c.dataset.cert === chatCert));
+}
 function pickCert(btn) {
     chatCert = btn.dataset.cert;
-    document.querySelectorAll('.cert-chip').forEach(c => c.classList.toggle('active', c === btn));
+    syncComposerCert();
+    closeComposerPopovers();
     refreshPainel();
 }
 
@@ -963,6 +1057,15 @@ function renderCertChips(certs) {
         seen.add(key);
         ordered.push(c);
     });
+	const verifySelect = document.getElementById('verify-cert');
+	if (verifySelect) {
+		verifySelect.innerHTML = '';
+		ordered.forEach(c => {
+			const opt = document.createElement('option');
+			opt.value = c; opt.textContent = c; opt.selected = c === chatCert;
+			verifySelect.appendChild(opt);
+		});
+	}
     ordered.forEach(c => {
         const b = document.createElement('button');
         b.className = 'cert-chip' + (c === chatCert ? ' active' : '');
@@ -976,13 +1079,68 @@ function renderCertChips(certs) {
     plus.title = 'Cadastrar nova certificação';
     plus.textContent = '＋';
     plus.onclick = () => {
+        closeComposerPopovers();
         const ta = document.getElementById('chat-text');
         ta.value = 'criar certificação ';
         ta.focus(); autoGrow(ta);
     };
     row.appendChild(plus);
+    syncComposerCert();
 }
 async function refreshCerts() { await refreshPainel(); }
+
+function toggleCurriculumVerifier() {
+	const panel = document.getElementById('curriculum-panel');
+	panel.classList.toggle('open');
+	const select = document.getElementById('verify-cert');
+	if (select && [...select.options].some(o => o.value === chatCert)) select.value = chatCert;
+}
+document.addEventListener('click', event => {
+    if (!event.target.closest('.composer-actions')) closeComposerPopovers();
+});
+
+async function verifyCertification() {
+	const cert = document.getElementById('verify-cert').value || chatCert;
+	const source = document.getElementById('verify-source').value.trim();
+	const button = document.getElementById('verify-btn');
+	const results = document.getElementById('curriculum-results');
+	button.disabled = true; button.textContent = 'Verificando...';
+	results.innerHTML = '<span class="eval-sub">Lendo fontes oficiais e cruzando os topicos...</span>';
+	try {
+		const response = await fetch('/api/tutor/curriculum/verify', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({cert, source})});
+		const data = await response.json();
+		if (!response.ok || !data.curriculum) throw new Error(data.error || 'Nao foi possivel verificar a certificacao.');
+		renderVerifiedCurriculum(data.curriculum, data.verified_sources || [], data.warnings || []);
+	} catch (error) {
+		results.innerHTML = `<span class="eval-sub" style="color:var(--red)">${escH(error.message || String(error))}</span>`;
+	} finally {
+		button.disabled = false; button.textContent = 'Verificar';
+	}
+}
+
+function renderVerifiedCurriculum(curriculum, sources, warnings) {
+	const results = document.getElementById('curriculum-results');
+	results.innerHTML = `<div class="eval-sub">${sources.length} fonte(s) oficial(is) lida(s)${warnings.length ? ' · '+escH(warnings.join(' · ')) : ''}</div>`;
+	(curriculum.domains || []).forEach(domain => {
+		const block = document.createElement('details');
+		block.className = 'curriculum-domain';
+		block.innerHTML = `<summary><strong>${escH(domain.domain)}</strong> <span class="eval-sub">${domain.weight || 0}%</span></summary><div class="choice-list"></div>`;
+		const list = block.querySelector('.choice-list');
+		(domain.competencies || []).forEach(item => {
+			const button = document.createElement('button');
+			button.className = 'choice-btn'; button.disabled = !item.available;
+			button.innerHTML = `<strong>${escH(item.label)}</strong><small>${escH(item.description || '')}</small>`;
+			if (item.available) button.onclick = () => {
+				const count = document.getElementById('verify-count').value;
+				const level = document.getElementById('verify-level').value;
+				document.getElementById('curriculum-panel').classList.remove('open');
+				sendSuggestion(`Crie ${count} lab(s) para ${curriculum.cert} sobre ${item.label} nivel ${level}`);
+			};
+			list.appendChild(button);
+		});
+		results.appendChild(block);
+	});
+}
 function autoGrow(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 130) + 'px'; }
 function tunePlaceholder() {
     const ta = document.getElementById('chat-text');
@@ -1024,7 +1182,7 @@ async function newConversation() {
 }
 async function openConversation(id) {
     const r=await fetch('/api/tutor/conversations?id='+encodeURIComponent(id)); if(!r.ok)return; const c=await r.json();
-    activeConversation=c.id; conversationMode=c.mode||'didactic'; chatCert=c.cert||chatCert; document.getElementById('response-mode').value=conversationMode; resetChatSurface();
+    activeConversation=c.id; conversationMode=c.mode||'didactic'; chatCert=c.cert||chatCert; document.getElementById('response-mode').value=conversationMode; syncComposerCert(); resetChatSurface();
     window.activeConversationData=c; (c.messages||[]).forEach(m=>m.role==='user'?addUser(m.content):addTutor(mdLite(m.content))); renderConversationSources(); await loadConversations(false); scrollBottom();
 }
 function renderConversationSources() {
@@ -1182,6 +1340,19 @@ function renderAction(slot, a) {
                 </div>
              </div>`);
         refreshPainel();
+	} else if (a.type === 'choices') {
+		const card = document.createElement('div');
+		card.className = 'chat-card agent-card';
+		card.innerHTML = `<div class="agent-card-kicker">${escH(a.cert || chatCert)} · curriculo verificado</div><div class="agent-card-title">${escH(a.title || 'Escolha uma opcao')}</div><div class="choice-list"></div>`;
+		const list = card.querySelector('.choice-list');
+		(a.options || []).forEach(item => {
+			const button = document.createElement('button');
+			button.className = 'choice-btn'; button.disabled = item.available === false;
+			button.innerHTML = `<strong>${escH(item.label || '')}</strong><small>${escH(item.description || '')}</small>`;
+			if (item.available !== false) button.onclick = () => sendSuggestion(item.prompt || item.label || '');
+			list.appendChild(button);
+		});
+		slot.appendChild(card);
     } else if (a.type === 'exam') {
         slot.insertAdjacentHTML('beforeend',
             `<div class="chat-card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
@@ -1272,6 +1443,11 @@ window.addEventListener('k8slab-lang', applyLang);
         } else {
             txt.textContent = lang() === 'en' ? 'heuristic mode · install Ollama for free chat' : 'modo heurístico · instale o Ollama p/ conversa livre';
         }
+		if (d && d.premium_usage && d.premium_usage.available) {
+			txt.textContent += ` · Sol ${d.premium_usage.remaining}/${d.premium_usage.limit}`;
+			const foot = document.getElementById('chat-foot');
+			if (foot) foot.textContent = `Enter envia · profundidade automatica · GPT-5.6 Sol: ${d.premium_usage.remaining}/${d.premium_usage.limit}`;
+		}
         // A recomendação nº1 também vira mensagem proativa (a mesma que a
         // ação do dia no painel — a conversa convida, o painel persiste).
         const rec = d && (d.recommendations || [])[0];

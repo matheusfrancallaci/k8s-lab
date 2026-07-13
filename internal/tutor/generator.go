@@ -103,29 +103,34 @@ type templateFn func(p params, level int, cert string) models.Question
 
 // Banco de templates por tópico (nomes casam com os tópicos do banco oficial).
 var templates = map[string][]templateFn{
-	"Core Concepts":      {tplPod, tplNamespaceQuota},
-	"Static Pods":        {tplStaticPodManifest},
-	"Workloads":          {tplDeployment, tplReplicaSet, tplJob, tplRolloutRollback},
-	"ReplicaSet":         {tplReplicaSet},
-	"Autoscaling":        {tplHPA},
-	"Troubleshooting":    {tplIncidentImage, tplIncidentSelector, tplIncidentScaledDown},
-	"GitOps":             {tplArgoCDApplication},
-	"Linux":              {tplLinuxLogProcessing, tplLinuxPermissions},
-	"Bash":               {tplBashCSVReport, tplBashArgs},
-	"Java":               {tplJavaFizzBuzz, tplJavaWordCount},
-	"Helm":               {tplHelmConfigMap},
-	"Docker":             {tplDockerfileStatic},
-	"AWS Compute":        {tplAWSCompute},
-	"AWS Networking":     {tplAWSNetworking},
-	"AWS IAM":            {tplAWSIAM},
-	"AWS Storage":        {tplAWSStorage},
-	"AWS Messaging":      {tplAWSMessaging},
-	"Services":           {tplService, tplDNSLookup},
-	"Configuration":      {tplConfigMap},
-	"Storage":            {tplPVC},
-	"Scheduling":         {tplNodeSelector, tplTaintToleration},
-	"Application Design": {tplProbes, tplInitContainer},
-	"Security":           {tplServiceAccount, tplNetworkPolicy, tplSecurityContext},
+	"Core Concepts":                  {tplPod, tplNamespaceQuota},
+	"Static Pods":                    {tplStaticPodManifest},
+	"Workloads":                      {tplDeployment, tplReplicaSet, tplJob, tplRolloutRollback},
+	"ReplicaSet":                     {tplReplicaSet},
+	"Autoscaling":                    {tplHPA},
+	"Troubleshooting":                {tplIncidentImage, tplIncidentSelector, tplIncidentScaledDown},
+	"GitOps":                         {tplArgoCDApplication},
+	"Linux":                          {tplLinuxLogProcessing, tplLinuxPermissions},
+	"Bash":                           {tplBashCSVReport, tplBashArgs},
+	"Java":                           {tplJavaFizzBuzz, tplJavaWordCount},
+	"Helm":                           {tplHelmConfigMap},
+	"Docker":                         {tplDockerfileStatic},
+	"AWS Compute":                    {tplAWSCompute},
+	"AWS Networking":                 {tplAWSNetworking},
+	"AWS IAM":                        {tplAWSIAM},
+	"AWS Storage":                    {tplAWSStorage},
+	"AWS Messaging":                  {tplAWSMessaging},
+	"Services":                       {tplService, tplDNSLookup},
+	"NodePort":                       {tplNodePort},
+	"Configuration":                  {tplConfigMap},
+	"Storage":                        {tplPVC},
+	"Scheduling":                     {tplNodeSelector, tplTaintToleration},
+	"Taints and Tolerations":         {tplTaintToleration},
+	"Pod Affinity and Anti-Affinity": {tplPodAntiAffinity},
+	"Admission Control":              {tplAdmissionControl},
+	"Application Design":             {tplProbes, tplInitContainer},
+	"Security":                       {tplServiceAccount, tplNetworkPolicy, tplSecurityContext},
+	"RBAC":                           {tplRBAC},
 }
 
 // Topics lista os tópicos que o gerador sabe criar.
@@ -722,6 +727,92 @@ func tplTaintToleration(p params, level int, cert string) models.Question {
 		Explanation: "Taints ficam no node e impedem scheduling; tolerations ficam no Pod e permitem que ele aceite aquele taint. Isso nao força o pod a ir para o node, apenas remove a repulsao.",
 		DocURL:      "https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/",
 		DocSection:  "Scheduling -> Taints and Tolerations",
+	}
+}
+
+func tplPodAntiAffinity(p params, level int, cert string) models.Question {
+	anchor := p.Name + "-anchor"
+	peer := p.Name + "-anti"
+	return models.Question{
+		Question: pickHelp(level,
+			fmt.Sprintf("Crie o Pod **%s** com `requiredDuringSchedulingIgnoredDuringExecution` para nao compartilhar o mesmo node do Pod **%s** (`app=%s`). Use `kubernetes.io/hostname` como topologyKey.", peer, anchor, anchor),
+			fmt.Sprintf("O Pod **%s** deve usar **podAntiAffinity obrigatoria** contra `app=%s`, com topologyKey `kubernetes.io/hostname`.", peer, anchor),
+			fmt.Sprintf("Crie **%s** com `spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution`. O `labelSelector.matchExpressions` deve selecionar `app In [%s]` e o `topologyKey` deve ser `kubernetes.io/hostname`. Em cluster de um node, ficar Pending e o resultado esperado da regra.", peer, anchor)),
+		Hint:          "Use spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution com labelSelector e topologyKey kubernetes.io/hostname.",
+		AnswerCommand: fmt.Sprintf("kubectl apply -f pod-antiaffinity.yaml  # Pod %s com podAntiAffinity contra app=%s", peer, anchor),
+		Setup: []models.SetupStep{{
+			Description: fmt.Sprintf("Criando o Pod ancora %s...", anchor),
+			Command:     fmt.Sprintf("kubectl run %s --image=nginx:1.25 --labels=app=%s --restart=Never 2>/dev/null || true; kubectl wait --for=condition=Ready pod/%s --timeout=90s 2>/dev/null || true", anchor, anchor, anchor),
+		}},
+		Goals: []models.Goal{
+			{Description: "A regra usa **podAntiAffinity obrigatoria** e topologyKey de hostname", Hint: pickHelp(level, "", "Confira requiredDuringSchedulingIgnoredDuringExecution[0].topologyKey.", "Use kubernetes.io/hostname."), Validation: &models.Validation{Command: fmt.Sprintf("kubectl get pod %s -o jsonpath='{.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].topologyKey}' 2>/dev/null", peer), ExpectedContains: "kubernetes.io/hostname"}},
+			{Description: fmt.Sprintf("O seletor da anti-affinity procura **app=%s**", anchor), Hint: "matchExpressions: key app, operator In, values com o nome da ancora.", Validation: &models.Validation{Command: fmt.Sprintf("kubectl get pod %s -o jsonpath='{.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].labelSelector.matchExpressions[0].values[0]}' 2>/dev/null", peer), ExpectedContains: anchor}},
+		},
+		Teardown:    []string{fmt.Sprintf("kubectl delete pod %s %s --ignore-not-found=true --wait=false", anchor, peer)},
+		Explanation: "Pod anti-affinity usa labels de outros Pods e um dominio de topologia para impedir ou evitar co-localizacao. A variante required e uma restricao dura; em um cluster de um unico node, o segundo Pod pode ficar Pending corretamente.",
+		DocURL:      "https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/", DocSection: "Affinity and anti-affinity -> Pod anti-affinity",
+	}
+}
+
+func tplNodePort(p params, level int, cert string) models.Question {
+	port := 30080
+	return models.Question{
+		Question: pickHelp(level,
+			fmt.Sprintf("Exponha o Deployment **%s** como Service **%s** do tipo **NodePort**, porta 80, targetPort 80 e nodePort **%d**.", p.Name, p.Name2, port),
+			fmt.Sprintf("Crie um Service NodePort **%s** para o Deployment **%s**. Use port/targetPort 80 e nodePort %d.", p.Name2, p.Name, port),
+			fmt.Sprintf("Use `kubectl expose deployment %s --name=%s --type=NodePort --port=80 --target-port=80` e ajuste `spec.ports[0].nodePort` para %d.", p.Name, p.Name2, port)),
+		Hint:          fmt.Sprintf("spec.type: NodePort e spec.ports[0].nodePort: %d", port),
+		AnswerCommand: fmt.Sprintf("kubectl expose deployment %s --name=%s --type=NodePort --port=80 --target-port=80; kubectl patch svc %s -p '{\"spec\":{\"ports\":[{\"port\":80,\"targetPort\":80,\"nodePort\":%d}]}}'", p.Name, p.Name2, p.Name2, port),
+		Setup:         []models.SetupStep{{Description: fmt.Sprintf("Criando backend %s...", p.Name), Command: fmt.Sprintf("kubectl create deployment %s --image=nginx:1.25 2>/dev/null || true; kubectl rollout status deployment/%s --timeout=90s 2>/dev/null || true", p.Name, p.Name)}},
+		Goals: []models.Goal{
+			{Description: fmt.Sprintf("Service **%s** e do tipo NodePort", p.Name2), Validation: &models.Validation{Command: fmt.Sprintf("kubectl get svc %s -o jsonpath='{.spec.type}' 2>/dev/null", p.Name2), ExpectedContains: "NodePort"}},
+			{Description: fmt.Sprintf("O Service publica nodePort **%d** e seleciona o backend", port), Validation: &models.Validation{Command: fmt.Sprintf("kubectl get svc %s -o jsonpath='{.spec.ports[0].nodePort}:{.spec.selector.app}' 2>/dev/null", p.Name2), ExpectedContains: fmt.Sprintf("%d:%s", port, p.Name)}},
+		},
+		Teardown:    []string{fmt.Sprintf("kubectl delete svc %s --ignore-not-found=true", p.Name2), fmt.Sprintf("kubectl delete deployment %s --ignore-not-found=true", p.Name)},
+		Explanation: "NodePort mantem um ClusterIP e tambem abre a mesma porta, no intervalo configurado, em cada node. O Service encaminha o trafego aos Pods que casam com seu selector.",
+		DocURL:      "https://kubernetes.io/docs/concepts/services-networking/service/", DocSection: "Type NodePort",
+	}
+}
+
+func tplAdmissionControl(p params, level int, cert string) models.Question {
+	pod := p.Name + "-admitted"
+	quota := p.Name + "-quota"
+	return models.Question{
+		Question: pickHelp(level,
+			fmt.Sprintf("Configure o admission controller **ResourceQuota** criando **%s** com `requests.cpu=1` e `requests.memory=1Gi`; depois crie o Pod **%s** com requests de CPU e memoria para ele ser admitido.", quota, pod),
+			fmt.Sprintf("Crie o ResourceQuota **%s** e um Pod **%s** que satisfaca a politica de requests exigida na admissao.", quota, pod),
+			fmt.Sprintf("1. `kubectl create quota %s --hard=requests.cpu=1,requests.memory=1Gi`\n2. Crie %s com resources.requests.cpu=100m e memory=64Mi.\n3. Confirme que o Pod foi admitido e ficou Running.", quota, pod)),
+		Hint:          "ResourceQuota e avaliado na cadeia de admission antes de o objeto ser persistido.",
+		AnswerCommand: fmt.Sprintf("kubectl create quota %s --hard=requests.cpu=1,requests.memory=1Gi; kubectl run %s --image=nginx:1.25 --requests=cpu=100m,memory=64Mi", quota, pod),
+		Goals: []models.Goal{
+			{Description: "ResourceQuota exige requests de CPU e memoria", Validation: &models.Validation{Command: fmt.Sprintf("kubectl get resourcequota %s -o jsonpath='{.spec.hard.requests\\.cpu}:{.spec.hard.requests\\.memory}' 2>/dev/null", quota), ExpectedContains: "1:1Gi"}},
+			{Description: fmt.Sprintf("Pod **%s** tem requests e foi admitido", pod), Validation: &models.Validation{Command: fmt.Sprintf("kubectl get pod %s -o jsonpath='{.spec.containers[0].resources.requests.cpu}:{.spec.containers[0].resources.requests.memory}' 2>/dev/null", pod), ExpectedContains: "100m:64Mi"}},
+		},
+		Teardown:    []string{fmt.Sprintf("kubectl delete pod %s --ignore-not-found=true", pod), fmt.Sprintf("kubectl delete resourcequota %s --ignore-not-found=true", quota)},
+		Explanation: "Admission controllers interceptam requests depois de autenticacao/autorizacao e antes da persistencia. ResourceQuota rejeita criacoes que excedem a quota ou omitem requests exigidos.",
+		DocURL:      "https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/", DocSection: "ResourceQuota admission controller",
+	}
+}
+
+func tplRBAC(p params, level int, cert string) models.Question {
+	sa := p.Name + "-viewer"
+	role := p.Name + "-pod-reader"
+	binding := p.Name + "-binding"
+	return models.Question{
+		Question: pickHelp(level,
+			fmt.Sprintf("Crie uma Role **%s** que permita `get,list,watch` em Pods e vincule-a ao ServiceAccount **%s** com o RoleBinding **%s**.", role, sa, binding),
+			fmt.Sprintf("Implemente RBAC namespaced: Role **%s** para leitura de Pods e RoleBinding para **%s**.", role, sa),
+			fmt.Sprintf("1. `kubectl create role %s --verb=get,list,watch --resource=pods`\n2. `kubectl create rolebinding %s --role=%s --serviceaccount=default:%s`\n3. Valide com `kubectl auth can-i list pods --as=system:serviceaccount:default:%s`.", role, binding, role, sa, sa)),
+		Hint:          "Use Role e RoleBinding, nao ClusterRoleBinding, para manter o menor escopo.",
+		AnswerCommand: fmt.Sprintf("kubectl create role %s --verb=get,list,watch --resource=pods; kubectl create rolebinding %s --role=%s --serviceaccount=default:%s", role, binding, role, sa),
+		Setup:         []models.SetupStep{{Description: fmt.Sprintf("Criando ServiceAccount %s...", sa), Command: fmt.Sprintf("kubectl create serviceaccount %s 2>/dev/null || true", sa)}},
+		Goals: []models.Goal{
+			{Description: "Role concede somente leitura de Pods", Validation: &models.Validation{Command: fmt.Sprintf("kubectl get role %s -o jsonpath='{.rules[0].resources[0]}:{.rules[0].verbs}' 2>/dev/null", role), ExpectedContains: "pods:[get list watch]"}},
+			{Description: fmt.Sprintf("RoleBinding referencia o ServiceAccount **%s**", sa), Validation: &models.Validation{Command: fmt.Sprintf("kubectl get rolebinding %s -o jsonpath='{.roleRef.name}:{.subjects[0].name}' 2>/dev/null", binding), ExpectedContains: role + ":" + sa}},
+		},
+		Teardown:    []string{fmt.Sprintf("kubectl delete rolebinding %s --ignore-not-found=true", binding), fmt.Sprintf("kubectl delete role %s --ignore-not-found=true", role), fmt.Sprintf("kubectl delete serviceaccount %s --ignore-not-found=true", sa)},
+		Explanation: "RBAC associa verbos e recursos a subjects. Role/RoleBinding sao namespaced; ClusterRole/ClusterRoleBinding ampliam o escopo. Prefira menor privilegio.",
+		DocURL:      "https://kubernetes.io/docs/reference/access-authn-authz/rbac/", DocSection: "Role and RoleBinding",
 	}
 }
 

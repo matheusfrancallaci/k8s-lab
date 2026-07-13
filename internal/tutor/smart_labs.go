@@ -72,7 +72,10 @@ func GenerateSmartLabs(msg, activeCert string, level, count int) ([]models.Quest
 		count = 8
 	}
 	cert := inferCertFromMessage(msg, activeCert)
-	userTopic := exactTopicForRequest(cert, msg)
+	userTopic := topicFromCurriculumOrRequest(cert, msg)
+	if userTopic == "" {
+		userTopic = exactTopicForRequest(cert, msg)
+	}
 	if userTopic == "" {
 		userTopic = detectTopic(msg)
 	}
@@ -179,6 +182,16 @@ func isAWSFocus(cert, msg string) bool {
 func exactTopicForRequest(cert, msg string) string {
 	l := strings.ToLower(cert + " " + msg)
 	switch {
+	case regexp.MustCompile(`(?i)pod.?anti.?affinity|podantiaffinity|anti.?affinit|affinity\s+and\s+anti`).MatchString(l):
+		return "Pod Affinity and Anti-Affinity"
+	case regexp.MustCompile(`(?i)taint\w*\s+(?:e|and|&)\s+toler|taint.?toler|toleration`).MatchString(l):
+		return "Taints and Tolerations"
+	case regexp.MustCompile(`(?i)admission\s*control|admissioncontroller|admission controll?e?r?`).MatchString(l):
+		return "Admission Control"
+	case regexp.MustCompile(`(?i)node.?port`).MatchString(l):
+		return "NodePort"
+	case regexp.MustCompile(`(?i)role.?based.?access|\brbac\b|rolebinding|clusterrole`).MatchString(l):
+		return "RBAC"
 	case regexp.MustCompile(`(?i)pod(?:s)?\s+est[aá]tic|static\s+pods?`).MatchString(l):
 		return "Static Pods"
 	case isAWSFocus(cert, msg) && regexp.MustCompile(`(?i)\bsqs\b|simple queue|fila|mensager`).MatchString(l):

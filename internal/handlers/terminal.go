@@ -758,6 +758,49 @@ func EnsureCluster() {
 	}
 }
 
+// EnsureClusterReady is the synchronous gate used before creating or starting
+// labs. It starts the selected AKS/minikube when possible and only returns nil
+// after the Kubernetes API answers. LAB_NO_CLUSTER keeps unit/eval runs
+// deterministic without weakening the production boundary.
+func EnsureClusterReady(ctx context.Context) error {
+	if os.Getenv("LAB_NO_CLUSTER") == "1" {
+		return nil
+	}
+	if clusterIsUp() {
+		return nil
+	}
+	current := currentContext()
+	if current == aksName() && azInstalled() && azSubscription() != "" && aksExists() {
+		if aksPowerState() != "Running" {
+			cmd := fmt.Sprintf("az aks start -g %s -n %s --only-show-errors 2>&1", azRG(), aksName())
+			if out, err := wslShellCtx(ctx, cmd).CombinedOutput(); err != nil {
+				return fmt.Errorf("nao consegui ligar o AKS: %s", strings.TrimSpace(string(out)))
+			}
+		}
+		cmd := fmt.Sprintf("az aks get-credentials -g %s -n %s --overwrite-existing --only-show-errors 2>&1 && kubectl config use-context %s 2>&1", azRG(), aksName(), aksName())
+		if out, err := wslShellCtx(ctx, cmd).CombinedOutput(); err != nil {
+			return fmt.Errorf("AKS ligado, mas kubectl nao conectou: %s", strings.TrimSpace(string(out)))
+		}
+	} else {
+		EnsureCluster()
+	}
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+	for {
+		if clusterIsUp() {
+			readyMu.Lock()
+			readyCached, readyCheckedAt = true, time.Now()
+			readyMu.Unlock()
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("cluster nao ficou pronto: %w", ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
 // TerminalWS opens a real PTY-backed terminal via Windows ConPTY running WSL bash.
 // This gives the user a full interactive shell: VIM, tab completion, colors, etc.
 func TerminalWS(w http.ResponseWriter, r *http.Request) {

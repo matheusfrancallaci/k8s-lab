@@ -60,6 +60,12 @@ func ClusterResetHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "data: %s\n\n", b)
 		flusher.Flush()
 	}
+	clusterCtx, cancelCluster := context.WithTimeout(r.Context(), 10*time.Minute)
+	defer cancelCluster()
+	if err := EnsureClusterReady(clusterCtx); err != nil {
+		send(map[string]any{"type": "error", "msg": "cluster nao subiu: " + err.Error()})
+		return
+	}
 
 	total := len(clusterResetSteps)
 	for i, step := range clusterResetSteps {
