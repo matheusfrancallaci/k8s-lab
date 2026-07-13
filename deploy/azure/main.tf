@@ -61,6 +61,88 @@ resource "azurerm_subnet" "lab" {
   address_prefixes     = ["10.20.1.0/24"]
 }
 
+resource "azurerm_subnet" "postgres" {
+  name                 = "${var.prefix}-postgres-subnet"
+  resource_group_name  = azurerm_resource_group.lab.name
+  virtual_network_name = azurerm_virtual_network.lab.name
+  address_prefixes     = ["10.20.2.0/24"]
+
+  delegation {
+    name = "postgres-flexible-server"
+    service_delegation {
+      name    = "Microsoft.DBforPostgreSQL/flexibleServers"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+    }
+  }
+}
+
+resource "azurerm_private_dns_zone" "postgres" {
+  name                = "${var.prefix}.postgres.database.azure.com"
+  resource_group_name = azurerm_resource_group.lab.name
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
+  name                  = "${var.prefix}-postgres-link"
+  private_dns_zone_name = azurerm_private_dns_zone.postgres.name
+  virtual_network_id    = azurerm_virtual_network.lab.id
+  resource_group_name   = azurerm_resource_group.lab.name
+}
+
+resource "random_password" "postgres" {
+  length  = 32
+  special = false
+}
+
+resource "azurerm_postgresql_flexible_server" "lab" {
+  name                          = "${var.prefix}-postgres-${random_string.suffix.result}"
+  resource_group_name           = azurerm_resource_group.lab.name
+  location                      = azurerm_resource_group.lab.location
+  version                       = var.postgres_version
+  delegated_subnet_id           = azurerm_subnet.postgres.id
+  private_dns_zone_id           = azurerm_private_dns_zone.postgres.id
+  public_network_access_enabled = false
+  administrator_login           = "labadmin"
+  administrator_password        = random_password.postgres.result
+  zone                          = "1"
+  storage_mb                    = var.postgres_storage_mb
+  sku_name                      = var.postgres_sku_name
+  backup_retention_days         = 7
+
+  depends_on = [azurerm_private_dns_zone_virtual_network_link.postgres]
+}
+
+resource "azurerm_postgresql_flexible_server_database" "lab" {
+  name      = "estudo_app"
+  server_id = azurerm_postgresql_flexible_server.lab.id
+  charset   = "UTF8"
+  collation = "en_US.utf8"
+}
+
+data "azurerm_client_config" "current" {}
+
+resource "azurerm_key_vault" "lab" {
+  name                       = "${var.prefix}kv${random_string.suffix.result}"
+  resource_group_name        = azurerm_resource_group.lab.name
+  location                   = azurerm_resource_group.lab.location
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  sku_name                   = "standard"
+  enable_rbac_authorization  = true
+  soft_delete_retention_days = 7
+}
+
+resource "azurerm_role_assignment" "deployer_manage_database_secret" {
+  scope                = azurerm_key_vault.lab.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+resource "azurerm_key_vault_secret" "database_url" {
+  name         = "database-url"
+  value        = "postgres://labadmin:${random_password.postgres.result}@${azurerm_postgresql_flexible_server.lab.fqdn}:5432/${azurerm_postgresql_flexible_server_database.lab.name}?sslmode=require"
+  key_vault_id = azurerm_key_vault.lab.id
+  depends_on   = [azurerm_role_assignment.deployer_manage_database_secret]
+}
+
 resource "azurerm_public_ip" "lab" {
   name                = "${var.prefix}-ip"
   resource_group_name = azurerm_resource_group.lab.name
@@ -203,5 +285,11 @@ resource "azurerm_role_assignment" "vm_self_manage" {
 resource "azurerm_role_assignment" "vm_manage_rg" {
   scope                = azurerm_resource_group.lab.id
   role_definition_name = "Contributor"
+  principal_id         = azurerm_linux_virtual_machine.lab.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "vm_read_database_secret" {
+  scope                = azurerm_key_vault.lab.id
+  role_definition_name = "Key Vault Secrets User"
   principal_id         = azurerm_linux_virtual_machine.lab.identity[0].principal_id
 }

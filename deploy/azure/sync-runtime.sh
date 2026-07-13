@@ -22,8 +22,15 @@ rollback() {
 }
 trap rollback EXIT
 
+az login --identity --allow-no-subscriptions >/dev/null
+key_vault=$(az keyvault list -g k8slab-rg --query '[0].name' -o tsv)
+test -n "$key_vault"
+export DATABASE_URL=$(az keyvault secret show --vault-name "$key_vault" --name database-url --query value -o tsv)
+test -n "$DATABASE_URL"
+
 python3 - "$runtime" <<'PY'
 from pathlib import Path
+import os
 import re
 import sys
 
@@ -60,6 +67,7 @@ desired = [
     ("QUESTIONS_CUSTOM_DIR", "/app/data/questions-custom"),
 	("LAB_SESSIONS_PATH", "/app/data/lab-sessions.json"),
 	("TUTOR_CHECKPOINTS_PATH", "/app/data/tutor/checkpoints.json"),
+	("DATABASE_URL", os.environ["DATABASE_URL"]),
 ]
 key_pattern = "|".join(re.escape(key) for key, _ in desired)
 content = re.sub(
@@ -87,7 +95,7 @@ for key in \
   EMBEDDED_K3S \
   OLLAMA_MODEL OLLAMA_CHAT_MODEL OLLAMA_ROUTER_MODEL OLLAMA_GEN_MODEL \
   OLLAMA_EMBED_MODEL OLLAMA_MAX_CONCURRENCY OLLAMA_KEEP_ALIVE \
-  K8S_LAB_VERIFY_GENERATED TUTOR_TELEMETRY_PERSIST QUESTIONS_CUSTOM_DIR LAB_SESSIONS_PATH TUTOR_CHECKPOINTS_PATH; do
+  K8S_LAB_VERIFY_GENERATED TUTOR_TELEMETRY_PERSIST QUESTIONS_CUSTOM_DIR LAB_SESSIONS_PATH TUTOR_CHECKPOINTS_PATH DATABASE_URL; do
   test "$(grep -c -- "-e ${key}=" "$runtime")" -eq 1
 done
 ! grep -q -- '--privileged' "$runtime"

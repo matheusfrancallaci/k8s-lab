@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"estudo-app/internal/persistence"
 )
 
 const labSessionTTL = 24 * time.Hour
@@ -38,6 +40,13 @@ func NewLabSessionStore() *LabSessionStore {
 }
 
 func (s *LabSessionStore) load() {
+	if persistence.Enabled() {
+		var items []*LabSession
+		if persistence.List("lab_session", &items) == nil && len(items) > 0 {
+			s.loadItems(items)
+			return
+		}
+	}
 	b, err := os.ReadFile(s.path)
 	if err != nil {
 		return
@@ -46,6 +55,10 @@ func (s *LabSessionStore) load() {
 	if json.Unmarshal(b, &items) != nil {
 		return
 	}
+	s.loadItems(items)
+}
+
+func (s *LabSessionStore) loadItems(items []*LabSession) {
 	now := time.Now()
 	for _, sess := range items {
 		if sess != nil && sess.ID != "" && sess.Owner != "" && now.Sub(sess.UpdatedAt) <= labSessionTTL {
@@ -61,6 +74,9 @@ func (s *LabSessionStore) saveLocked() {
 	items := make([]*LabSession, 0, len(s.sessions))
 	for _, sess := range s.sessions {
 		items = append(items, sess)
+		if persistence.Enabled() {
+			_ = persistence.Put("lab_session", sess.ID, sess)
+		}
 	}
 	b, err := json.Marshal(items)
 	if err != nil {

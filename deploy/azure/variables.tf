@@ -74,3 +74,21 @@ variable "ollama_embed_model" {
   type        = string
   default     = "embeddinggemma"
 }
+
+variable "postgres_version" {
+  description = "Versao major do Azure Database for PostgreSQL Flexible Server."
+  type        = string
+  default     = "16"
+}
+
+variable "postgres_sku_name" {
+  description = "SKU burstable do PostgreSQL; adequada ao volume inicial da plataforma."
+  type        = string
+  default     = "B_Standard_B1ms"
+}
+
+variable "postgres_storage_mb" {
+  description = "Armazenamento inicial do PostgreSQL em MB."
+  type        = number
+  default     = 32768
+}

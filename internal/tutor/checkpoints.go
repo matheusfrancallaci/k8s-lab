@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"estudo-app/internal/persistence"
 )
 
 type TutorCheckpoint struct {
@@ -31,6 +33,11 @@ type CheckpointEvaluation struct {
 	NextPrompt   string   `json:"next_prompt,omitempty"`
 }
 
+type persistedCheckpoint struct {
+	Key        string          `json:"key"`
+	Checkpoint TutorCheckpoint `json:"checkpoint"`
+}
+
 var checkpoints = struct {
 	sync.Mutex
 	Values map[string]TutorCheckpoint
@@ -49,8 +56,23 @@ func ensureCheckpointsLoadedLocked() {
 		return
 	}
 	checkpoints.Loaded = true
+	if persistence.Enabled() {
+		var items []persistedCheckpoint
+		if persistence.List("tutor_checkpoint", &items) == nil {
+			for _, item := range items {
+				checkpoints.Values[item.Key] = item.Checkpoint
+			}
+		}
+	}
 	if b, err := os.ReadFile(checkpointsPath()); err == nil {
-		_ = json.Unmarshal(b, &checkpoints.Values)
+		var local map[string]TutorCheckpoint
+		if json.Unmarshal(b, &local) == nil {
+			for key, cp := range local {
+				if _, exists := checkpoints.Values[key]; !exists {
+					checkpoints.Values[key] = cp
+				}
+			}
+		}
 	}
 	if checkpoints.Values == nil {
 		checkpoints.Values = map[string]TutorCheckpoint{}
@@ -58,6 +80,11 @@ func ensureCheckpointsLoadedLocked() {
 }
 
 func saveCheckpointsLocked() {
+	if persistence.Enabled() {
+		for key, cp := range checkpoints.Values {
+			_ = persistence.Put("tutor_checkpoint", key, persistedCheckpoint{Key: key, Checkpoint: cp})
+		}
+	}
 	path := checkpointsPath()
 	if os.MkdirAll(filepath.Dir(path), 0o755) != nil {
 		return

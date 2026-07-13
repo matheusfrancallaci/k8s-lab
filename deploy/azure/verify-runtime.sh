@@ -31,6 +31,7 @@ expect_env TUTOR_TELEMETRY_PERSIST 1
 expect_env QUESTIONS_CUSTOM_DIR /app/data/questions-custom
 expect_env LAB_SESSIONS_PATH /app/data/lab-sessions.json
 expect_env TUTOR_CHECKPOINTS_PATH /app/data/tutor/checkpoints.json
+grep -Eq '^DATABASE_URL=postgres://.+sslmode=require$' <<<"$container_env"
 
 for _ in $(seq 1 30); do
   if models=$(docker exec ollama ollama list 2>/dev/null) \

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"estudo-app/internal/models"
+	"estudo-app/internal/persistence"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -206,6 +207,13 @@ type skillsDoc struct {
 
 func loadProfile(id string) *Profile {
 	p := &Profile{id: id, Skills: map[string]*TopicSkill{}, Review: map[string]*ReviewItem{}, lastAdvised: map[string]time.Time{}}
+	if persistence.Enabled() {
+		var s skillsDoc
+		if found, err := persistence.Get("tutor_profile", id, &s); err == nil && found {
+			applySkillsDoc(p, s)
+			return p
+		}
+	}
 	b, err := os.ReadFile(profilePath(id))
 	if err != nil && id == "default" {
 		// Migração única: progresso legado morava em data/tutor.json.
@@ -214,25 +222,29 @@ func loadProfile(id string) *Profile {
 	if err == nil {
 		var s skillsDoc
 		if json.Unmarshal(b, &s) == nil {
-			if s.Skills != nil {
-				p.Skills = s.Skills
-			}
-			if s.Review != nil {
-				p.Review = s.Review
-			}
-			p.History = s.History
-			p.Memory = s.Memory
-			p.Goal = s.Goal
-			p.Streak = s.Streak
-			if s.Activity != nil {
-				p.Activity = s.Activity
-			}
+			applySkillsDoc(p, s)
 		}
 	}
 	if p.Activity == nil {
 		p.Activity = map[string]*QuestionOutcome{}
 	}
 	return p
+}
+
+func applySkillsDoc(p *Profile, s skillsDoc) {
+	if s.Skills != nil {
+		p.Skills = s.Skills
+	}
+	if s.Review != nil {
+		p.Review = s.Review
+	}
+	p.History, p.Memory, p.Goal, p.Streak = s.History, s.Memory, s.Goal, s.Streak
+	if s.Activity != nil {
+		p.Activity = s.Activity
+	}
+	if p.Activity == nil {
+		p.Activity = map[string]*QuestionOutcome{}
+	}
 }
 
 // scheduleSave persiste com debounce (caller deve segurar p.mu).
@@ -243,7 +255,8 @@ func (p *Profile) scheduleSave() {
 	p.saveTimer = time.AfterFunc(2*time.Second, func() {
 		p.mu.Lock()
 		refreshLearningMemoryLocked(p)
-		b, err := json.MarshalIndent(skillsDoc{Skills: p.Skills, Review: p.Review, History: p.History, Memory: p.Memory, Goal: p.Goal, Streak: p.Streak, Activity: p.Activity}, "", "  ")
+		doc := skillsDoc{Skills: p.Skills, Review: p.Review, History: p.History, Memory: p.Memory, Goal: p.Goal, Streak: p.Streak, Activity: p.Activity}
+		b, err := json.MarshalIndent(doc, "", "  ")
 		p.mu.Unlock()
 		if err != nil {
 			return
@@ -253,6 +266,11 @@ func (p *Profile) scheduleSave() {
 		}
 		if err := os.WriteFile(profilePath(p.id), b, 0o644); err != nil {
 			log.Printf("[tutor] falha ao salvar perfil %s: %v", p.id, err)
+		}
+		if persistence.Enabled() {
+			if err := persistence.Put("tutor_profile", p.id, doc); err != nil {
+				log.Printf("[tutor] falha ao salvar perfil %s no postgres: %v", p.id, err)
+			}
 		}
 	})
 }
