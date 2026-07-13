@@ -48,6 +48,17 @@ func llmContractSchema(contract string) any {
 				"reason": stringField,
 			},
 		},
+		"tutor-action": map[string]any{
+			"type": "object", "additionalProperties": false,
+			"required": []string{"intent", "cert", "count", "level", "confidence"},
+			"properties": map[string]any{
+				"intent": map[string]any{"type": "string", "enum": []string{"create_lab", "progress", "exam", "review", "diagnose", "compare", "explain"}},
+				"topic":  stringField, "cert": stringField,
+				"count":      map[string]any{"type": "integer", "minimum": 1, "maximum": 12},
+				"level":      map[string]any{"type": "integer", "minimum": 1, "maximum": 3},
+				"confidence": map[string]any{"type": "integer", "minimum": 0, "maximum": 100},
+			},
+		},
 		"judge": map[string]any{
 			"type": "object", "additionalProperties": false, "required": []string{"verdict", "nivel", "problema"},
 			"properties": map[string]any{

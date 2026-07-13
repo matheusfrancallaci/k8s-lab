@@ -55,6 +55,15 @@ type goldenPrompt struct {
 
 var goldenPrompts = []goldenPrompt{
 	{
+		Name:       "CKA Static Pods action",
+		Prompt:     "Criar 3 labs de pods estaticos nivel 2",
+		ActiveCert: "CKA",
+		WantCert:   "CKA",
+		WantTopic:  "Static Pods",
+		WantTerms:  []string{"staticpodpath", "mirror pod", "kubelet"},
+		Level:      2,
+	},
+	{
 		Name:       "CKA HPA",
 		Prompt:     "criar questao da CKA de HPA nivel 3",
 		ActiveCert: "CKA",

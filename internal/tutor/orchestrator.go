@@ -34,11 +34,12 @@ var orchestrationState = struct {
 
 func OrchestrateTutorTurn(userID, msg, cert, mode string) TutorOrchestration {
 	memory := LearningMemoryFor(userID)
-	intent := classifyTutorIntent(msg)
-	topic := exactTopicForRequest(cert, msg)
-	if topic == "" {
-		topic = detectTopic(msg)
+	decision := ClassifyTutorRequest(msg, cert)
+	intent := decision.Intent
+	if intent == "create_lab" {
+		intent = "practice"
 	}
+	topic := decision.Topic
 	level := inferLearnerLevel(memory)
 	strategy := selectTeachingStrategy(intent, level, mode, memory)
 	phases := []TutorPhase{

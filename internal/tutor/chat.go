@@ -215,6 +215,7 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 	if cert == "" {
 		cert = "CKA"
 	}
+	intentDecision := ClassifyTutorRequest(msg, cert)
 
 	// 0. Cadastrar certificação nova → personaliza o board de verdade
 	if m := regexp.MustCompile(`(?i)(?:criar|adicionar|cadastrar|nova|quero(?:\s+estudar)?(?:\s+para)?)\s+(?:a\s+)?certifica[cç][aã]o\s+(?:de\s+|do\s+|da\s+)?([A-Za-z0-9][A-Za-z0-9 ._+-]{1,30})`).FindStringSubmatch(msg); m != nil {
@@ -257,7 +258,7 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 	}
 
 	// 1. Desempenho / progresso
-	if regexp.MustCompile(`desempenho|progresso|como estou|estat[ií]stic(?:a|as|o|os)?\b|\bstats?\b|pontos? frac|dashboard`).MatchString(l) {
+	if intentDecision.Intent == "progress" {
 		return ChatResult{
 			Reply:  "Aqui está o seu panorama. Onde o score está baixo é onde eu atacaria primeiro — quer que eu gere um lab focado nele?",
 			Action: &ChatAction{Type: "stats"},

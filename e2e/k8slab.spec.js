@@ -56,6 +56,7 @@ test('golden eval cobre prompts criticos do tutor', async ({ page }) => {
   expect(typeof body.regression_total).toBe('number');
   expect(body.quality).toBeTruthy();
   expect((body.cases || []).map(c => c.name)).toEqual(expect.arrayContaining([
+    'CKA Static Pods action',
     'CKA HPA',
     'AWS SQS',
     'CAPA ArgoCD Sync',
@@ -86,6 +87,19 @@ test('tutor roteia labs por certificacao e topico exato', async ({ page }) => {
     topic: 'GitOps',
     dependencies: ['argocd']
   });
+  await expectTutorSession(page, 'Criar 3 labs de pods estaticos nivel 2', 'CKA', {
+    cert: 'CKA',
+    topic: 'Static Pods'
+  });
+});
+
+test('catalogo permite sessao customizada e labs mostram confianca', async ({ page }) => {
+  await ensureLoggedIn(page);
+  await page.goto('/lab');
+  await expect(page.locator('#maker-topic')).toBeVisible();
+  await expect(page.locator('#maker-count')).toHaveValue('5');
+  await page.goto('/lab/cka-lab-001');
+  await expect(page.locator('.lab-top-actions')).toContainText(/curado|verifica|valida|simula/i);
 });
 
 test('painel de desempenho mostra RAG, observabilidade e golden eval', async ({ page }) => {
@@ -113,6 +127,7 @@ test('tutor oferece conversas persistentes, modos e anexos acessiveis', async ({
   await expect(page.locator('.tutor-tab')).toHaveCount(4);
   await page.locator('.tutor-tab', { hasText: 'Progresso' }).click();
   await expect(page.locator('#painel')).toHaveClass(/active/);
+  await expect(page.locator('.tutor-tab', { hasText: 'Progresso' })).toHaveAttribute('aria-selected', 'true');
   await page.locator('.tutor-tab', { hasText: 'Fontes' }).click();
   await expect(page.locator('#sources-pane')).toHaveClass(/active/);
   await page.locator('.tutor-tab', { hasText: 'Sistema' }).click();

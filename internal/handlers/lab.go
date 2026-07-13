@@ -69,6 +69,7 @@ func (h *LabHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/lab", http.StatusSeeOther)
 		return
 	}
+	q = scopeLabForUser(q, userID(r))
 	q = tutor.PrepareLabForDelivery(q)
 	// Gabarito PROVADO quebrado pela execução não chega ao aluno.
 	if reason := tutor.DeliveryBlockReason(q); reason != "" {
@@ -96,7 +97,7 @@ func (h *LabHandler) Show(w http.ResponseWriter, r *http.Request) {
 	sessionIsLast := false
 	sessionPct := 0
 	if sid := r.URL.Query().Get("session"); sid != "" {
-		if sess, ok := h.labSessions.Get(sid); ok {
+		if sess, ok := h.labSessions.Get(userID(r), sid); ok {
 			sessionID = sess.ID
 			sessionIndex = sess.Index + 1 // 1-based for display
 			sessionTotal = len(sess.Questions)
@@ -118,8 +119,78 @@ func (h *LabHandler) Show(w http.ResponseWriter, r *http.Request) {
 		"SessionTotal":  sessionTotal,
 		"SessionIsLast": sessionIsLast,
 		"SessionPct":    sessionPct,
+		"TrustLabel":    labTrustLabel(q),
+		"TrustTone":     labTrustTone(q),
 	}
 	h.render(w, "lab.html", data)
+}
+
+func labTrustLabel(q models.Question) string {
+	if q.Source == models.SourceCurated {
+		return "curado"
+	}
+	if q.LabSpec != nil {
+		r := q.LabSpec.Readiness
+		switch {
+		case r.Executable && r.State == "ready":
+			return "execução verificada"
+		case strings.Contains(q.LabSpec.ValidationMode, "dry-run") || (!r.Executable && r.State != ""):
+			return "simulação segura"
+		case r.State == "degraded":
+			return "verificação parcial"
+		}
+	}
+	return "gerado com validação"
+}
+
+func labTrustTone(q models.Question) string {
+	label := labTrustLabel(q)
+	if label == "execução verificada" || label == "curado" {
+		return "badge-green"
+	}
+	if label == "verificação parcial" {
+		return "badge-red"
+	}
+	return "badge-yellow"
+}
+
+func scopeLabForUser(q models.Question, uid string) models.Question {
+	ns := userLabNamespace(uid)
+	if ns == "" {
+		return q
+	}
+	scope := func(s string) string {
+		toolsNS := ns + "-tools"
+		return strings.NewReplacer(
+			"-n default", "-n "+ns, "--namespace=default", "--namespace="+ns,
+			"--namespace default", "--namespace "+ns, "namespace: default", "namespace: "+ns,
+			"serviceaccount:default:", "serviceaccount:"+ns+":", "namespace default", "namespace "+ns,
+			"-n tools", "-n "+toolsNS, "namespace `tools`", "namespace `"+toolsNS+"`", "namespace tools", "namespace "+toolsNS,
+		).Replace(s)
+	}
+	q.Question, q.Hint, q.AnswerCommand, q.Explanation = scope(q.Question), scope(q.Hint), scope(q.AnswerCommand), scope(q.Explanation)
+	if q.Validation != nil {
+		q.Validation.Command = scope(q.Validation.Command)
+	}
+	for i := range q.Setup {
+		q.Setup[i].Command, q.Setup[i].Description = scope(q.Setup[i].Command), scope(q.Setup[i].Description)
+	}
+	for i := range q.Goals {
+		q.Goals[i].Description, q.Goals[i].Hint = scope(q.Goals[i].Description), scope(q.Goals[i].Hint)
+		if q.Goals[i].Validation != nil {
+			q.Goals[i].Validation.Command = scope(q.Goals[i].Validation.Command)
+		}
+	}
+	for i := range q.Teardown {
+		q.Teardown[i] = scope(q.Teardown[i])
+	}
+	if q.LabSpec != nil {
+		q.LabSpec.Namespace = ns
+		if q.LabSpec.LabPlan != nil {
+			q.LabSpec.LabPlan.Namespace = ns
+		}
+	}
+	return q
 }
 
 func (h *LabHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
@@ -160,7 +231,7 @@ func (h *LabHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		ids[i] = questions[i].ID
 	}
 
-	sess := h.labSessions.Create(ids)
+	sess := h.labSessions.Create(userID(r), ids)
 	json.NewEncoder(w).Encode(map[string]any{
 		"id":    sess.ID,
 		"first": ids[0],
@@ -176,7 +247,7 @@ func (h *LabHandler) AdvanceSession(w http.ResponseWriter, r *http.Request) {
 	// Estado honesto: avançar sem aprovar a questão atual registra "pulou" —
 	// não bloqueia, mas a jornada não mente conclusão.
 	var sessionQuestions []string
-	if sess, ok := h.labSessions.Get(sid); ok {
+	if sess, ok := h.labSessions.Get(uid, sid); ok {
 		sessionQuestions = append(sessionQuestions, sess.Questions...)
 		if sess.Index >= 0 && sess.Index < len(sess.Questions) {
 			if q, found := h.repo.GetByID(sess.Questions[sess.Index]); found {
@@ -185,7 +256,7 @@ func (h *LabHandler) AdvanceSession(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	idx, total, nextID, done := h.labSessions.Advance(sid)
+	idx, total, nextID, done := h.labSessions.Advance(uid, sid)
 	resp := map[string]any{
 		"done":  done,
 		"next":  nextID,
@@ -276,6 +347,7 @@ func (h *LabHandler) Setup(w http.ResponseWriter, r *http.Request) {
 
 	// Setup executa somente o ambiente do exercicio. A verificacao executavel
 	// acontece na geracao e nunca e repetida no request do aluno.
+	q = scopeLabForUser(q, userID(r))
 	q = tutor.FinalizeLab(q, "")
 
 	if len(q.Setup) == 0 {
@@ -327,6 +399,7 @@ func (h *LabHandler) Teardown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	q = scopeLabForUser(q, userID(r))
 	q = tutor.FinalizeLab(q, "")
 
 	var warnings []string
@@ -361,6 +434,7 @@ func (h *LabHandler) Validate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	q = scopeLabForUser(q, userID(r))
 	q = tutor.FinalizeLab(q, "")
 
 	// Determine which validation to run: specific goal or the question's own.

@@ -48,7 +48,7 @@ variable "dns_label" {
 variable "idle_minutes" {
   description = "Minutos de inatividade (sem terminais ativos) antes da VM se desalocar sozinha. 0 desliga o auto-stop."
   type        = number
-  default     = 30
+  default     = 0
 }
 
 variable "ollama_model" {

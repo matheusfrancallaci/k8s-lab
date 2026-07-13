@@ -5,6 +5,7 @@ import "testing"
 func resetCheckpointsForTest() {
 	checkpoints.Lock()
 	checkpoints.Values = map[string]TutorCheckpoint{}
+	checkpoints.Loaded = true
 	checkpoints.Unlock()
 }
 

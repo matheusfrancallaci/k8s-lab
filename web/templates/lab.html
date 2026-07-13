@@ -19,6 +19,7 @@
             </a>
             {{end}}
             <span class="badge badge-primary">{{.Question.Cert}}</span>
+            <span class="badge {{.TrustTone}}" title="Nível de evidência deste laboratório">{{.TrustLabel}}</span>
             <span class="badge {{if eq .Question.Difficulty "easy"}}badge-green{{else if eq .Question.Difficulty "mid"}}badge-yellow{{else}}badge-red{{end}}">
                 {{if eq .Question.Difficulty "easy"}}easy{{else if eq .Question.Difficulty "mid"}}medium{{else}}hard{{end}}
             </span>

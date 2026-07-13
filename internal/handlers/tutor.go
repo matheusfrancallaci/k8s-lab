@@ -44,21 +44,27 @@ func (h *TutorHandler) Status(w http.ResponseWriter, r *http.Request) {
 	if cert == "" {
 		cert = "CKA"
 	}
-	nextDecision := tutor.BuildTutorDecision(userID(r), "", cert)
+	uid := userID(r)
+	nextDecision := tutor.BuildTutorDecision(uid, "", cert)
+	var activeSession any
+	if sess, ok := h.labSessions.LatestActive(uid); ok && sess.Index < len(sess.Questions) {
+		activeSession = map[string]any{"id": sess.ID, "question": sess.Questions[sess.Index], "index": sess.Index + 1, "total": len(sess.Questions)}
+	}
 	// Predictive preparation: opening the tutor dashboard warms the images for
 	// the learner's most likely next topic before they request the lab.
 	if likely := h.repo.FilterLabs([]string{cert}, "", []string{nextDecision.TargetTopic}); len(likely) > 0 {
 		PrewarmLabImages(likely)
 	}
 	json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
-		"recommendations": tutor.Advise(userID(r)),
-		"stats":           tutor.Stats(userID(r)),
-		"domain_map":      tutor.DomainMap(userID(r), cert),
-		"review":          tutor.ReviewQueue(userID(r)),
-		"history":         tutor.History(userID(r)),
-		"journey":         tutor.Journey(userID(r)),
-		"mastery":         tutor.MasteryPathForCert(userID(r), cert),
-		"learning_memory": tutor.LearningMemoryFor(userID(r)),
+		"recommendations": tutor.Advise(uid),
+		"stats":           tutor.Stats(uid),
+		"domain_map":      tutor.DomainMap(uid, cert),
+		"review":          tutor.ReviewQueue(uid),
+		"history":         tutor.History(uid),
+		"journey":         tutor.Journey(uid),
+		"mastery":         tutor.MasteryPathForCert(uid, cert),
+		"learning_memory": tutor.LearningMemoryFor(uid),
+		"active_session":  activeSession,
 		"next_decision":   nextDecision,
 		"coverage":        coverageOrNil(cert, h.repo.Filter([]string{cert}, "")),
 		"rag":             tutor.RAGStatus(),
@@ -352,7 +358,7 @@ func (h *TutorHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	for i, q := range qs {
 		ids[i] = q.ID
 	}
-	sess := h.labSessions.Create(ids)
+	sess := h.labSessions.Create(userID(r), ids)
 	// Pré-aquece as imagens usadas pelos labs gerados
 	PrewarmLabImages(qs)
 
@@ -401,7 +407,7 @@ func (h *TutorHandler) Ingest(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := map[string]any{"report": rep}
 	if len(labIDs) > 0 {
-		sess := h.labSessions.Create(labIDs)
+		sess := h.labSessions.Create(userID(r), labIDs)
 		resp["session"] = map[string]any{"id": sess.ID, "first": labIDs[0], "total": len(labIDs)}
 		PrewarmLabImages(qs)
 	}
@@ -438,7 +444,7 @@ func (h *TutorHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	plan := tutor.OrchestrateTutorTurn(uid, body.Message, body.Cert, body.Mode)
 	message = enrichWithReadOnlyAgentObservation(r, uid, message, body.Mode)
 	res := tutor.Chat(uid, message, body.Cert, func(ids []string) (string, string, int) {
-		sess := h.labSessions.Create(ids)
+		sess := h.labSessions.Create(uid, ids)
 		return sess.ID, ids[0], len(ids)
 	})
 	decision := tutor.BuildTutorDecision(uid, message, body.Cert)
@@ -510,7 +516,7 @@ func (h *TutorHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	plan := tutor.OrchestrateTutorTurn(uid, body.Message, body.Cert, body.Mode)
 	message = enrichWithReadOnlyAgentObservation(r, uid, message, body.Mode)
 	res := tutor.Chat(uid, message, body.Cert, func(ids []string) (string, string, int) {
-		sess := h.labSessions.Create(ids)
+		sess := h.labSessions.Create(uid, ids)
 		return sess.ID, ids[0], len(ids)
 	})
 	if len(res.Questions) > 0 {

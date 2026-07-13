@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if systemctl is-enabled lab-autostop.timer >/dev/null 2>&1; then
+  echo "lab-autostop.timer must be disabled for production availability" >&2
+  exit 1
+fi
+
 test "$(docker inspect -f '{{.Config.Image}}' ollama)" = "ollama/ollama:0.30.11"
 
 container_env=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' lab)
@@ -9,6 +14,10 @@ expect_env() {
   value=$2
   grep -Fxq "${key}=${value}" <<<"$container_env"
 }
+
+test "$(docker inspect -f '{{.HostConfig.Privileged}}' lab)" = "false"
+test "$(docker inspect -f '{{.HostConfig.SecurityOpt}}' lab)" = "[no-new-privileges]"
+expect_env EMBEDDED_K3S 0
 
 expect_env OLLAMA_MODEL qwen3:8b
 expect_env OLLAMA_CHAT_MODEL qwen3:8b
@@ -20,6 +29,8 @@ expect_env OLLAMA_KEEP_ALIVE 15m
 expect_env K8S_LAB_VERIFY_GENERATED 0
 expect_env TUTOR_TELEMETRY_PERSIST 1
 expect_env QUESTIONS_CUSTOM_DIR /app/data/questions-custom
+expect_env LAB_SESSIONS_PATH /app/data/lab-sessions.json
+expect_env TUTOR_CHECKPOINTS_PATH /app/data/tutor/checkpoints.json
 
 for _ in $(seq 1 30); do
   if models=$(docker exec ollama ollama list 2>/dev/null) \

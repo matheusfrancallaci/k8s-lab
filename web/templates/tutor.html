@@ -5,7 +5,7 @@
 /* ── duas colunas: conversa + painel persistente ── */
 .tutor-cols {
     width:100%; height:100%; max-width:none; margin:0;
-    display:grid; grid-template-columns:240px minmax(0,1fr); grid-template-rows:56px minmax(0,1fr); gap:0; padding:0;
+    display:grid; grid-template-columns:268px minmax(0,1fr); grid-template-rows:62px minmax(0,1fr); gap:0; padding:0;
 }
 .tutor-shell .sidebar { width:68px; padding-inline:8px; overflow:hidden; }
 .tutor-shell .sidebar .sb-brand { justify-content:center; padding-inline:0; }
@@ -13,13 +13,13 @@
 .tutor-shell .sidebar .sb-link { justify-content:center; width:42px; height:42px; padding:0; margin:2px auto; font-size:0; border-left:0; }
 .tutor-shell .sidebar .sb-link svg,.tutor-shell .sidebar .sb-link img { width:18px; height:18px; }
 .chat-wrap { grid-column:2; grid-row:2; height:100%; min-width:0; display:flex; flex-direction:column; position:relative; padding:0 24px; }
-.conversation-rail { grid-column:1; grid-row:1 / 3; min-width:0; border-right:1px solid var(--border); padding:18px 14px 20px; display:flex; flex-direction:column; gap:12px; background:linear-gradient(180deg,var(--surface),rgba(255,255,255,.012)); }
-.tutor-tabbar { grid-column:2; grid-row:1; display:flex; align-items:center; justify-content:center; gap:4px; border-bottom:1px solid var(--border); backdrop-filter:blur(16px); }
+.conversation-rail { grid-column:1; grid-row:1 / 3; min-width:0; border-right:1px solid var(--border-2); padding:20px 15px; display:flex; flex-direction:column; gap:14px; background:linear-gradient(180deg,rgba(129,140,248,.045),transparent 22%),var(--surface); box-shadow:18px 0 60px -50px rgba(129,140,248,.8); }
+.tutor-tabbar { grid-column:2; grid-row:1; display:flex; align-items:center; justify-content:center; gap:5px; border-bottom:1px solid var(--border); background:rgba(5,5,16,.76); backdrop-filter:blur(20px); }
 .tutor-heading { position:absolute; left:22px; display:flex; align-items:center; gap:9px; }
 .tutor-heading img { width:22px; height:22px; }
 .tutor-heading b { display:block; font-size:12px; color:var(--text); }
 .tutor-heading small { display:block; font:9px var(--mono); color:var(--text-4); }
-.tutor-tab { border:0; border-radius:8px; background:transparent; color:var(--text-4); padding:7px 11px; cursor:pointer; font:10px var(--mono); }
+.tutor-tab { border:0; border-radius:9px; background:transparent; color:var(--text-3); padding:8px 13px; cursor:pointer; font:11px var(--mono); }
 .tutor-tab:hover,.tutor-tab.active { background:var(--surface-2); color:var(--text); }
 .tutor-tab.active { box-shadow:inset 0 -2px var(--violet); }
 .tutor-tab-pane { grid-column:2; grid-row:2; min-width:0; height:100%; overflow:auto; padding:24px max(24px,calc((100% - 980px)/2)); display:none; }
@@ -142,7 +142,7 @@
 .quality-row code { font-family:var(--mono); font-size:11px; color:var(--text-3); background:transparent; padding:0; }
 
 /* ── área de conversa ── */
-.chat-log { flex:1; overflow-y:auto; padding:24px max(12px,calc((100% - 780px)/2)) 138px; scroll-behavior:smooth; scrollbar-width:thin; }
+.chat-log { flex:1; overflow-y:auto; padding:32px max(14px,calc((100% - 860px)/2)) 154px; scroll-behavior:smooth; scrollbar-width:thin; }
 
 /* saudação (estado vazio) */
 .chat-hero { text-align:center; padding:9vh 12px 20px; animation:fadeUp .4s ease both; }
@@ -166,7 +166,7 @@
 @media (max-width:600px){ .sugg-grid { grid-template-columns:1fr; } }
 
 /* mensagens */
-.msg { display:flex; gap:12px; margin-bottom:24px; animation:fadeUp .28s ease both; }
+.msg { display:flex; gap:13px; margin-bottom:28px; animation:fadeUp .28s ease both; }
 .msg.user { justify-content:flex-end; }
 .msg.user .bubble {
     max-width:78%; padding:11px 16px; border-radius:18px 18px 4px 18px;
@@ -176,7 +176,7 @@
 }
 .msg.tutor .t-ava { flex-shrink:0; margin-top:2px; }
 .msg.tutor .t-ava img { display:block; }
-.msg.tutor .t-content { max-width:calc(100% - 42px); font-size:14px; color:var(--text-2); line-height:1.72; }
+.msg.tutor .t-content { max-width:calc(100% - 42px); font-size:14.5px; color:var(--text-2); line-height:1.76; }
 .msg.tutor .t-content strong { color:var(--text); }
 .msg.tutor .t-content code {
     font-family:var(--mono); font-size:12px; background:var(--surface-3);
@@ -189,8 +189,8 @@
 
 /* cards dentro do chat (respostas conversacionais) */
 .chat-card {
-    margin-top:12px; border-radius:12px; border:1px solid var(--border-2);
-    background:linear-gradient(145deg,rgba(255,255,255,.025),transparent),var(--surface-2); padding:15px 16px;
+    margin-top:14px; border-radius:15px; border:1px solid var(--border-2);
+    background:linear-gradient(145deg,rgba(129,140,248,.045),transparent 44%),var(--surface-2); padding:17px 18px; box-shadow:0 18px 55px -46px rgba(129,140,248,.9);
 }
 .checkpoint-card { border-color:var(--violet-glow); box-shadow:0 14px 50px -35px var(--violet); }
 .chat-card .cc-title { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--text-4); margin-bottom:10px; font-family:var(--mono); }
@@ -201,7 +201,7 @@
 .agent-card-foot small { color:var(--text-3); font-size:11px; line-height:1.45; }
 
 /* ── barra de entrada ── */
-.chat-input-zone { position:absolute; z-index:8; left:50%; bottom:0; width:min(780px,calc(100% - 24px)); transform:translateX(-50%); padding:10px 10px 16px; border-radius:20px 20px 0 0; background:linear-gradient(180deg,transparent,var(--bg) 24%); }
+.chat-input-zone { position:absolute; z-index:8; left:50%; bottom:0; width:min(860px,calc(100% - 24px)); transform:translateX(-50%); padding:14px 12px 18px; border-radius:24px 24px 0 0; background:linear-gradient(180deg,transparent,var(--bg) 28%); }
 .response-tools { display:flex; align-items:center; gap:7px; margin-bottom:8px; }
 .response-mode,.attach-btn { border:1px solid var(--border-2); border-radius:999px; background:var(--surface-2); color:var(--text-3); padding:5px 9px; font:10px var(--mono); }
 .attach-btn { cursor:pointer; }
@@ -241,6 +241,7 @@
 .send-btn:disabled { opacity:.35; cursor:default; transform:none; }
 .send-btn svg { width:16px; height:16px; }
 .chat-foot { text-align:center; font-size:10px; color:var(--text-4); margin-top:8px; font-family:var(--mono); }
+@media (max-width:520px){ .chat-log{padding-top:20px;padding-bottom:164px}.msg.user .bubble{max-width:92%}.msg.tutor .t-content{font-size:14px}.tutor-heading{display:none}.tutor-tab{padding-inline:9px}.chat-foot{font-size:9px} }
 
 /* ── mobile: painel vira gaveta ── */
 @media (max-width:1080px){
@@ -280,10 +281,10 @@
 
 <div class="tutor-tabbar" role="tablist" aria-label="Áreas do tutor">
     <div class="tutor-heading"><img src="/static/vendor/kubernetes.svg" alt=""><div><b>Tutor técnico</b><small>aprenda · pratique · valide</small></div></div>
-    <button class="tutor-tab active" data-tab="chat" onclick="switchTutorTab('chat')" role="tab">Conversa</button>
-    <button class="tutor-tab" data-tab="progress" onclick="switchTutorTab('progress')" role="tab">Progresso</button>
-    <button class="tutor-tab" data-tab="sources" onclick="switchTutorTab('sources')" role="tab">Fontes</button>
-    <button class="tutor-tab" data-tab="system" onclick="switchTutorTab('system')" role="tab">Sistema</button>
+    <button class="tutor-tab active" data-tab="chat" onclick="switchTutorTab('chat')" role="tab" aria-selected="true" aria-controls="chat-log">Conversa</button>
+    <button class="tutor-tab" data-tab="progress" onclick="switchTutorTab('progress')" role="tab" aria-selected="false" aria-controls="painel">Progresso</button>
+    <button class="tutor-tab" data-tab="sources" onclick="switchTutorTab('sources')" role="tab" aria-selected="false" aria-controls="sources-pane">Fontes</button>
+    <button class="tutor-tab" data-tab="system" onclick="switchTutorTab('system')" role="tab" aria-selected="false" aria-controls="system-pane">Sistema</button>
 </div>
 
 <div class="chat-wrap">
@@ -528,7 +529,7 @@ function togglePainel() {
 }
 function switchTutorTab(tab) {
     activeTutorTab = tab;
-    document.querySelectorAll('.tutor-tab').forEach(x => x.classList.toggle('active', x.dataset.tab === tab));
+    document.querySelectorAll('.tutor-tab').forEach(x => { const active=x.dataset.tab===tab; x.classList.toggle('active',active); x.setAttribute('aria-selected',String(active)); });
     document.querySelector('.chat-wrap').style.display = tab === 'chat' ? 'flex' : 'none';
     document.getElementById('painel').classList.toggle('active', tab === 'progress');
     document.getElementById('sources-pane').classList.toggle('active', tab === 'sources');
@@ -611,6 +612,14 @@ async function saveGoal(btn) {
 // A ação do dia decide por prioridade: recomendação nº1 (revisões vencidas
 // vêm primeiro do servidor) > fronteira da trilha > calibrar perfil.
 function acaoDoDia(d) {
+    const active = d.active_session;
+    if (active && active.id && active.question) {
+        return `<div class="p-card p-acao frontier">
+            <div class="cc-title">continue de onde parou</div>
+            <p><strong>Lab ${active.index} de ${active.total}</strong> · sua sessão está salva e pronta para continuar.</p>
+            <a class="btn btn-primary btn-sm" href="/lab/${encodeURIComponent(active.question)}?session=${encodeURIComponent(active.id)}">Continuar sessão →</a>
+        </div>`;
+    }
     const rec = (d.recommendations || [])[0];
     if (rec) {
         const isReview = /revis/i.test(rec.reason || '');

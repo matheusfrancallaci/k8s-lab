@@ -1,7 +1,10 @@
 package tutor
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -12,7 +15,7 @@ type TutorCheckpoint struct {
 	ID        string    `json:"id"`
 	Question  string    `json:"question"`
 	Topic     string    `json:"topic,omitempty"`
-	Expected  []string  `json:"-"`
+	Expected  []string  `json:"expected,omitempty"`
 	Attempts  int       `json:"attempts"`
 	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
@@ -31,7 +34,43 @@ type CheckpointEvaluation struct {
 var checkpoints = struct {
 	sync.Mutex
 	Values map[string]TutorCheckpoint
+	Loaded bool
 }{Values: map[string]TutorCheckpoint{}}
+
+func checkpointsPath() string {
+	if p := strings.TrimSpace(os.Getenv("TUTOR_CHECKPOINTS_PATH")); p != "" {
+		return p
+	}
+	return filepath.Join("data", "tutor", "checkpoints.json")
+}
+
+func ensureCheckpointsLoadedLocked() {
+	if checkpoints.Loaded {
+		return
+	}
+	checkpoints.Loaded = true
+	if b, err := os.ReadFile(checkpointsPath()); err == nil {
+		_ = json.Unmarshal(b, &checkpoints.Values)
+	}
+	if checkpoints.Values == nil {
+		checkpoints.Values = map[string]TutorCheckpoint{}
+	}
+}
+
+func saveCheckpointsLocked() {
+	path := checkpointsPath()
+	if os.MkdirAll(filepath.Dir(path), 0o755) != nil {
+		return
+	}
+	b, err := json.Marshal(checkpoints.Values)
+	if err != nil {
+		return
+	}
+	tmp := path + ".tmp"
+	if os.WriteFile(tmp, b, 0o600) == nil {
+		_ = os.Rename(tmp, path)
+	}
+}
 
 func checkpointKey(userID, conversationID string) string { return ragID(userID, conversationID) }
 
@@ -46,7 +85,9 @@ func RegisterTutorCheckpoint(userID, conversationID string, plan TutorOrchestrat
 	question, expected := checkpointFor(plan.Intent, topic)
 	cp := TutorCheckpoint{ID: ragID(userID, conversationID, plan.TurnID), Question: question, Topic: topic, Expected: expected, Status: "awaiting", CreatedAt: time.Now().UTC()}
 	checkpoints.Lock()
+	ensureCheckpointsLoadedLocked()
 	checkpoints.Values[checkpointKey(userID, conversationID)] = cp
+	saveCheckpointsLocked()
 	checkpoints.Unlock()
 	return cp, true
 }
@@ -54,6 +95,7 @@ func RegisterTutorCheckpoint(userID, conversationID string, plan TutorOrchestrat
 func ActiveTutorCheckpoint(userID, conversationID string) (TutorCheckpoint, bool) {
 	checkpoints.Lock()
 	defer checkpoints.Unlock()
+	ensureCheckpointsLoadedLocked()
 	cp, ok := checkpoints.Values[checkpointKey(userID, conversationID)]
 	return cp, ok && cp.Status == "awaiting"
 }
@@ -65,6 +107,7 @@ func EvaluateTutorCheckpoint(userID, conversationID, answer string) (CheckpointE
 	key := checkpointKey(userID, conversationID)
 	checkpoints.Lock()
 	defer checkpoints.Unlock()
+	ensureCheckpointsLoadedLocked()
 	cp, ok := checkpoints.Values[key]
 	if !ok || cp.Status != "awaiting" {
 		return CheckpointEvaluation{}, false
@@ -74,6 +117,7 @@ func EvaluateTutorCheckpoint(userID, conversationID, answer string) (CheckpointE
 	if explicitTutorCommand(answer) {
 		cp.Status = "superseded"
 		checkpoints.Values[key] = cp
+		saveCheckpointsLocked()
 		return CheckpointEvaluation{}, false
 	}
 	answerNorm := normalizeEvidenceText(answer)
@@ -110,6 +154,7 @@ func EvaluateTutorCheckpoint(userID, conversationID, answer string) (CheckpointE
 		ev.Feedback = "Vamos pausar o checkpoint e reforcar o pre-requisito com um exemplo menor."
 	}
 	checkpoints.Values[key] = cp
+	saveCheckpointsLocked()
 	return ev, true
 }
 

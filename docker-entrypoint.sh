@@ -2,6 +2,14 @@
 # Sobe o k3s embutido, espera ficar pronto e inicia o K8s Study Lab.
 set -e
 
+if [ "${EMBEDDED_K3S:-1}" = "0" ]; then
+    mkdir -p /root/.kube
+    export KUBECONFIG=/root/.kube/config
+    export K8S_LAB_VERIFY_GENERATED="${K8S_LAB_VERIFY_GENERATED:-0}"
+    echo "[entrypoint] modo hospedado seguro: k3s embutido desativado; aguardando AKS"
+    exec /app/estudo-app
+fi
+
 # cgroup v2 aninhado (docker-in-docker): move os processos para um subcgroup
 # "init" e delega os controllers aos subtrees — senão o kubelet falha com
 # "cannot enter cgroupv2 ... invalid state". Padrão usado por k3d/kind.

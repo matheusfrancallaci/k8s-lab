@@ -66,8 +66,8 @@ func TestCloudShellNamespaceAccessScript(t *testing.T) {
 	}
 	script := cloudShellNamespaceAccessScript("lab-alice", "lab-user", q)
 	mustContain := []string{
-		"kubectl -n default create rolebinding lab-shell-alice-default --clusterrole=admin --serviceaccount=lab-alice:lab-user",
-		"kubectl -n tools create rolebinding lab-shell-alice-tools --clusterrole=admin --serviceaccount=lab-alice:lab-user",
+		"kubectl -n lab-alice create rolebinding lab-shell-alice-lab-alice --clusterrole=admin --serviceaccount=lab-alice:lab-user",
+		"kubectl -n lab-alice-tools create rolebinding lab-shell-alice-lab-alice-tools --clusterrole=admin --serviceaccount=lab-alice:lab-user",
 	}
 	for _, want := range mustContain {
 		if !strings.Contains(script, want) {
@@ -141,16 +141,26 @@ func TestCloudShellRBACIncludesDynamicLabNamespace(t *testing.T) {
 	}
 }
 
-func TestCloudShellRCDefaultsToDefaultNamespace(t *testing.T) {
+func TestCloudShellRCDefaultsToPrivateNamespace(t *testing.T) {
 	rc := cloudShellRC("lab-alice")
 	for _, want := range []string{
-		"namespace: default",
+		"namespace: lab-alice",
 		`export LAB_NAMESPACE="lab-alice"`,
 		"alias kdefault=",
 		"alias klab=",
 	} {
 		if !strings.Contains(rc, want) {
 			t.Fatalf("rcfile nao contem %q\nrc=%s", want, rc)
+		}
+	}
+}
+
+func TestScopeLabForUserRewritesExplicitDefaultNamespace(t *testing.T) {
+	q := models.Question{Question: "use namespace default", AnswerCommand: "kubectl get pods -n default", Validation: &models.Validation{Command: "kubectl get pods --namespace=default"}}
+	got := scopeLabForUser(q, "alice")
+	for _, text := range []string{got.Question, got.AnswerCommand, got.Validation.Command} {
+		if strings.Contains(text, "default") || !strings.Contains(text, "lab-alice") {
+			t.Fatalf("referencia nao isolada: %q", text)
 		}
 	}
 }

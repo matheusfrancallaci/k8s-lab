@@ -92,7 +92,7 @@ func TestKubectlNamespaceGuardrailsBlockIMDS(t *testing.T) {
 	if strings.Contains(combined, "K8SLABPOLICY;") || !strings.Contains(combined, "K8SLABPOLICY\nkubectl") {
 		t.Fatalf("heredoc terminator must be on its own line before the next command:\n%s", combined)
 	}
-	if !strings.Contains(combined, "kubectl -n default apply -f -") {
+	if !strings.Contains(combined, "kubectl -n lab-alice apply -f -") {
 		t.Fatalf("namespaces where the user can create workloads must receive the IMDS policy:\n%s", combined)
 	}
 }
