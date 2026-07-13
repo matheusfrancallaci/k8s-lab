@@ -968,6 +968,11 @@ function wsConnect(h, isReconnect) {
         if (e.data instanceof ArrayBuffer) {
             h.term.write(new Uint8Array(e.data));
             if (!EXAM) scanTermOutput(new TextDecoder().decode(e.data));
+        } else if (typeof e.data === 'string') {
+            // Mensagens de status/erro do backend usam frames de texto. Antes
+            // elas eram descartadas, então uma falha de autenticação ou de
+            // provisionamento aparecia apenas como um loop de reconexão.
+            h.term.write(e.data);
         }
     };
     h.ws.onclose = () => {
