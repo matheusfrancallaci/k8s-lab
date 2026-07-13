@@ -169,8 +169,9 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.reconcile_runtime }}
         run: |
           script=$(
+            head -n 1 deploy/azure/sync-runtime.sh
             printf 'export SYNC_RUNTIME_SKIP_PULL=1\n'
-            cat deploy/azure/sync-runtime.sh
+            tail -n +2 deploy/azure/sync-runtime.sh
           )
           out=$(timeout 300 az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts "$script" --query "value[0].message" -o tsv)
           echo "$out"
@@ -180,10 +181,11 @@ jobs:
         run: |
           sha=${{ steps.version.outputs.sha }}
           script=$(
+            head -n 1 deploy/azure/switch-app.sh
             printf 'export TARGET_IMAGE=%q\n' "$ACR.azurecr.io/$IMAGE:$sha"
             printf 'export EXPECTED_VERSION=%q\n' "$sha"
             printf 'export ACR_NAME=%q\n' "$ACR"
-            cat deploy/azure/switch-app.sh
+            tail -n +2 deploy/azure/switch-app.sh
           )
           out=$(timeout 720 az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts "$script" --query "value[0].message" -o tsv)
           echo "$out"
