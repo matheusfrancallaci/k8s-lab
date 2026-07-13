@@ -11,6 +11,11 @@ on:
         description: Commit, branch ou tag a publicar
         required: false
         default: ""
+      reconcile_runtime:
+        description: Reconciliar Ollama, Key Vault e o script persistente da VM
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -156,6 +161,7 @@ jobs:
           az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts "touch /run/lab-busy" --query "value[0].message" -o tsv >/dev/null
 
       - name: Reconcile persistent runtime
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.reconcile_runtime }}
         run: |
           script=$(
             printf 'export SYNC_RUNTIME_SKIP_PULL=1\n'
