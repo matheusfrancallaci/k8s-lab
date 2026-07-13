@@ -12,7 +12,14 @@ import (
 	"estudo-app/internal/persistence"
 )
 
-const labSessionTTL = 24 * time.Hour
+const defaultLabSessionTTL = time.Hour
+
+func LabSessionTTL() time.Duration {
+	if ttl, err := time.ParseDuration(os.Getenv("LAB_SESSION_TTL")); err == nil && ttl > 0 {
+		return ttl
+	}
+	return defaultLabSessionTTL
+}
 
 type LabSession struct {
 	ID        string    `json:"id"`
@@ -21,6 +28,7 @@ type LabSession struct {
 	Index     int       `json:"index"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 type LabSessionStore struct {
@@ -61,7 +69,13 @@ func (s *LabSessionStore) load() {
 func (s *LabSessionStore) loadItems(items []*LabSession) {
 	now := time.Now()
 	for _, sess := range items {
-		if sess != nil && sess.ID != "" && sess.Owner != "" && now.Sub(sess.UpdatedAt) <= labSessionTTL {
+		if sess == nil {
+			continue
+		}
+		if sess.ExpiresAt.IsZero() {
+			sess.ExpiresAt = sess.CreatedAt.Add(LabSessionTTL())
+		}
+		if sess.ID != "" && sess.Owner != "" && now.Before(sess.ExpiresAt) {
 			s.sessions[sess.ID] = sess
 		}
 	}
@@ -92,7 +106,7 @@ func (s *LabSessionStore) Create(owner string, questions []string) *LabSession {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	now := time.Now().UTC()
-	sess := &LabSession{ID: hex.EncodeToString(b), Owner: owner, Questions: append([]string(nil), questions...), CreatedAt: now, UpdatedAt: now}
+	sess := &LabSession{ID: hex.EncodeToString(b), Owner: owner, Questions: append([]string(nil), questions...), CreatedAt: now, UpdatedAt: now, ExpiresAt: now.Add(LabSessionTTL())}
 	s.mu.Lock()
 	s.pruneLocked(now)
 	s.sessions[sess.ID] = sess
@@ -104,7 +118,7 @@ func (s *LabSessionStore) Create(owner string, questions []string) *LabSession {
 func (s *LabSessionStore) Get(owner, id string) (*LabSession, bool) {
 	s.mu.RLock()
 	sess, ok := s.sessions[id]
-	if !ok || sess.Owner != owner || time.Since(sess.UpdatedAt) > labSessionTTL {
+	if !ok || sess.Owner != owner || !time.Now().Before(sess.ExpiresAt) {
 		s.mu.RUnlock()
 		return nil, false
 	}
@@ -118,7 +132,7 @@ func (s *LabSessionStore) LatestActive(owner string) (*LabSession, bool) {
 	defer s.mu.RUnlock()
 	var latest *LabSession
 	for _, sess := range s.sessions {
-		if sess.Owner != owner || sess.Index >= len(sess.Questions) || time.Since(sess.UpdatedAt) > labSessionTTL {
+		if sess.Owner != owner || sess.Index >= len(sess.Questions) || !time.Now().Before(sess.ExpiresAt) {
 			continue
 		}
 		if latest == nil || sess.UpdatedAt.After(latest.UpdatedAt) {
@@ -135,7 +149,7 @@ func (s *LabSessionStore) Advance(owner, id string) (index, total int, nextID st
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sess, ok := s.sessions[id]
-	if !ok || sess.Owner != owner || time.Since(sess.UpdatedAt) > labSessionTTL {
+	if !ok || sess.Owner != owner || !time.Now().Before(sess.ExpiresAt) {
 		return 0, 0, "", true
 	}
 	sess.Index++
@@ -150,10 +164,28 @@ func (s *LabSessionStore) Advance(owner, id string) (index, total int, nextID st
 
 func (s *LabSessionStore) pruneLocked(now time.Time) {
 	for id, sess := range s.sessions {
-		if now.Sub(sess.UpdatedAt) > labSessionTTL {
+		if !now.Before(sess.ExpiresAt) {
 			delete(s.sessions, id)
+			if persistence.Enabled() {
+				_ = persistence.Delete("lab_session", id)
+			}
 		}
 	}
+}
+
+func (s *LabSessionStore) End(owner, id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.sessions[id]
+	if !ok || sess.Owner != owner {
+		return false
+	}
+	delete(s.sessions, id)
+	if persistence.Enabled() {
+		_ = persistence.Delete("lab_session", id)
+	}
+	s.saveLocked()
+	return true
 }
 
 func cloneLabSession(in *LabSession) *LabSession {

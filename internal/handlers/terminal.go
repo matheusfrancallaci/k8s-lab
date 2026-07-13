@@ -216,6 +216,11 @@ func hostedTerminalIdentityReady(uid string) bool {
 // login cai no pod único de sistema com cluster-admin (single-tenant).
 func cloudShellTarget(uid string) (ns, pod, sa string, scoped bool) {
 	id := tutor.SanitizeID(uid)
+	if virtualClustersEnabled() {
+		if env, ok := activeLabEnvironment(uid); ok {
+			return env.Namespace, "lab-shell", "default", true
+		}
+	}
 	// Hosted environments must never resolve to the shared lab-admin pod. The
 	// WebSocket handler rejects a default identity; this scoped fallback keeps
 	// maintenance callers safe as defense in depth.
@@ -534,10 +539,122 @@ cd 2>/dev/null
 `
 }
 
+func virtualCloudShellRC() string {
+	return `# kubeconfig do Kubernetes virtual e efemero deste aluno
+export KUBECONFIG=/tmp/.labkube
+export LAB_NAMESPACE=default
+export LAB_DEFAULT_NAMESPACE=default
+[ -f /usr/share/bash-completion/bash_completion ] && . /usr/share/bash-completion/bash_completion
+source <(kubectl completion bash) 2>/dev/null
+alias k=kubectl
+complete -o default -F __start_kubectl kubectl 2>/dev/null
+complete -o default -F __start_kubectl k 2>/dev/null
+bind 'set show-all-if-ambiguous on' 2>/dev/null
+bind 'set completion-ignore-case on' 2>/dev/null
+alias kdefault='kubectl config set-context --current --namespace=default >/dev/null && echo namespace=default'
+alias klab='kubectl config set-context --current --namespace=default >/dev/null && echo namespace=default'
+__lab_ns(){ kubectl config view --minify -o jsonpath='{..namespace}' 2>/dev/null || printf default; }
+export KUBE_EDITOR=vim
+PS1='\[\e[38;2;56;189;248m\]\[\e[1m\]⎈ cluster\[\e[0m\]\[\e[38;2;107;114;128m\]·$(__lab_ns)\[\e[0m\] \[\e[38;2;52;211;153m\]\w\[\e[0m\] \[\e[38;2;56;189;248m\]❯\[\e[0m\] '
+cd 2>/dev/null
+`
+}
+
+var virtualShellProvisionMu sync.Mutex
+
+func ensureVirtualClusterShellPod(uid string, report func(string)) (string, string, error) {
+	if report == nil {
+		report = func(string) {}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	env, err := provisionLabEnvironment(ctx, uid, report)
+	if err != nil {
+		return "", "", err
+	}
+	if env == nil {
+		return "", "", fmt.Errorf("cluster virtual nao configurado")
+	}
+	virtualShellProvisionMu.Lock()
+	defer virtualShellProvisionMu.Unlock()
+	ns, pod := env.Namespace, "lab-shell"
+	alive := wslCmdCtx(ctx, "kubectl", "-n", ns, "exec", pod, "--request-timeout=10s", "--", "true").Run() == nil
+	if !alive {
+		wslCmdCtx(ctx, "kubectl", "-n", ns, "delete", "pod", pod, "--force", "--grace-period=0", "--ignore-not-found=true", "--wait=false").Run() //nolint:errcheck
+		report("abrindo um terminal dentro do seu cluster...")
+		manifest := fmt.Sprintf(`apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+  namespace: %s
+  labels:
+    app.kubernetes.io/name: k8s-lab-shell
+    k8s-study-lab/environment-id: %s
+spec:
+  automountServiceAccountToken: false
+  terminationGracePeriodSeconds: 1
+  containers:
+  - name: shell
+    image: %s
+    imagePullPolicy: IfNotPresent
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+`, pod, ns, env.ID, cloudShellImage())
+		encoded := base64.StdEncoding.EncodeToString([]byte(manifest))
+		script := fmt.Sprintf("echo %s | base64 -d | kubectl apply -f - && kubectl -n %s wait --for=condition=Ready pod/%s --timeout=240s", encoded, ns, pod)
+		if out, runErr := wslShellCtx(ctx, script).CombinedOutput(); runErr != nil {
+			return ns, pod, fmt.Errorf("terminal do cluster nao ficou pronto: %s", strings.TrimSpace(string(out)))
+		}
+	}
+	config, err := wslCmdCtx(ctx, "kubectl", "-n", ns, "get", "secret", "vc-"+env.ClusterName, "-o", "jsonpath={.data.config}").Output()
+	if err != nil || strings.TrimSpace(string(config)) == "" {
+		return ns, pod, fmt.Errorf("kubeconfig do cluster isolado indisponivel")
+	}
+	configB64 := strings.TrimSpace(string(config))
+	writeConfig := fmt.Sprintf("echo %s | base64 -d > /tmp/.labkube && chmod 600 /tmp/.labkube", configB64)
+	if out, writeErr := wslCmdCtx(ctx, "kubectl", "-n", ns, "exec", pod, "--", "sh", "-c", writeConfig).CombinedOutput(); writeErr != nil {
+		return ns, pod, fmt.Errorf("nao consegui configurar kubectl do aluno: %s", strings.TrimSpace(string(out)))
+	}
+	wslCmdCtx(ctx, "kubectl", "-n", ns, "exec", pod, "--", "sh", "-c", "which vim >/dev/null 2>&1 && [ -f /usr/share/bash-completion/bash_completion ] || apk add --no-cache vim bash-completion >/dev/null 2>&1").Run() //nolint:errcheck
+	rc := base64.StdEncoding.EncodeToString([]byte(virtualCloudShellRC()))
+	if out, rcErr := wslCmdCtx(ctx, "kubectl", "-n", ns, "exec", pod, "--", "sh", "-c", "echo "+rc+" | base64 -d > /tmp/.labrc").CombinedOutput(); rcErr != nil {
+		return ns, pod, fmt.Errorf("nao consegui preparar o terminal: %s", strings.TrimSpace(string(out)))
+	}
+	if out, readyErr := wslCmdCtx(ctx, "kubectl", "-n", ns, "exec", pod, "--", "env", "KUBECONFIG=/tmp/.labkube", "kubectl", "get", "--raw=/readyz").CombinedOutput(); readyErr != nil || !strings.Contains(string(out), "ok") {
+		return ns, pod, fmt.Errorf("API do cluster do aluno nao respondeu: %s", strings.TrimSpace(string(out)))
+	}
+	return ns, pod, nil
+}
+
+func runVirtualLabCommand(command, uid string) (string, error) {
+	ns, pod, err := ensureVirtualClusterShellPod(uid, nil)
+	if err != nil {
+		return "", err
+	}
+	encoded := base64.StdEncoding.EncodeToString([]byte(command))
+	script := "echo " + encoded + " | base64 -d | bash"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	cmd := wslCmdCtx(ctx, "kubectl", "-n", ns, "exec", pod, "--",
+		"env", "KUBECONFIG=/tmp/.labkube", "LAB_NAMESPACE=default", "LAB_USER="+tutor.SanitizeID(uid),
+		"bash", "-lc", script)
+	out, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(out)), err
+}
+
 // ensureCloudShellPod garante ns + service account + RBAC + pod prontos no
 // cluster ativo (AKS), para o usuário informado. Idempotente; o report envia
 // progresso ao terminal do usuário. Devolve (ns, pod) do shell provisionado.
 func ensureCloudShellPod(uid string, report func(string)) (string, string, error) {
+	if virtualClustersEnabled() {
+		return ensureVirtualClusterShellPod(uid, report)
+	}
 	ns, pod, sa, scoped := cloudShellTarget(uid)
 	active, hasActive := tutor.ActiveQuestion(uid)
 	var activeLab *models.Question
@@ -644,6 +761,13 @@ func markShellClosed(uid string) {
 		shellOpen[uid]--
 	}
 	shellLastSeen[uid] = time.Now()
+	shellMu.Unlock()
+}
+
+func forgetCloudShell(uid string) {
+	shellMu.Lock()
+	delete(shellOpen, uid)
+	delete(shellLastSeen, uid)
 	shellMu.Unlock()
 }
 

@@ -123,9 +123,9 @@ faça backup periódico:
   domínio próprio (`labs.seudominio.com`), aponte um CNAME para o FQDN e troque o
   endereço no `deploy/azure/cloud-init.yaml` (Caddyfile) — o Caddy emite o cert sozinho.
 - **Restrinja o SSH**: em `terraform.tfvars`, ponha `allowed_ssh_cidr = "SEU_IP/32"`.
-- **Labs compartilham o cluster**: nesta instância única, o k3s é um só. Ótimo para
-  quiz/teoria/tutor (isolados por perfil); para hands-on simultâneo pesado, cada
-  pessoa idealmente roda a própria imagem local (`make docker-run`).
+- **Labs usam nós compartilhados, mas não o mesmo control plane**: cada usuário
+  recebe um vCluster com API, RBAC e CRDs próprios por até 1 hora. Os workloads
+  ainda dividem o node pool AKS; isolamento físico exige nós ou VMs dedicados.
 - **State do Terraform remoto**: hoje o `terraform.tfstate` é local (frágil e pode
   conter valores sensíveis). Veja `backend.tf.example` para migrar para um Azure
   Storage (`terraform init -migrate-state`).
@@ -135,12 +135,10 @@ faça backup periódico:
 Assumidas de propósito para manter o custo/complexidade baixos numa instância entre
 amigos. Reavaliar ao virar produto de verdade:
 
-- **Container `--privileged` = raiz do host.** O app, o k3s e o cluster-admin rodam
-  no mesmo container privilegiado; comprometer o processo do app é ter root na VM. O
-  hardening multi-tenant (namespaces `lab-<user>` com admin *namespaced*) limita o que
-  um usuário faz *no cluster*, mas não muda o fato de o processo ser privilegiado.
-  Mitigação real exigiria separar o app (não privilegiado) do runtime de cluster —
-  refactor grande, fora do escopo desta instância.
+- **Nós ainda são compartilhados.** O app hospedado roda sem `--privileged` e o
+  aluno só recebe o kubeconfig de seu vCluster, nunca o do AKS host. Entretanto,
+  os pods dos vClusters dividem o mesmo runtime dos nós; isolamento contra escape
+  de container exigiria node pools, Kata/gVisor ou VMs dedicadas.
 - **Ponto único de falha.** Uma VM, um container, um volume. Sem HA. Um `az vm start`
   frio + pull do modelo Ollama deixa o **primeiro acesso pós auto-stop lento**
   (cold start); o `/readyz` sinaliza quando o cluster está de fato pronto. Para um

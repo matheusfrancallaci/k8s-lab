@@ -54,7 +54,7 @@ if app_run_changes != 1:
     raise SystemExit(f"expected one hosted app docker run, changed {app_run_changes}")
 
 desired = [
-	("EMBEDDED_K3S", "0"),
+    ("EMBEDDED_K3S", "0"),
     ("OLLAMA_MODEL", "qwen3:8b"),
     ("OLLAMA_CHAT_MODEL", "qwen3:8b"),
     ("OLLAMA_ROUTER_MODEL", "qwen3:4b"),
@@ -63,11 +63,15 @@ desired = [
     ("OLLAMA_MAX_CONCURRENCY", "1"),
     ("OLLAMA_KEEP_ALIVE", "15m"),
     ("K8S_LAB_VERIFY_GENERATED", "1"),
+    ("LAB_VCLUSTER_ENABLED", "1"),
+    ("VCLUSTER_CHART_VERSION", "0.35.1"),
+    ("LAB_SESSION_TTL", "1h"),
     ("TUTOR_TELEMETRY_PERSIST", "1"),
     ("QUESTIONS_CUSTOM_DIR", "/app/data/questions-custom"),
-	("LAB_SESSIONS_PATH", "/app/data/lab-sessions.json"),
-	("TUTOR_CHECKPOINTS_PATH", "/app/data/tutor/checkpoints.json"),
-	("DATABASE_URL", os.environ["DATABASE_URL"]),
+    ("LAB_SESSIONS_PATH", "/app/data/lab-sessions.json"),
+    ("LAB_ENVIRONMENTS_PATH", "/app/data/lab-environments.json"),
+    ("TUTOR_CHECKPOINTS_PATH", "/app/data/tutor/checkpoints.json"),
+    ("DATABASE_URL", os.environ["DATABASE_URL"]),
 ]
 key_pattern = "|".join(re.escape(key) for key, _ in desired)
 content = re.sub(
@@ -95,7 +99,8 @@ for key in \
   EMBEDDED_K3S \
   OLLAMA_MODEL OLLAMA_CHAT_MODEL OLLAMA_ROUTER_MODEL OLLAMA_GEN_MODEL \
   OLLAMA_EMBED_MODEL OLLAMA_MAX_CONCURRENCY OLLAMA_KEEP_ALIVE \
-  K8S_LAB_VERIFY_GENERATED TUTOR_TELEMETRY_PERSIST QUESTIONS_CUSTOM_DIR LAB_SESSIONS_PATH TUTOR_CHECKPOINTS_PATH DATABASE_URL; do
+  K8S_LAB_VERIFY_GENERATED LAB_VCLUSTER_ENABLED VCLUSTER_CHART_VERSION LAB_SESSION_TTL \
+  TUTOR_TELEMETRY_PERSIST QUESTIONS_CUSTOM_DIR LAB_SESSIONS_PATH LAB_ENVIRONMENTS_PATH TUTOR_CHECKPOINTS_PATH DATABASE_URL; do
   test "$(grep -c -- "-e ${key}=" "$runtime")" -eq 1
 done
 ! grep -q -- '--privileged' "$runtime"

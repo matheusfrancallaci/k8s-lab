@@ -62,6 +62,13 @@ func ClusterResetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	clusterCtx, cancelCluster := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancelCluster()
+	uid := userID(r)
+	if _, err := provisionLabEnvironment(clusterCtx, uid, func(status string) {
+		send(map[string]any{"type": "environment", "msg": status})
+	}); err != nil {
+		send(map[string]any{"type": "error", "msg": "cluster isolado nao subiu: " + err.Error()})
+		return
+	}
 	if err := EnsureClusterReady(clusterCtx); err != nil {
 		send(map[string]any{"type": "error", "msg": "cluster nao subiu: " + err.Error()})
 		return
@@ -75,10 +82,15 @@ func ClusterResetHandler(w http.ResponseWriter, r *http.Request) {
 		})
 
 		ctx, cancel := context.WithTimeout(r.Context(), step.Timeout)
-		out, _ := wslShellCtx(ctx, step.Cmd).CombinedOutput()
+		var outStr string
+		if virtualClustersEnabled() {
+			out, _ := runVirtualLabCommand(step.Cmd, uid)
+			outStr = strings.TrimSpace(out)
+		} else {
+			out, _ := wslShellCtx(ctx, step.Cmd).CombinedOutput()
+			outStr = strings.TrimSpace(string(out))
+		}
 		cancel()
-
-		outStr := strings.TrimSpace(string(out))
 		send(map[string]any{
 			"type": "step", "index": i, "total": total,
 			"desc": step.Desc, "status": "done", "output": outStr,

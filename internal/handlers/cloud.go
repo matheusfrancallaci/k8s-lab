@@ -67,6 +67,7 @@ func azRegion() string { return envOr("AZURE_REGION", "eastus") }
 // standard_d2als_v7: o SKU barato (2 vCPU/4GB AMD) permitido em subscriptions
 // gratuitas novas — a série B (B2s) não é liberada nelas.
 func aksNodeSize() string { return envOr("AKS_NODE_SIZE", "standard_d2als_v7") }
+func aksMaxNodes() string { return envOr("AKS_MAX_NODES", "3") }
 
 func cloudIdleMinutes() int {
 	v := strings.TrimSpace(os.Getenv("CLOUD_IDLE_MINUTES"))
@@ -331,9 +332,10 @@ func CloudCreateHandler(w http.ResponseWriter, r *http.Request) {
 		{
 			fmt.Sprintf("Criando cluster AKS %s (1x %s, tier free) — 5 a 10 min...", aksName(), aksNodeSize()),
 			fmt.Sprintf("az aks create -g %s -n %s --node-count 1 --node-vm-size %s "+
+				"--enable-cluster-autoscaler --min-count 1 --max-count %s "+
 				"--tier free --generate-ssh-keys --load-balancer-sku standard "+
 				"--only-show-errors -o none 2>&1 && echo OK",
-				azRG(), aksName(), aksNodeSize()),
+				azRG(), aksName(), aksNodeSize(), aksMaxNodes()),
 		},
 		{
 			"Configurando credenciais do kubectl",

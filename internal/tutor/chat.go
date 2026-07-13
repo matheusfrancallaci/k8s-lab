@@ -373,7 +373,7 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 	// 3. Modo exame
 	if regexp.MustCompile(`exame|simulado|prova completa`).MatchString(l) {
 		return ChatResult{
-			Reply:  "🏆 Modo Exame: 16 questões, 2 horas, sem dicas — como na prova real. Pronto?",
+			Reply:  "🏆 Modo Exame: 16 questões, 1 hora, sem dicas — como na prova real. Pronto?",
 			Action: &ChatAction{Type: "exam", Total: 16, DurationMin: 120, NoHints: true, Mode: "strict"},
 		}
 	}

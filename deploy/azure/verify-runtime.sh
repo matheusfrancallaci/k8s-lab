@@ -27,8 +27,12 @@ expect_env OLLAMA_EMBED_MODEL embeddinggemma
 expect_env OLLAMA_MAX_CONCURRENCY 1
 expect_env OLLAMA_KEEP_ALIVE 15m
 expect_env K8S_LAB_VERIFY_GENERATED 1
+expect_env LAB_VCLUSTER_ENABLED 1
+expect_env VCLUSTER_CHART_VERSION 0.35.1
+expect_env LAB_SESSION_TTL 1h
 expect_env TUTOR_TELEMETRY_PERSIST 1
 expect_env QUESTIONS_CUSTOM_DIR /app/data/questions-custom
+expect_env LAB_ENVIRONMENTS_PATH /app/data/lab-environments.json
 expect_env LAB_SESSIONS_PATH /app/data/lab-sessions.json
 expect_env TUTOR_CHECKPOINTS_PATH /app/data/tutor/checkpoints.json
 grep -Eq '^DATABASE_URL=postgres://.+sslmode=require$' <<<"$container_env"

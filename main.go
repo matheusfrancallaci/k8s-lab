@@ -103,6 +103,8 @@ func main() {
 
 	store := repository.NewSessionStore()
 	labSessions := repository.NewLabSessionStore()
+	labEnvironments := repository.NewLabEnvironmentStore()
+	handlers.ConfigureLabEnvironmentStore(labEnvironments)
 	quiz := handlers.NewQuizHandler(repo, store, templatesFS)
 	lab := handlers.NewLabHandler(repo, store, labSessions, templatesFS)
 	tutorH := handlers.NewTutorHandler(repo, labSessions, templatesFS)
@@ -167,6 +169,8 @@ func main() {
 	mux.HandleFunc("GET /lab/{id}/setup", lab.Setup)
 	mux.HandleFunc("GET /lab/{id}/state", lab.State)
 	mux.HandleFunc("POST /lab/{id}/teardown", lab.Teardown)
+	mux.HandleFunc("GET /api/lab/environment", lab.EnvironmentStatus)
+	mux.HandleFunc("DELETE /api/lab/environment", lab.EndEnvironment)
 
 	// Terminal WebSocket
 	mux.HandleFunc("GET /ws/terminal", handlers.TerminalWS)
@@ -266,6 +270,7 @@ func main() {
 		go handlers.EnsureCluster()
 		go handlers.StartCloudMonitor()
 		handlers.StartCloudShellGC() // coleta pods de shell por-usuário ociosos
+		handlers.StartLabEnvironmentGC()
 	} else {
 		log.Println("LAB_NO_CLUSTER definido — auto-gerenciamento de cluster desativado")
 	}

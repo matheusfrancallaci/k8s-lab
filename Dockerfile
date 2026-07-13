@@ -46,6 +46,25 @@ RUN ENC=$(echo "$K3S_VERSION" | sed 's/+/%2B/') && \
     chmod +x /usr/local/bin/k3s && \
     ln -sf /usr/local/bin/k3s /usr/local/bin/kubectl
 
+# vCluster OSS: cada aluno recebe um Kubernetes virtual com API server, RBAC e
+# CRDs próprios sobre o node pool compartilhado do AKS. A versão e o checksum
+# ficam fixos para o ambiente criado hoje ser reproduzível no próximo deploy.
+ARG HELM_VERSION=3.20.2
+ARG HELM_SHA256=258e830a9e613c8a7a302d6059b4bb3b9758f2f3e1bb8ea0d707ce10a9a72fea
+RUN curl -fL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tgz \
+    && echo "${HELM_SHA256}  /tmp/helm.tgz" | sha256sum -c - \
+    && tar -xzf /tmp/helm.tgz -C /tmp \
+    && install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm \
+    && rm -rf /tmp/helm.tgz /tmp/linux-amd64 \
+    && helm version --short
+
+ARG VCLUSTER_VERSION=0.35.1
+ARG VCLUSTER_SHA256=baf9effb1de7c17cfa4462aacf92d913b4ec4e359c6e711e33c43f7e5e5b0dab
+RUN curl -fL "https://github.com/loft-sh/vcluster/releases/download/v${VCLUSTER_VERSION}/vcluster-linux-amd64" -o /usr/local/bin/vcluster \
+    && echo "${VCLUSTER_SHA256}  /usr/local/bin/vcluster" | sha256sum -c - \
+    && chmod 0755 /usr/local/bin/vcluster \
+    && vcluster --version
+
 COPY --from=build /out/estudo-app /app/estudo-app
 COPY questions-custom /app/questions-custom
 COPY docker-entrypoint.sh /usr/local/bin/entrypoint.sh
