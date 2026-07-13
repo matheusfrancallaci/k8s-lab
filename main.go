@@ -276,7 +276,7 @@ func main() {
 	// Cadeia de middleware: Recover (panic->500) -> RequestMetrics (conta+loga)
 	// -> RequireAuth (gating) -> mux. Recover fica por fora para capturar panics
 	// de qualquer camada abaixo.
-	root := handlers.Recover(handlers.RequestMetrics(handlers.RequireAuth(mux)))
+	root := handlers.Recover(handlers.RequestMetrics(handlers.RequireAuth(handlers.UserActivity(mux))))
 
 	srv := &http.Server{
 		Addr:    addr,

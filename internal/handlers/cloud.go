@@ -475,6 +475,21 @@ func touchActivity() {
 	activityMu.Unlock()
 }
 
+// UserActivity registra uso real depois do gate de autenticacao. Probes,
+// assets e o proprio poll do auto-stop ficam de fora para que monitoramento e
+// trafego anonimo nao mantenham a VM ligada. Tutor e catalogo de labs passam a
+// contar como atividade mesmo antes de o aluno abrir um terminal.
+func UserActivity(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		if p != "/healthz" && p != "/readyz" && p != "/metrics" && p != "/api/idle" &&
+			p != "/login" && p != "/register" && !strings.HasPrefix(p, "/static/") {
+			touchActivity()
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func idleFor() time.Duration {
 	activityMu.Lock()
 	defer activityMu.Unlock()

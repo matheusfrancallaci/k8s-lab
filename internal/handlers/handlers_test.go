@@ -1,12 +1,35 @@
 package handlers
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"estudo-app/internal/models"
 )
+
+func TestUserActivityTracksTutorButIgnoresProbes(t *testing.T) {
+	activityMu.Lock()
+	lastActivity = time.Now().Add(-time.Hour)
+	activityMu.Unlock()
+	h := UserActivity(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/tutor/chat/stream", nil))
+	if idleFor() > time.Second {
+		t.Fatalf("uso do tutor deveria renovar atividade; idle=%s", idleFor())
+	}
+
+	activityMu.Lock()
+	lastActivity = time.Now().Add(-time.Hour)
+	activityMu.Unlock()
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if idleFor() < 59*time.Minute {
+		t.Fatalf("probe publico nao pode manter VM ligada; idle=%s", idleFor())
+	}
+}
 
 func TestContextNameValidation(t *testing.T) {
 	valid := []string{"minikube", "k8s-study-lab", "arn:aws:eks:us-east-1:123:cluster/prod",
