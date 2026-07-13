@@ -104,6 +104,7 @@ type templateFn func(p params, level int, cert string) models.Question
 // Banco de templates por tópico (nomes casam com os tópicos do banco oficial).
 var templates = map[string][]templateFn{
 	"Core Concepts":      {tplPod, tplNamespaceQuota},
+	"Static Pods":        {tplStaticPodManifest},
 	"Workloads":          {tplDeployment, tplReplicaSet, tplJob, tplRolloutRollback},
 	"ReplicaSet":         {tplReplicaSet},
 	"Autoscaling":        {tplHPA},
@@ -358,6 +359,38 @@ func tplPod(p params, level int, cert string) models.Question {
 			"kubectl run cria um Pod único, sem controller por trás — se morrer, ninguém recria (diferente de um Deployment). Labels são pares chave=valor usados por selectors de Services, NetworkPolicies e afins para localizar pods. --show-labels no get exibe as labels."),
 		DocURL:     "https://kubernetes.io/docs/concepts/workloads/pods/",
 		DocSection: "Concepts → Workloads → Pods",
+	}
+}
+
+func tplStaticPodManifest(p params, level int, cert string) models.Question {
+	name := p.Name + "-static"
+	file := "$HOME/" + name + ".yaml"
+	manifest := fmt.Sprintf(`apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+  namespace: kube-system
+spec:
+  containers:
+  - name: web
+    image: %s
+`, name, p.Image)
+	write := fmt.Sprintf("cat > %s <<'EOF'\n%sEOF", file, manifest)
+	return models.Question{
+		Question: pickHelp(level,
+			fmt.Sprintf("Crie em **%s** um manifesto valido para o Pod estatico **%s**, usando a imagem **%s** e o namespace `kube-system`.", file, name, p.Image),
+			fmt.Sprintf("Crie o manifesto do Pod estatico **%s** em **%s**. Use `apiVersion: v1`, `kind: Pod`, namespace `kube-system` e imagem **%s**.", name, file, p.Image),
+			fmt.Sprintf("Monte em **%s** o manifesto do Pod estatico **%s**. Depois valide com `kubectl apply --dry-run=client -f %s`. Em um node autogerenciado, o arquivo iria para o `staticPodPath`; no AKS gerenciado nao alteramos o filesystem do node.", file, name, file)),
+		Hint:          fmt.Sprintf("kubectl run %s --image=%s -n kube-system --restart=Never --dry-run=client -o yaml > %s", name, p.Image, file),
+		AnswerCommand: write,
+		Goals: []models.Goal{
+			{Description: "Manifesto de Pod valido no dry-run do cliente", Validation: &models.Validation{Command: fmt.Sprintf("kubectl apply --dry-run=client -f %s >/dev/null 2>&1 && echo VALID", file), ExpectedContains: "VALID"}},
+			{Description: fmt.Sprintf("Manifesto declara nome **%s**, namespace `kube-system` e imagem **%s**", name, p.Image), Validation: &models.Validation{Command: fmt.Sprintf("kubectl create --dry-run=client -f %s -o jsonpath='{.metadata.name}:{.metadata.namespace}:{.spec.containers[0].image}' 2>/dev/null", file), ExpectedContains: fmt.Sprintf("%s:kube-system:%s", name, p.Image)}},
+		},
+		Teardown:    []string{"rm -f " + file},
+		Explanation: "Pods estaticos sao observados diretamente pelo kubelet a partir do diretorio configurado em staticPodPath. Eles nao sao gerenciados pelo API server; o kubelet publica apenas um mirror Pod para visibilidade. Como os nodes do AKS sao gerenciados, este lab pratica a construcao e validacao segura do manifesto sem modificar o host.",
+		DocURL:      "https://kubernetes.io/docs/tasks/configure-pod-container/static-pod/",
+		DocSection:  "Tasks -> Configure Pods and Containers -> Create static Pods",
 	}
 }
 

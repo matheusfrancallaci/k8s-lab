@@ -50,3 +50,14 @@ func TestCheckpointIsIsolatedByConversation(t *testing.T) {
 		t.Fatal("checkpoint vazou entre conversas")
 	}
 }
+
+func TestExplicitLabCommandSupersedesPendingCheckpoint(t *testing.T) {
+	resetCheckpointsForTest()
+	RegisterTutorCheckpoint("carol", "conv-lab", TutorOrchestration{TurnID: "1", Intent: "explain", TargetTopic: "Core Concepts"})
+	if _, ok := EvaluateTutorCheckpoint("carol", "conv-lab", "Criar lab de pod estaticos"); ok {
+		t.Fatal("ordem explicita deve substituir o checkpoint, nao ser avaliada como resposta")
+	}
+	if _, ok := ActiveTutorCheckpoint("carol", "conv-lab"); ok {
+		t.Fatal("checkpoint substituido continuou interceptando mensagens")
+	}
+}

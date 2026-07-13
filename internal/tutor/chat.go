@@ -257,7 +257,7 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 	}
 
 	// 1. Desempenho / progresso
-	if regexp.MustCompile(`desempenho|progresso|como estou|estat|pontos? frac|dashboard`).MatchString(l) {
+	if regexp.MustCompile(`desempenho|progresso|como estou|estat[ií]stic(?:a|as|o|os)?\b|\bstats?\b|pontos? frac|dashboard`).MatchString(l) {
 		return ChatResult{
 			Reply:  "Aqui está o seu panorama. Onde o score está baixo é onde eu atacaria primeiro — quer que eu gere um lab focado nele?",
 			Action: &ChatAction{Type: "stats"},

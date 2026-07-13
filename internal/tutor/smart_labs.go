@@ -179,6 +179,8 @@ func isAWSFocus(cert, msg string) bool {
 func exactTopicForRequest(cert, msg string) string {
 	l := strings.ToLower(cert + " " + msg)
 	switch {
+	case regexp.MustCompile(`(?i)pod(?:s)?\s+est[aá]tic|static\s+pods?`).MatchString(l):
+		return "Static Pods"
 	case isAWSFocus(cert, msg) && regexp.MustCompile(`(?i)\bsqs\b|simple queue|fila|mensager`).MatchString(l):
 		return "AWS Messaging"
 	case isAWSFocus(cert, msg) && regexp.MustCompile(`(?i)\bs3\b|bucket|object storage|storage|armazen`).MatchString(l):

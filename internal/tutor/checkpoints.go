@@ -69,6 +69,13 @@ func EvaluateTutorCheckpoint(userID, conversationID, answer string) (CheckpointE
 	if !ok || cp.Status != "awaiting" {
 		return CheckpointEvaluation{}, false
 	}
+	// Uma ordem nova nao e resposta ao checkpoint anterior. Troque de intencao
+	// imediatamente para nao avaliar "criar lab..." como resposta conceitual.
+	if explicitTutorCommand(answer) {
+		cp.Status = "superseded"
+		checkpoints.Values[key] = cp
+		return CheckpointEvaluation{}, false
+	}
 	answerNorm := normalizeEvidenceText(answer)
 	ev := CheckpointEvaluation{CheckpointID: cp.ID}
 	for _, concept := range cp.Expected {
@@ -104,6 +111,12 @@ func EvaluateTutorCheckpoint(userID, conversationID, answer string) (CheckpointE
 	}
 	checkpoints.Values[key] = cp
 	return ev, true
+}
+
+var explicitTutorCommandRe = regexp.MustCompile(`(?i)^\s*(?:por\s+favor\s+)?(?:cri(?:e|ar)|ger(?:e|ar)|mont(?:e|ar)|fa(?:ca|ça|zer)|faz|quero|inici(?:e|ar)|abr(?:a|ir)|mostr(?:e|ar)|revis(?:e|ar)|simulado|exame|modo\s+incidente|como\s+estou)\b`)
+
+func explicitTutorCommand(answer string) bool {
+	return explicitTutorCommandRe.MatchString(strings.TrimSpace(answer))
 }
 
 func checkpointFor(intent, topic string) (string, []string) {
