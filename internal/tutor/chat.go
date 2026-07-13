@@ -246,7 +246,7 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 	if domain, ok := curriculumDomainInMessage(routeCert, msg); ok && isBroadLabRequest(msg) &&
 		topicFromCurriculumOrRequest(routeCert, msg) == "" && exactTopicForRequest(routeCert, msg) == "" {
 		return ChatResult{
-			Reply:  fmt.Sprintf("Voce escolheu **%s** em **%s**. Qual competencia quer praticar? Itens sem lab seguro continuam visiveis, mas nao podem ser iniciados.", domain.Domain, routeCert),
+			Reply:  fmt.Sprintf("Voce escolheu **%s** em **%s**. Qual competencia quer praticar? Nos itens sem template pronto, selecione **pesquisar e tentar criar**: eu leio a fonte oficial e so abro a sessao se o lab passar nas validacoes de ambiente, permissao e execucao.", domain.Domain, routeCert),
 			Action: &ChatAction{Type: "choices", Cert: routeCert, Title: domain.Domain, Options: domain.Competencies},
 		}
 	}
@@ -394,7 +394,20 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 			requestedTopic = exactTopicForRequest(cert, msg)
 		}
 		if requestedTopic != "" && labAskRe.MatchString(msg) {
-			qs, rep, err := GenerateSmartLabs(msg, cert, detectLevel(msg), detectCount(msg, 5))
+			var qs []models.Question
+			var rep SmartLabReport
+			var err error
+			if source := urlRe.FindString(msg); source != "" {
+				selected := requestedTopic
+				if choice, ok := curriculumChoiceInMessage(cert, msg); ok {
+					selected = choice.Label
+				}
+				var ingest IngestReport
+				qs, ingest, err = GenerateDocumentLabs(source, cert, selected, detectLevel(msg), detectCount(msg, 5))
+				rep = SmartLabReport{Cert: cert, Topic: selected, Ingest: ingest, Reason: "secao exata da documentacao oficial"}
+			} else {
+				qs, rep, err = GenerateSmartLabs(msg, cert, detectLevel(msg), detectCount(msg, 5))
+			}
 			if err != nil {
 				return ChatResult{Reply: "Nao consegui criar o lab exato dessa secao: " + err.Error()}
 			}

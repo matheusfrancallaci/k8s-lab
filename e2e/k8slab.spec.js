@@ -97,6 +97,8 @@ test('catalogo permite sessao customizada e labs mostram confianca', async ({ pa
   await ensureLoggedIn(page);
   await page.goto('/lab');
   await expect(page.locator('#maker-topic')).toBeVisible();
+  await expect(page.locator('#maker-source')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'ANALISAR TÓPICOS' })).toBeVisible();
   await expect(page.locator('#maker-count')).toHaveValue('5');
   await page.goto('/lab/cka-lab-001');
   await expect(page.locator('.lab-top-actions')).toContainText(/curado|verifica|valida|simula/i);
@@ -159,6 +161,9 @@ test('pedido vago de certificacao pede dominio e competencia', async ({ page }) 
   expect(domainBody.action?.type).toBe('choices');
   expect(domainBody.action?.options).toHaveLength(8);
   expect(domainBody.action.options[0].label).toContain('RBAC');
+  expect(domainBody.action.options[1].available).toBe(false);
+  expect(domainBody.action.options[1].researchable).toBe(true);
+  expect(domainBody.action.options[1].prompt).toMatch(/Pesquise a documentacao oficial/i);
 
   await page.goto('/tutor');
   await page.getByRole('button', { name: 'Adicionar contexto' }).click();

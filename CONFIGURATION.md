@@ -49,7 +49,7 @@ single-user; os defaults cobrem esse caso.
 | `OLLAMA_KEEP_ALIVE` | `10m` | Mantém o modelo carregado entre chamadas e reduz cold start. |
 | Runtime Ollama Azure | `ollama/ollama:0.30.11` | Imagem fixada para evitar mudanças incompatíveis em `latest`. |
 | `TUTOR_DOC_CACHE_TTL` | `30m` | TTL do cache com ETag para documentação oficial; reduz fetch/crawl repetido. |
-| `K8S_LAB_VERIFY_GENERATED` | `0` | Verificação executável experimental. Falhas nunca escondem conteúdo; mantenha desligado no cluster compartilhado até usar um runner efêmero dedicado. |
+| `K8S_LAB_VERIFY_GENERATED` | `1` em produção | Executa setup, solução, validadores e limpeza em namespace efêmero antes de publicar cada lab Kubernetes gerado. Qualquer falha bloqueia a sessão. |
 | `TUTOR_TELEMETRY_PERSIST` | `1` | Persiste amostras p50/p95/p99, falhas, fila e TTFT em `data/eval/tutor_telemetry.jsonl`. Use `0` somente em testes isolados. |
 | `TUTOR_TELEMETRY_FILE` | `data/eval/tutor_telemetry.jsonl` | Caminho alternativo para a telemetria durável. |
 | `QUESTIONS_CUSTOM_DIR` | `questions-custom` | Diretório dos labs gerados. No Azure usa `/app/data/questions-custom` para sobreviver a redeploys. |

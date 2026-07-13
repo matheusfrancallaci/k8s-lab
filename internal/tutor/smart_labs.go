@@ -137,13 +137,16 @@ func GenerateSmartLabs(msg, activeCert string, level, count int) ([]models.Quest
 		return nil, rep, fmt.Errorf("nao consegui mapear esse pedido para um lab seguro")
 	}
 	qs = FinalizeLabs(qs, msg)
+	for i := range qs {
+		qs[i].Source = models.SourceGenerated
+	}
 	for _, q := range qs {
-		if err := LabQualityGate(q); err != nil {
-			return nil, rep, err
-		}
 		if err := LabRequestAdherence(q, msg); err != nil {
 			return nil, rep, err
 		}
+	}
+	if err := validateGeneratedLabs(qs); err != nil {
+		return nil, rep, fmt.Errorf("nao publiquei o lab porque a validacao falhou: %w", err)
 	}
 	if err := persist(qs); err != nil {
 		return nil, rep, err

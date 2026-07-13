@@ -82,7 +82,10 @@ func LabPreflight(q models.Question) LabPreflightReport {
 	} else {
 		check("namespace alinhado: " + ns)
 	}
-	for _, cmd := range append(append([]string{}, setupCommands(q)...), validations...) {
+	commands := append(append([]string{}, setupCommands(q)...), q.AnswerCommand)
+	commands = append(commands, validations...)
+	commands = append(commands, q.Teardown...)
+	for _, cmd := range commands {
 		if reason := BlockedLabCommandReason(cmd); reason != "" {
 			fail("comando bloqueado pelo guardrail: " + reason)
 		}

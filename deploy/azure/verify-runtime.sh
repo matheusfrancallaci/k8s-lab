@@ -26,7 +26,7 @@ expect_env OLLAMA_GEN_MODEL qwen3:8b
 expect_env OLLAMA_EMBED_MODEL embeddinggemma
 expect_env OLLAMA_MAX_CONCURRENCY 1
 expect_env OLLAMA_KEEP_ALIVE 15m
-expect_env K8S_LAB_VERIFY_GENERATED 0
+expect_env K8S_LAB_VERIFY_GENERATED 1
 expect_env TUTOR_TELEMETRY_PERSIST 1
 expect_env QUESTIONS_CUSTOM_DIR /app/data/questions-custom
 expect_env LAB_SESSIONS_PATH /app/data/lab-sessions.json

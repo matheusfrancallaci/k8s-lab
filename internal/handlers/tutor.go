@@ -134,7 +134,40 @@ func (h *TutorHandler) VerifyCurriculum(w http.ResponseWriter, r *http.Request) 
 		json.NewEncoder(w).Encode(map[string]any{"error": "certificacao sem curriculo; informe a URL oficial do exame"}) //nolint:errcheck
 		return
 	}
+	if source := strings.TrimSpace(body.Source); source != "" {
+		for domainIndex := range view.Domains {
+			for itemIndex := range view.Domains[domainIndex].Competencies {
+				item := &view.Domains[domainIndex].Competencies[itemIndex]
+				item.Source = source
+				item.Researchable = true
+				if !item.Available {
+					item.Prompt = "Pesquise a documentacao oficial e tente criar um lab funcional para " + body.Cert + " sobre " + item.Label + " usando " + source
+				}
+			}
+		}
+	}
 	json.NewEncoder(w).Encode(map[string]any{"curriculum": view, "verified_sources": verified, "warnings": warnings}) //nolint:errcheck
+}
+
+// AnalyzeDocument exposes the real sections of one trusted documentation page
+// so the learner can select an exact topic before any lab is generated.
+func (h *TutorHandler) AnalyzeDocument(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var body struct {
+		Source string `json:"source"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]any{"error": "payload invalido"}) //nolint:errcheck
+		return
+	}
+	topics, sources, err := tutor.AnalyzeDocumentTopics(body.Source)
+	if err != nil {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		json.NewEncoder(w).Encode(map[string]any{"error": err.Error()}) //nolint:errcheck
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]any{"topics": topics, "verified_sources": sources}) //nolint:errcheck
 }
 
 // Author engorda o banco em lote: labs nível prova com verificação executável
@@ -372,10 +405,11 @@ func (h *TutorHandler) ExamReport(w http.ResponseWriter, r *http.Request) {
 func (h *TutorHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var body struct {
-		Cert  string `json:"cert"`
-		Topic string `json:"topic"`
-		Level int    `json:"level"`
-		Count int    `json:"count"`
+		Cert   string `json:"cert"`
+		Topic  string `json:"topic"`
+		Source string `json:"source"`
+		Level  int    `json:"level"`
+		Count  int    `json:"count"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		json.NewEncoder(w).Encode(map[string]any{"error": "payload inválido"}) //nolint:errcheck
@@ -412,8 +446,14 @@ func (h *TutorHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"error": "nao criei os labs porque o cluster nao subiu com sucesso: " + err.Error()}) //nolint:errcheck
 		return
 	}
-	request := fmt.Sprintf("Crie %d labs praticos sobre %s", body.Count, body.Topic)
-	qs, _, err := tutor.GenerateSmartLabs(request, body.Cert, body.Level, body.Count)
+	var qs []models.Question
+	var err error
+	if strings.TrimSpace(body.Source) != "" {
+		qs, _, err = tutor.GenerateDocumentLabs(body.Source, body.Cert, body.Topic, body.Level, body.Count)
+	} else {
+		request := fmt.Sprintf("Crie %d labs praticos sobre %s", body.Count, body.Topic)
+		qs, _, err = tutor.GenerateSmartLabs(request, body.Cert, body.Level, body.Count)
+	}
 	if err != nil {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		json.NewEncoder(w).Encode(map[string]any{"error": err.Error()}) //nolint:errcheck

@@ -300,6 +300,16 @@ func Ingest(text, cert, topic string, level, wantLabs, wantQuiz int) ([]models.Q
 		return nil, rep, fmt.Errorf("nenhum conteúdo utilizável detectado — cole uma URL (kubernetes.io ou GitHub), um trecho com comandos/manifests, ou descreva o tema (ex.: \"init containers\")")
 	}
 	qs = FinalizeLabs(qs, text)
+	var generatedLabs []models.Question
+	for i := range qs {
+		if qs[i].Type == models.Lab {
+			qs[i].Source = models.SourceGenerated
+			generatedLabs = append(generatedLabs, qs[i])
+		}
+	}
+	if err := validateGeneratedLabs(generatedLabs); err != nil {
+		return nil, rep, fmt.Errorf("nao publiquei os labs porque a validacao falhou: %w", err)
+	}
 	if err := persist(qs); err != nil {
 		return nil, rep, err
 	}
@@ -578,7 +588,7 @@ func labFromManifest(sn snippet, cert, topic string, level int) (models.Question
 			fmt.Sprintf("Da documentação que você forneceu: crie o **%s/%s**.\n\nDica: monte o YAML e aplique com `kubectl apply -f`.", kind, name),
 			fmt.Sprintf("Da sua documentação, vamos criar um **%s** passo a passo:\n\n1. Crie um arquivo com o manifest abaixo\n2. Aplique: `kubectl apply -f arquivo.yaml`\n3. Confirme: `kubectl get %s %s`\n\n```yaml\n%s\n```", kind, strings.ToLower(kind), name, strings.TrimSpace(manifest))),
 		Hint:          fmt.Sprintf("kubectl apply -f - <<EOF\n%s\nEOF", strings.TrimSpace(manifest)),
-		AnswerCommand: fmt.Sprintf("kubectl apply -f manifest.yaml  # %s/%s da documentação", kind, name),
+		AnswerCommand: fmt.Sprintf("kubectl apply -f - <<'EOF'\n%s\nEOF", strings.TrimSpace(manifest)),
 		Goals: []models.Goal{{
 			Description: fmt.Sprintf("**%s/%s** existe no cluster", kind, name),
 			Hint:        pickHelp(level, "", "kubectl apply -f com o manifest da doc.", "O YAML completo está no enunciado/hint — aplique com kubectl apply -f -."),

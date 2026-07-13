@@ -182,14 +182,22 @@ func PrepareLabForDelivery(q models.Question) models.Question {
 	return q
 }
 
-// DeliveryBlockReason devolve o motivo para NÃO entregar o lab ao aluno, ou
-// vazio. Só a prova executável reprova ("rejected" com Executable=true) —
-// pendente/degradado continua disponível com o aviso de procedência.
+// DeliveryBlockReason returns the reason a generated lab cannot reach the
+// learner. In production, Kubernetes labs must be runtime-verified and ready;
+// compiled/degraded content remains observable to operators but never opens a
+// student session.
 func DeliveryBlockReason(q models.Question) string {
 	if q.Source != models.SourceGenerated || q.LabSpec == nil {
 		return ""
 	}
 	r := q.LabSpec.Readiness
+	if isKubernetesLab(q) && shouldVerifyGeneratedKubernetesLabs() && (r.State != "ready" || !r.Executable) {
+		reason := strings.TrimSpace(r.Failure)
+		if reason == "" {
+			reason = "o lab ainda nao passou na verificacao executavel obrigatoria"
+		}
+		return reason
+	}
 	if r.State == "rejected" && r.Executable {
 		reason := strings.TrimSpace(r.Failure)
 		if reason == "" {

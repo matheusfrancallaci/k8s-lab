@@ -9,11 +9,13 @@ import (
 // current lab engine can build an exact, safe, automatically validated lab for
 // the item; unavailable items remain visible so curriculum coverage is honest.
 type CurriculumChoice struct {
-	Label       string `json:"label"`
-	Description string `json:"description,omitempty"`
-	Prompt      string `json:"prompt"`
-	Available   bool   `json:"available"`
-	Topic       string `json:"topic,omitempty"`
+	Label        string `json:"label"`
+	Description  string `json:"description,omitempty"`
+	Prompt       string `json:"prompt"`
+	Available    bool   `json:"available"`
+	Researchable bool   `json:"researchable"`
+	Topic        string `json:"topic,omitempty"`
+	Source       string `json:"source,omitempty"`
 }
 
 type CurriculumDomainView struct {
@@ -103,11 +105,21 @@ func CurriculumViewFor(cert string) (CurriculumView, bool) {
 			items = []CurriculumChoice{{Label: domain.Domain, Topic: topic, Available: topic != ""}}
 		}
 		for i := range items {
-			items[i].Prompt = "Crie um lab para " + cert + " sobre " + items[i].Label
+			if len(domain.URLs) > 0 {
+				items[i].Source = domain.URLs[0]
+			}
 			if items[i].Available {
+				items[i].Researchable = true
+				items[i].Prompt = "Crie um lab para " + cert + " sobre " + items[i].Label
 				items[i].Description = "lab hands-on disponivel"
 			} else {
-				items[i].Description = "conteudo detectado; lab exato ainda indisponivel"
+				items[i].Researchable = items[i].Source != ""
+				items[i].Topic = items[i].Label
+				items[i].Prompt = "Pesquise a documentacao oficial e tente criar um lab funcional para " + cert + " sobre " + items[i].Label
+				if items[i].Source != "" {
+					items[i].Prompt += " usando " + items[i].Source
+				}
+				items[i].Description = "sem template pronto; pesquisar fonte oficial e validar antes de criar"
 			}
 		}
 		view.Domains = append(view.Domains, CurriculumDomainView{
@@ -145,6 +157,22 @@ func curriculumTopicInMessage(cert, msg string) string {
 		}
 	}
 	return ""
+}
+
+func curriculumChoiceInMessage(cert, msg string) (CurriculumChoice, bool) {
+	view, ok := CurriculumViewFor(cert)
+	if !ok {
+		return CurriculumChoice{}, false
+	}
+	lower := strings.ToLower(msg)
+	for _, domain := range view.Domains {
+		for _, item := range domain.Competencies {
+			if strings.Contains(lower, strings.ToLower(item.Label)) {
+				return item, true
+			}
+		}
+	}
+	return CurriculumChoice{}, false
 }
 
 func isBareCertificationLabRequest(msg, cert string) bool {

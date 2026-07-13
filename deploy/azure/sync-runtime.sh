@@ -62,7 +62,7 @@ desired = [
     ("OLLAMA_EMBED_MODEL", "embeddinggemma"),
     ("OLLAMA_MAX_CONCURRENCY", "1"),
     ("OLLAMA_KEEP_ALIVE", "15m"),
-    ("K8S_LAB_VERIFY_GENERATED", "0"),
+    ("K8S_LAB_VERIFY_GENERATED", "1"),
     ("TUTOR_TELEMETRY_PERSIST", "1"),
     ("QUESTIONS_CUSTOM_DIR", "/app/data/questions-custom"),
 	("LAB_SESSIONS_PATH", "/app/data/lab-sessions.json"),

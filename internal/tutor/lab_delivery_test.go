@@ -2,7 +2,6 @@ package tutor
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -70,7 +69,7 @@ func TestPrepareLabForDeliveryNeverRunsExecutableVerification(t *testing.T) {
 	}
 }
 
-func TestGeneratePersistsContentWhenExecutableVerificationFails(t *testing.T) {
+func TestGenerateRejectsContentWhenExecutableVerificationFails(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Setenv("K8S_LAB_VERIFY_GENERATED", "1")
 	t.Setenv("RAG_DATA_DIR", filepath.Join(t.TempDir(), "rag"))
@@ -99,28 +98,42 @@ func TestGeneratePersistsContentWhenExecutableVerificationFails(t *testing.T) {
 	t.Cleanup(func() { executableKubernetesLabVerifier = previousVerifier })
 
 	qs, err := Generate("Workloads", "CKA", 2, 1)
-	if err != nil {
-		t.Fatalf("falha de verificacao nao pode cancelar geracao: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "validacao falhou") {
+		t.Fatalf("falha executavel precisa cancelar a publicacao: labs=%d err=%v", len(qs), err)
 	}
-	if called != 1 || len(qs) != 1 {
+	if called != 1 || len(qs) != 0 {
 		t.Fatalf("verificacao deveria ser tentada uma vez: called=%d labs=%d", called, len(qs))
 	}
-	if qs[0].Question == "" || qs[0].Hint == "" || qs[0].AnswerCommand == "" {
-		t.Fatalf("tarefa, hint e solucao devem continuar disponiveis: %+v", qs[0])
-	}
-	if qs[0].LabSpec == nil || qs[0].LabSpec.Readiness.State != "rejected" || qs[0].LabSpec.Readiness.Failure == "" {
-		t.Fatalf("falha deve ficar registrada apenas na prontidao interna: %+v", qs[0].LabSpec)
-	}
 	files, globErr := filepath.Glob(filepath.Join("questions-custom", "gen-*.yaml"))
-	if globErr != nil || len(files) != 1 {
-		t.Fatalf("lab deve ser persistido apesar da verificacao: files=%v err=%v", files, globErr)
-	}
-	if _, statErr := os.Stat(files[0]); statErr != nil {
-		t.Fatalf("arquivo persistido nao esta acessivel: %v", statErr)
+	if globErr != nil || len(files) != 0 {
+		t.Fatalf("lab reprovado nao pode ser persistido: files=%v err=%v", files, globErr)
 	}
 	entries := LabCatalog()
 	if len(entries) != 1 || entries[0].Readiness.State != "rejected" {
-		t.Fatalf("catalogo deve preservar a falha operacional: %+v", entries)
+		t.Fatalf("catalogo interno deve preservar a falha sem publicar o lab: %+v", entries)
+	}
+}
+
+func TestSmartLabPathRunsExecutableVerificationBeforePublishing(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("K8S_LAB_VERIFY_GENERATED", "1")
+	previousVerifier := executableKubernetesLabVerifier
+	called := 0
+	executableKubernetesLabVerifier = func(q models.Question) error {
+		called++
+		if q.Source != models.SourceGenerated {
+			t.Fatalf("verificador recebeu lab sem proveniencia gerada: %+v", q)
+		}
+		return nil
+	}
+	t.Cleanup(func() { executableKubernetesLabVerifier = previousVerifier })
+
+	qs, _, err := GenerateSmartLabs("Crie 1 lab pratico sobre NodePort", "CKA", 2, 1)
+	if err != nil || len(qs) != 1 {
+		t.Fatalf("smart lab deveria publicar depois da verificacao: labs=%d err=%v", len(qs), err)
+	}
+	if called != 1 || qs[0].LabSpec == nil || qs[0].LabSpec.Readiness.State != "ready" {
+		t.Fatalf("verificacao executavel nao foi aplicada: called=%d lab=%+v", called, qs[0].LabSpec)
 	}
 }
 

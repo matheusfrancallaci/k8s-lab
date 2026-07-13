@@ -202,6 +202,8 @@
 .choice-list { display:grid; gap:8px; margin-top:10px; }
 .choice-btn { width:100%; text-align:left; border:1px solid var(--border-2); background:var(--surface); color:var(--text-2); border-radius:10px; padding:10px 12px; cursor:pointer; }
 .choice-btn:hover { border-color:var(--violet); color:var(--text); }
+.choice-btn.research { border-style:dashed; }
+.choice-btn.research small { color:var(--amber); }
 .choice-btn:disabled { cursor:not-allowed; opacity:.5; }
 .choice-btn strong,.choice-btn small { display:block; }
 .choice-btn small { margin-top:3px; color:var(--text-4); }
@@ -1128,13 +1130,16 @@ function renderVerifiedCurriculum(curriculum, sources, warnings) {
 		const list = block.querySelector('.choice-list');
 		(domain.competencies || []).forEach(item => {
 			const button = document.createElement('button');
-			button.className = 'choice-btn'; button.disabled = !item.available;
+			button.className = 'choice-btn' + (!item.available ? ' research' : '');
+			button.disabled = !item.available && !item.researchable;
 			button.innerHTML = `<strong>${escH(item.label)}</strong><small>${escH(item.description || '')}</small>`;
-			if (item.available) button.onclick = () => {
+			if (!button.disabled) button.onclick = () => {
 				const count = document.getElementById('verify-count').value;
 				const level = document.getElementById('verify-level').value;
 				document.getElementById('curriculum-panel').classList.remove('open');
-				sendSuggestion(`Crie ${count} lab(s) para ${curriculum.cert} sobre ${item.label} nivel ${level}`);
+				const source = item.source || document.getElementById('verify-source').value.trim();
+				const verb = item.available ? 'Crie' : 'Pesquise a documentacao oficial e tente criar';
+				sendSuggestion(`${verb} ${count} lab(s) para ${curriculum.cert} sobre ${item.label} nivel ${level}${source ? ' usando '+source : ''}`);
 			};
 			list.appendChild(button);
 		});
@@ -1347,9 +1352,10 @@ function renderAction(slot, a) {
 		const list = card.querySelector('.choice-list');
 		(a.options || []).forEach(item => {
 			const button = document.createElement('button');
-			button.className = 'choice-btn'; button.disabled = item.available === false;
+			button.className = 'choice-btn' + (item.available === false ? ' research' : '');
+			button.disabled = item.available === false && item.researchable !== true;
 			button.innerHTML = `<strong>${escH(item.label || '')}</strong><small>${escH(item.description || '')}</small>`;
-			if (item.available !== false) button.onclick = () => sendSuggestion(item.prompt || item.label || '');
+			if (!button.disabled) button.onclick = () => sendSuggestion(item.prompt || item.label || '');
 			list.appendChild(button);
 		});
 		slot.appendChild(card);

@@ -214,19 +214,13 @@ func Generate(topic, cert string, level, count int) ([]models.Question, error) {
 	}
 
 	WarmRAG(cert, topic)
-	qs := generateQuestions(topic, cert, level, count)
+	qs := FinalizeLabs(generateQuestions(topic, cert, level, count), topic)
 	for i := range qs {
 		qs[i].Source = models.SourceGenerated
-		if err := LabQualityGate(qs[i]); err != nil {
-			// O gate continua visivel no catalogo, mas nao apaga o material
-			// pedagogico. Setup, validacao e teardown ainda bloqueiam cada
-			// comando inseguro antes de chegar ao shell.
-			markLabDegraded(&qs[i], "quality gate: "+err.Error())
-		}
 	}
-	// A verificacao executavel promove ou reprova o estado interno. Falhas
-	// nunca impedem persistencia/entrega do enunciado, hint e solucao.
-	_ = verifyGeneratedKubernetesLabs(qs)
+	if err := validateGeneratedLabs(qs); err != nil {
+		return nil, fmt.Errorf("nao publiquei o lab porque a validacao falhou: %w", err)
+	}
 	for i := range qs {
 		if qs[i].LabSpec != nil && isKubernetesLab(qs[i]) && qs[i].LabSpec.Readiness.State == "ready" && qs[i].LabSpec.Readiness.Executable {
 			qs[i].LabSpec.ValidationMode = "compiled+runtime-verified"
@@ -618,8 +612,34 @@ func tplPVC(p params, level int, cert string) models.Question {
 			fmt.Sprintf("Crie um PVC **%s-pvc** de **1Gi** (accessMode ReadWriteOnce) e um Pod **%s** com a imagem **nginx:1.21** montando esse PVC em **/data**.", p.Name, p.Name),
 			fmt.Sprintf("Crie um PVC **%s-pvc** de **1Gi** (ReadWriteOnce) e um Pod **%s** montando-o em **/data**.\n\nDica: PVC e Pod via YAML (`kubectl apply -f`); no pod, `volumes.persistentVolumeClaim` + `volumeMounts`.", p.Name, p.Name),
 			fmt.Sprintf("Storage persistente, passo a passo:\n\n1. Crie o PVC (o minikube provisiona PV automaticamente):\n```\nkubectl apply -f - <<EOF\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: %s-pvc\nspec:\n  accessModes: [ReadWriteOnce]\n  resources:\n    requests:\n      storage: 1Gi\nEOF\n```\n2. Crie o Pod montando o PVC em /data (volumes + volumeMounts)\n3. Verifique: `kubectl get pvc %s-pvc` deve mostrar **Bound**", p.Name, p.Name)),
-		Hint:          fmt.Sprintf("PVC: accessModes [ReadWriteOnce], storage 1Gi. Pod: volumes.persistentVolumeClaim.claimName=%s-pvc + volumeMounts mountPath=/data", p.Name),
-		AnswerCommand: fmt.Sprintf("kubectl apply -f pvc.yaml && kubectl apply -f pod.yaml  # PVC %s-pvc 1Gi RWO + pod %s montando em /data", p.Name, p.Name),
+		Hint: fmt.Sprintf("PVC: accessModes [ReadWriteOnce], storage 1Gi. Pod: volumes.persistentVolumeClaim.claimName=%s-pvc + volumeMounts mountPath=/data", p.Name),
+		AnswerCommand: fmt.Sprintf(`kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: %s-pvc
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+spec:
+  volumes:
+  - name: data
+    persistentVolumeClaim:
+      claimName: %s-pvc
+  containers:
+  - name: app
+    image: nginx:1.21
+    volumeMounts:
+    - name: data
+      mountPath: /data
+EOF`, p.Name, p.Name, p.Name),
 		Goals: []models.Goal{
 			{
 				Description: fmt.Sprintf("PVC **%s-pvc** está **Bound**", p.Name),
@@ -652,36 +672,44 @@ func tplPVC(p params, level int, cert string) models.Question {
 }
 
 func tplNodeSelector(p params, level int, cert string) models.Question {
-	label := fmt.Sprintf("disk=%s", p.Value)
+	label := "kubernetes.io/os=linux"
 	return models.Question{
 		Question: pickHelp(level,
-			fmt.Sprintf("Rotule o nó do cluster com **%s** e crie um Pod **%s** (imagem **%s**) que só agende em nós com essa label (nodeSelector).", label, p.Name, p.Image),
-			fmt.Sprintf("Rotule o nó com **%s** e crie um Pod **%s** com **nodeSelector** para essa label.\n\nDica: `kubectl label node` + YAML com `spec.nodeSelector`.", label, p.Name),
-			fmt.Sprintf("Scheduling dirigido, passo a passo:\n\n1. Descubra o nó: `kubectl get nodes`\n2. Rotule: `kubectl label node <nó> %s`\n3. Crie o pod com nodeSelector:\n```\nkubectl apply -f - <<EOF\napiVersion: v1\nkind: Pod\nmetadata:\n  name: %s\nspec:\n  nodeSelector:\n    disk: %s\n  containers:\n  - name: app\n    image: %s\nEOF\n```\n4. O pod deve ficar **Running** (a label casa).", label, p.Name, p.Value, p.Image)),
-		Hint:          fmt.Sprintf("kubectl label node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') %s — depois pod com spec.nodeSelector {disk: %s}", label, p.Value),
-		AnswerCommand: fmt.Sprintf("kubectl label node <nó> %s; kubectl apply -f pod.yaml  # com nodeSelector disk: %s", label, p.Value),
+			fmt.Sprintf("Crie um Pod **%s** (imagem **%s**) usando `nodeSelector` com a label padrão **%s**.", p.Name, p.Image, label),
+			fmt.Sprintf("Crie um Pod **%s** com `spec.nodeSelector.kubernetes.io/os: linux`. O exercício usa uma label padrão existente e não altera os Nodes compartilhados.", p.Name),
+			fmt.Sprintf("Aplique um Pod com `spec.nodeSelector.kubernetes.io/os: linux` e confirme que **%s** fica Running. Essa label é publicada pelo kubelet e permite praticar scheduling sem modificar o Node.", p.Name)),
+		Hint: "spec.nodeSelector: {kubernetes.io/os: linux}",
+		AnswerCommand: fmt.Sprintf(`kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+spec:
+  nodeSelector:
+    kubernetes.io/os: linux
+  containers:
+  - name: app
+    image: %s
+EOF`, p.Name, p.Image),
 		Goals: []models.Goal{
 			{
-				Description: fmt.Sprintf("O nó tem a label **%s**", label),
-				Hint:        pickHelp(level, "", "kubectl label node <nome> chave=valor", fmt.Sprintf("kubectl label node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') %s", label)),
+				Description: fmt.Sprintf("O cluster possui Node Linux com a label padrão **%s**", label),
+				Hint:        "Use kubectl get nodes --show-labels para inspecionar labels padrão.",
 				Validation: &models.Validation{
-					Command:          fmt.Sprintf("kubectl get nodes -o jsonpath='{.items[0].metadata.labels.disk}' 2>/dev/null"),
-					ExpectedContains: p.Value,
+					Command:          "kubectl get nodes -o jsonpath='{.items[0].metadata.labels.kubernetes\\.io/os}' 2>/dev/null",
+					ExpectedContains: "linux",
 				},
 			},
 			{
 				Description: fmt.Sprintf("Pod **%s** usa nodeSelector e está **Running**", p.Name),
-				Hint:        pickHelp(level, "", "spec.nodeSelector no YAML do pod.", "Use o YAML do passo 3 — nodeSelector deve ser exatamente {disk: "+p.Value+"}."),
+				Hint:        pickHelp(level, "", "spec.nodeSelector no YAML do pod.", "Use nodeSelector com kubernetes.io/os: linux."),
 				Validation: &models.Validation{
-					Command:          fmt.Sprintf("kubectl get pod %s -o jsonpath='{.spec.nodeSelector.disk}:{.status.phase}' 2>/dev/null", p.Name),
-					ExpectedContains: fmt.Sprintf("%s:Running", p.Value),
+					Command:          fmt.Sprintf("kubectl get pod %s -o jsonpath='{.spec.nodeSelector.kubernetes\\.io/os}:{.status.phase}' 2>/dev/null", p.Name),
+					ExpectedContains: "linux:Running",
 				},
 			},
 		},
-		Teardown: []string{
-			fmt.Sprintf("kubectl delete pod %s --ignore-not-found=true", p.Name),
-			"kubectl label node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') disk- 2>/dev/null || true",
-		},
+		Teardown: []string{fmt.Sprintf("kubectl delete pod %s --ignore-not-found=true", p.Name)},
 		Explanation: pickHelp(level,
 			"nodeSelector agenda pods apenas em nós com as labels exigidas.",
 			"nodeSelector é a forma mais simples de direcionar scheduling: o pod só agenda em nós cujas labels contêm todos os pares exigidos.",
@@ -697,17 +725,31 @@ func tplTaintToleration(p params, level int, cert string) models.Question {
 	tolerationPod := p.Name + "-tol"
 	return models.Question{
 		Question: pickHelp(level,
-			fmt.Sprintf("Aplique no primeiro node o taint **%s=%s:NoSchedule** e crie um Pod **%s** que consiga agendar usando a toleration correta.", key, value, tolerationPod),
-			fmt.Sprintf("Treino CKA de scheduling: taint o primeiro node com **%s=%s:NoSchedule** e crie o Pod **%s** com toleration correspondente.\n\nDica: taints repelem pods; tolerations permitem que um pod aceite esse node.", key, value, tolerationPod),
-			fmt.Sprintf("Taints e tolerations passo a passo:\n\n1. Taint o primeiro node: `kubectl taint node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') %s=%s:NoSchedule --overwrite`\n2. Crie um Pod **%s** com toleration `key: %s`, `operator: Equal`, `value: %s`, `effect: NoSchedule`\n3. Confirme que o Pod ficou **Running**\n\nEsse topico pertence a CKA Workloads & Scheduling: controlar onde workloads podem rodar.", key, value, tolerationPod, key, value)),
-		Hint:          fmt.Sprintf("spec.tolerations: [{key:%s, operator: Equal, value:%s, effect: NoSchedule}]", key, value),
-		AnswerCommand: fmt.Sprintf("kubectl taint node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') %s=%s:NoSchedule --overwrite; kubectl apply -f pod.yaml", key, value),
+			fmt.Sprintf("Crie um Pod **%s** que tolere o taint **%s=%s:NoSchedule**. O lab valida a toleration sem alterar os Nodes compartilhados.", tolerationPod, key, value),
+			fmt.Sprintf("Treino CKA seguro: configure no Pod **%s** uma toleration para **%s=%s:NoSchedule** e confirme que o objeto foi admitido.", tolerationPod, key, value),
+			fmt.Sprintf("Crie **%s** com `spec.tolerations`: key `%s`, operator `Equal`, value `%s`, effect `NoSchedule`. O mesmo manifesto funcionará quando um administrador aplicar o taint correspondente em um Node dedicado.", tolerationPod, key, value)),
+		Hint: fmt.Sprintf("spec.tolerations: [{key:%s, operator: Equal, value:%s, effect: NoSchedule}]", key, value),
+		AnswerCommand: fmt.Sprintf(`kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+spec:
+  tolerations:
+  - key: %s
+    operator: Equal
+    value: %s
+    effect: NoSchedule
+  containers:
+  - name: app
+    image: nginx:1.25
+EOF`, tolerationPod, key, value),
 		Goals: []models.Goal{
 			{
-				Description: fmt.Sprintf("Primeiro node tem taint **%s=%s:NoSchedule**", key, value),
-				Hint:        pickHelp(level, "", "Use kubectl taint node <node> key=value:NoSchedule --overwrite.", fmt.Sprintf("kubectl taint node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') %s=%s:NoSchedule --overwrite", key, value)),
+				Description: fmt.Sprintf("Pod declara a toleration **%s=%s:NoSchedule**", key, value),
+				Hint:        "Confira spec.tolerations[0] no Pod.",
 				Validation: &models.Validation{
-					Command:          fmt.Sprintf("kubectl get node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') -o jsonpath='{.spec.taints[?(@.key==\"%s\")].value}:{.spec.taints[?(@.key==\"%s\")].effect}' 2>/dev/null", key, key),
+					Command:          fmt.Sprintf("kubectl get pod %s -o jsonpath='{.spec.tolerations[?(@.key==\"%s\")].value}:{.spec.tolerations[?(@.key==\"%s\")].effect}' 2>/dev/null", tolerationPod, key, key),
 					ExpectedContains: value + ":NoSchedule",
 				},
 			},
@@ -720,10 +762,7 @@ func tplTaintToleration(p params, level int, cert string) models.Question {
 				},
 			},
 		},
-		Teardown: []string{
-			fmt.Sprintf("kubectl delete pod %s --ignore-not-found=true", tolerationPod),
-			fmt.Sprintf("kubectl taint node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') %s- 2>/dev/null || true", key),
-		},
+		Teardown:    []string{fmt.Sprintf("kubectl delete pod %s --ignore-not-found=true", tolerationPod)},
 		Explanation: "Taints ficam no node e impedem scheduling; tolerations ficam no Pod e permitem que ele aceite aquele taint. Isso nao força o pod a ir para o node, apenas remove a repulsao.",
 		DocURL:      "https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/",
 		DocSection:  "Scheduling -> Taints and Tolerations",
@@ -738,8 +777,26 @@ func tplPodAntiAffinity(p params, level int, cert string) models.Question {
 			fmt.Sprintf("Crie o Pod **%s** com `requiredDuringSchedulingIgnoredDuringExecution` para nao compartilhar o mesmo node do Pod **%s** (`app=%s`). Use `kubernetes.io/hostname` como topologyKey.", peer, anchor, anchor),
 			fmt.Sprintf("O Pod **%s** deve usar **podAntiAffinity obrigatoria** contra `app=%s`, com topologyKey `kubernetes.io/hostname`.", peer, anchor),
 			fmt.Sprintf("Crie **%s** com `spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution`. O `labelSelector.matchExpressions` deve selecionar `app In [%s]` e o `topologyKey` deve ser `kubernetes.io/hostname`. Em cluster de um node, ficar Pending e o resultado esperado da regra.", peer, anchor)),
-		Hint:          "Use spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution com labelSelector e topologyKey kubernetes.io/hostname.",
-		AnswerCommand: fmt.Sprintf("kubectl apply -f pod-antiaffinity.yaml  # Pod %s com podAntiAffinity contra app=%s", peer, anchor),
+		Hint: "Use spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution com labelSelector e topologyKey kubernetes.io/hostname.",
+		AnswerCommand: fmt.Sprintf(`kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+spec:
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+          - key: app
+            operator: In
+            values: [%s]
+        topologyKey: kubernetes.io/hostname
+  containers:
+  - name: app
+    image: nginx:1.25
+EOF`, peer, anchor),
 		Setup: []models.SetupStep{{
 			Description: fmt.Sprintf("Criando o Pod ancora %s...", anchor),
 			Command:     fmt.Sprintf("kubectl run %s --image=nginx:1.25 --labels=app=%s --restart=Never 2>/dev/null || true; kubectl wait --for=condition=Ready pod/%s --timeout=90s 2>/dev/null || true", anchor, anchor, anchor),
@@ -755,18 +812,17 @@ func tplPodAntiAffinity(p params, level int, cert string) models.Question {
 }
 
 func tplNodePort(p params, level int, cert string) models.Question {
-	port := 30080
 	return models.Question{
 		Question: pickHelp(level,
-			fmt.Sprintf("Exponha o Deployment **%s** como Service **%s** do tipo **NodePort**, porta 80, targetPort 80 e nodePort **%d**.", p.Name, p.Name2, port),
-			fmt.Sprintf("Crie um Service NodePort **%s** para o Deployment **%s**. Use port/targetPort 80 e nodePort %d.", p.Name2, p.Name, port),
-			fmt.Sprintf("Use `kubectl expose deployment %s --name=%s --type=NodePort --port=80 --target-port=80` e ajuste `spec.ports[0].nodePort` para %d.", p.Name, p.Name2, port)),
-		Hint:          fmt.Sprintf("spec.type: NodePort e spec.ports[0].nodePort: %d", port),
-		AnswerCommand: fmt.Sprintf("kubectl expose deployment %s --name=%s --type=NodePort --port=80 --target-port=80; kubectl patch svc %s -p '{\"spec\":{\"ports\":[{\"port\":80,\"targetPort\":80,\"nodePort\":%d}]}}'", p.Name, p.Name2, p.Name2, port),
+			fmt.Sprintf("Exponha o Deployment **%s** como Service **%s** do tipo **NodePort**, porta 80 e targetPort 80. Deixe a API escolher uma porta livre para evitar conflito com outros alunos.", p.Name, p.Name2),
+			fmt.Sprintf("Crie um Service NodePort **%s** para o Deployment **%s**, com port/targetPort 80 e alocação automática de nodePort.", p.Name2, p.Name),
+			fmt.Sprintf("Use `kubectl expose deployment %s --name=%s --type=NodePort --port=80 --target-port=80`; depois inspecione a nodePort alocada pelo cluster.", p.Name, p.Name2)),
+		Hint:          "kubectl expose deployment ... --type=NodePort --port=80 --target-port=80",
+		AnswerCommand: fmt.Sprintf("kubectl expose deployment %s --name=%s --type=NodePort --port=80 --target-port=80", p.Name, p.Name2),
 		Setup:         []models.SetupStep{{Description: fmt.Sprintf("Criando backend %s...", p.Name), Command: fmt.Sprintf("kubectl create deployment %s --image=nginx:1.25 2>/dev/null || true; kubectl rollout status deployment/%s --timeout=90s 2>/dev/null || true", p.Name, p.Name)}},
 		Goals: []models.Goal{
 			{Description: fmt.Sprintf("Service **%s** e do tipo NodePort", p.Name2), Validation: &models.Validation{Command: fmt.Sprintf("kubectl get svc %s -o jsonpath='{.spec.type}' 2>/dev/null", p.Name2), ExpectedContains: "NodePort"}},
-			{Description: fmt.Sprintf("O Service publica nodePort **%d** e seleciona o backend", port), Validation: &models.Validation{Command: fmt.Sprintf("kubectl get svc %s -o jsonpath='{.spec.ports[0].nodePort}:{.spec.selector.app}' 2>/dev/null", p.Name2), ExpectedContains: fmt.Sprintf("%d:%s", port, p.Name)}},
+			{Description: "O Service recebeu uma nodePort livre e seleciona o backend", Validation: &models.Validation{Command: fmt.Sprintf("kubectl get svc %s -o jsonpath='{.spec.selector.app}' 2>/dev/null", p.Name2), ExpectedContains: p.Name}},
 		},
 		Teardown:    []string{fmt.Sprintf("kubectl delete svc %s --ignore-not-found=true", p.Name2), fmt.Sprintf("kubectl delete deployment %s --ignore-not-found=true", p.Name)},
 		Explanation: "NodePort mantem um ClusterIP e tambem abre a mesma porta, no intervalo configurado, em cada node. O Service encaminha o trafego aos Pods que casam com seu selector.",
@@ -782,8 +838,21 @@ func tplAdmissionControl(p params, level int, cert string) models.Question {
 			fmt.Sprintf("Configure o admission controller **ResourceQuota** criando **%s** com `requests.cpu=1` e `requests.memory=1Gi`; depois crie o Pod **%s** com requests de CPU e memoria para ele ser admitido.", quota, pod),
 			fmt.Sprintf("Crie o ResourceQuota **%s** e um Pod **%s** que satisfaca a politica de requests exigida na admissao.", quota, pod),
 			fmt.Sprintf("1. `kubectl create quota %s --hard=requests.cpu=1,requests.memory=1Gi`\n2. Crie %s com resources.requests.cpu=100m e memory=64Mi.\n3. Confirme que o Pod foi admitido e ficou Running.", quota, pod)),
-		Hint:          "ResourceQuota e avaliado na cadeia de admission antes de o objeto ser persistido.",
-		AnswerCommand: fmt.Sprintf("kubectl create quota %s --hard=requests.cpu=1,requests.memory=1Gi; kubectl run %s --image=nginx:1.25 --requests=cpu=100m,memory=64Mi", quota, pod),
+		Hint: "ResourceQuota e avaliado na cadeia de admission antes de o objeto ser persistido.",
+		AnswerCommand: fmt.Sprintf(`kubectl create quota %s --hard=requests.cpu=1,requests.memory=1Gi; kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+spec:
+  containers:
+  - name: app
+    image: nginx:1.25
+    resources:
+      requests:
+        cpu: 100m
+        memory: 64Mi
+EOF`, quota, pod),
 		Goals: []models.Goal{
 			{Description: "ResourceQuota exige requests de CPU e memoria", Validation: &models.Validation{Command: fmt.Sprintf("kubectl get resourcequota %s -o jsonpath='{.spec.hard.requests\\.cpu}:{.spec.hard.requests\\.memory}' 2>/dev/null", quota), ExpectedContains: "1:1Gi"}},
 			{Description: fmt.Sprintf("Pod **%s** tem requests e foi admitido", pod), Validation: &models.Validation{Command: fmt.Sprintf("kubectl get pod %s -o jsonpath='{.spec.containers[0].resources.requests.cpu}:{.spec.containers[0].resources.requests.memory}' 2>/dev/null", pod), ExpectedContains: "100m:64Mi"}},
@@ -804,7 +873,7 @@ func tplRBAC(p params, level int, cert string) models.Question {
 			fmt.Sprintf("Implemente RBAC namespaced: Role **%s** para leitura de Pods e RoleBinding para **%s**.", role, sa),
 			fmt.Sprintf("1. `kubectl create role %s --verb=get,list,watch --resource=pods`\n2. `kubectl create rolebinding %s --role=%s --serviceaccount=default:%s`\n3. Valide com `kubectl auth can-i list pods --as=system:serviceaccount:default:%s`.", role, binding, role, sa, sa)),
 		Hint:          "Use Role e RoleBinding, nao ClusterRoleBinding, para manter o menor escopo.",
-		AnswerCommand: fmt.Sprintf("kubectl create role %s --verb=get,list,watch --resource=pods; kubectl create rolebinding %s --role=%s --serviceaccount=default:%s", role, binding, role, sa),
+		AnswerCommand: fmt.Sprintf("NS=$(kubectl config view --minify -o jsonpath='{..namespace}'); NS=${NS:-default}; kubectl create role %s --verb=get,list,watch --resource=pods; kubectl create rolebinding %s --role=%s --serviceaccount=$NS:%s", role, binding, role, sa),
 		Setup:         []models.SetupStep{{Description: fmt.Sprintf("Criando ServiceAccount %s...", sa), Command: fmt.Sprintf("kubectl create serviceaccount %s 2>/dev/null || true", sa)}},
 		Goals: []models.Goal{
 			{Description: "Role concede somente leitura de Pods", Validation: &models.Validation{Command: fmt.Sprintf("kubectl get role %s -o jsonpath='{.rules[0].resources[0]}:{.rules[0].verbs}' 2>/dev/null", role), ExpectedContains: "pods:[get list watch]"}},
@@ -823,7 +892,7 @@ func tplProbes(p params, level int, cert string) models.Question {
 			fmt.Sprintf("Adicione **readinessProbe** e **livenessProbe** httpGet (path **/**, porta **80**) ao Deployment **%s**.\n\nDica: `kubectl edit deployment %s` e edite o container.", p.Name, p.Name),
 			fmt.Sprintf("Health checks, passo a passo:\n\n1. `kubectl edit deployment %s`\n2. Em spec.template.spec.containers[0], adicione:\n```\nreadinessProbe:\n  httpGet:\n    path: /\n    port: 80\nlivenessProbe:\n  httpGet:\n    path: /\n    port: 80\n```\n3. Salve — o Deployment faz rollout automático\n\nreadiness controla tráfego; liveness reinicia container travado.", p.Name)),
 		Hint:          "Em containers[0]: readinessProbe e livenessProbe com httpGet {path: /, port: 80}",
-		AnswerCommand: fmt.Sprintf("kubectl edit deployment %s  # adicionar readinessProbe/livenessProbe httpGet / :80", p.Name),
+		AnswerCommand: fmt.Sprintf(`kubectl patch deployment %s --type=strategic -p '{"spec":{"template":{"spec":{"containers":[{"name":"nginx","readinessProbe":{"httpGet":{"path":"/","port":80}},"livenessProbe":{"httpGet":{"path":"/","port":80}}}]}}}}'`, p.Name),
 		Setup: []models.SetupStep{
 			{Description: fmt.Sprintf("Criando o Deployment %s...", p.Name), Command: fmt.Sprintf("kubectl create deployment %s --image=nginx:1.21 --replicas=1 2>/dev/null || true", p.Name)},
 			{Description: "Aguardando pod ficar pronto...", Command: fmt.Sprintf("kubectl rollout status deployment/%s --timeout=90s 2>/dev/null || true", p.Name)},
@@ -862,8 +931,21 @@ func tplInitContainer(p params, level int, cert string) models.Question {
 			fmt.Sprintf("Crie um Pod **%s** com um **initContainer** (busybox:1.35, comando `sh -c 'echo preparando && sleep 3'`) e um container principal **nginx:1.21**.", p.Name),
 			fmt.Sprintf("Crie um Pod **%s** com um **initContainer** (busybox:1.35 rodando `sh -c 'echo preparando && sleep 3'`) e container principal **nginx:1.21**.\n\nDica: `spec.initContainers` é uma lista igual a `containers`.", p.Name),
 			fmt.Sprintf("Init containers, passo a passo:\n\n1. Aplique:\n```\nkubectl apply -f - <<EOF\napiVersion: v1\nkind: Pod\nmetadata:\n  name: %s\nspec:\n  initContainers:\n  - name: prepara\n    image: busybox:1.35\n    command: ['sh', '-c', 'echo preparando && sleep 3']\n  containers:\n  - name: app\n    image: nginx:1.21\nEOF\n```\n2. Observe: `kubectl get pod %s -w` — status passa por **Init:0/1** antes de **Running**\n\nO container principal só inicia quando TODOS os init completam.", p.Name, p.Name)),
-		Hint:          "spec.initContainers: [{name, image: busybox:1.35, command: ['sh','-c','...']}] antes de containers.",
-		AnswerCommand: fmt.Sprintf("kubectl apply -f pod.yaml  # pod %s com initContainers busybox + container nginx", p.Name),
+		Hint: "spec.initContainers: [{name, image: busybox:1.35, command: ['sh','-c','...']}] antes de containers.",
+		AnswerCommand: fmt.Sprintf(`kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+spec:
+  initContainers:
+  - name: prepara
+    image: busybox:1.35
+    command: ['sh', '-c', 'echo preparando && sleep 3']
+  containers:
+  - name: app
+    image: nginx:1.21
+EOF`, p.Name),
 		Goals: []models.Goal{
 			{
 				Description: fmt.Sprintf("Pod **%s** tem um **initContainer** busybox", p.Name),
@@ -899,7 +981,7 @@ func tplServiceAccount(p params, level int, cert string) models.Question {
 			fmt.Sprintf("Crie um ServiceAccount **%s-sa**, um Role **%s-reader** que permite **get/list** em **pods**, e o RoleBinding.\n\nDica: `kubectl create sa|role|rolebinding` fazem tudo imperativo.", p.Name, p.Name),
 			fmt.Sprintf("RBAC mínimo, passo a passo:\n\n1. `kubectl create serviceaccount %s-sa`\n2. `kubectl create role %s-reader --verb=get --verb=list --resource=pods`\n3. `kubectl create rolebinding %s-bind --role=%s-reader --serviceaccount=default:%s-sa`\n4. Teste: `kubectl auth can-i list pods --as=system:serviceaccount:default:%s-sa` → **yes**", p.Name, p.Name, p.Name, p.Name, p.Name, p.Name)),
 		Hint:          fmt.Sprintf("kubectl create sa %s-sa; kubectl create role %s-reader --verb=get,list --resource=pods; kubectl create rolebinding %s-bind --role=%s-reader --serviceaccount=default:%s-sa", p.Name, p.Name, p.Name, p.Name, p.Name),
-		AnswerCommand: fmt.Sprintf("kubectl create sa %s-sa; kubectl create role %s-reader --verb=get --verb=list --resource=pods; kubectl create rolebinding %s-bind --role=%s-reader --serviceaccount=default:%s-sa", p.Name, p.Name, p.Name, p.Name, p.Name),
+		AnswerCommand: fmt.Sprintf("NS=$(kubectl config view --minify -o jsonpath='{..namespace}'); NS=${NS:-default}; kubectl create sa %s-sa; kubectl create role %s-reader --verb=get --verb=list --resource=pods; kubectl create rolebinding %s-bind --role=%s-reader --serviceaccount=$NS:%s-sa", p.Name, p.Name, p.Name, p.Name, p.Name),
 		Goals: []models.Goal{
 			{
 				Description: fmt.Sprintf("Role **%s-reader** permite get/list de pods", p.Name),
@@ -913,7 +995,7 @@ func tplServiceAccount(p params, level int, cert string) models.Question {
 				Description: fmt.Sprintf("SA **%s-sa** consegue listar pods (RBAC efetivo)", p.Name),
 				Hint:        pickHelp(level, "", "rolebinding liga role ↔ serviceaccount.", fmt.Sprintf("kubectl create rolebinding %s-bind --role=%s-reader --serviceaccount=default:%s-sa — valide com kubectl auth can-i.", p.Name, p.Name, p.Name)),
 				Validation: &models.Validation{
-					Command:          fmt.Sprintf("kubectl auth can-i list pods --as=system:serviceaccount:default:%s-sa 2>/dev/null", p.Name),
+					Command:          fmt.Sprintf("NS=$(kubectl config view --minify -o jsonpath='{..namespace}'); NS=${NS:-default}; kubectl auth can-i list pods --as=system:serviceaccount:$NS:%s-sa 2>/dev/null", p.Name),
 					ExpectedContains: "yes",
 				},
 			},
@@ -938,8 +1020,18 @@ func tplNetworkPolicy(p params, level int, cert string) models.Question {
 			fmt.Sprintf("O pod **%s** (já criado, label app=%s) precisa ser isolado. Crie uma **NetworkPolicy** chamada **%s-deny** que bloqueia TODO tráfego de entrada (ingress) para ele.", p.Name, p.Name, p.Name),
 			fmt.Sprintf("Isole o pod **%s** com uma **NetworkPolicy** **%s-deny** de deny-all ingress.\n\nDica: podSelector com a label do pod e `policyTypes: [Ingress]` sem regras = nega tudo.", p.Name, p.Name),
 			fmt.Sprintf("Deny-all ingress, passo a passo:\n\n1. O pod **%s** já existe (setup) com a label app=%s\n2. Aplique:\n```\nkubectl apply -f - <<EOF\napiVersion: networking.k8s.io/v1\nkind: NetworkPolicy\nmetadata:\n  name: %s-deny\nspec:\n  podSelector:\n    matchLabels:\n      app: %s\n  policyTypes:\n  - Ingress\nEOF\n```\n3. Sem regras `ingress` listadas, NADA entra — é o padrão seguro do CKS.", p.Name, p.Name, p.Name, p.Name)),
-		Hint:          fmt.Sprintf("NetworkPolicy com podSelector app=%s e policyTypes [Ingress] sem regras ingress = deny-all.", p.Name),
-		AnswerCommand: fmt.Sprintf("kubectl apply -f netpol.yaml  # NetworkPolicy %s-deny, podSelector app=%s, policyTypes [Ingress]", p.Name, p.Name),
+		Hint: fmt.Sprintf("NetworkPolicy com podSelector app=%s e policyTypes [Ingress] sem regras ingress = deny-all.", p.Name),
+		AnswerCommand: fmt.Sprintf(`kubectl apply -f - <<'EOF'
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: %s-deny
+spec:
+  podSelector:
+    matchLabels:
+      app: %s
+  policyTypes: [Ingress]
+EOF`, p.Name, p.Name),
 		Setup: []models.SetupStep{
 			{Description: fmt.Sprintf("Criando o pod alvo %s...", p.Name), Command: fmt.Sprintf("kubectl run %s --image=nginx:1.21 --labels=app=%s --restart=Never 2>/dev/null || true", p.Name, p.Name)},
 		},
@@ -980,8 +1072,23 @@ func tplSecurityContext(p params, level int, cert string) models.Question {
 			fmt.Sprintf("Crie um Pod **%s** (imagem **busybox:1.35**, comando `sleep 3600`) endurecido: deve rodar como **não-root** (runAsNonRoot + runAsUser 1000) e com **allowPrivilegeEscalation: false**.", p.Name),
 			fmt.Sprintf("Crie o Pod **%s** (busybox:1.35, `sleep 3600`) com securityContext endurecido: **runAsNonRoot: true**, **runAsUser: 1000** e **allowPrivilegeEscalation: false**.\n\nDica: runAs* vai no securityContext do POD; allowPrivilegeEscalation no do CONTAINER.", p.Name),
 			fmt.Sprintf("Hardening de pod, passo a passo:\n\n1. Aplique:\n```\nkubectl apply -f - <<EOF\napiVersion: v1\nkind: Pod\nmetadata:\n  name: %s\nspec:\n  securityContext:\n    runAsNonRoot: true\n    runAsUser: 1000\n  containers:\n  - name: app\n    image: busybox:1.35\n    command: ['sleep', '3600']\n    securityContext:\n      allowPrivilegeEscalation: false\nEOF\n```\n2. Confirme que está Running: como busybox roda qualquer UID, o sleep funciona com UID 1000\n3. Inspecione: `kubectl get pod %s -o yaml | grep -A3 securityContext`", p.Name, p.Name)),
-		Hint:          "securityContext do pod: runAsNonRoot+runAsUser; do container: allowPrivilegeEscalation: false.",
-		AnswerCommand: fmt.Sprintf("kubectl apply -f pod.yaml  # %s com runAsNonRoot, runAsUser 1000, allowPrivilegeEscalation false", p.Name),
+		Hint: "securityContext do pod: runAsNonRoot+runAsUser; do container: allowPrivilegeEscalation: false.",
+		AnswerCommand: fmt.Sprintf(`kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  containers:
+  - name: app
+    image: busybox:1.35
+    command: ['sleep', '3600']
+    securityContext:
+      allowPrivilegeEscalation: false
+EOF`, p.Name),
 		Goals: []models.Goal{
 			{
 				Description: fmt.Sprintf("Pod **%s** roda como **não-root** (runAsUser 1000) e está Running", p.Name),
@@ -1177,8 +1284,27 @@ func tplArgoCDApplication(p params, level int, cert string) models.Question {
 			fmt.Sprintf("Crie uma **Application** do ArgoCD chamada **%s** no namespace **argocd**, apontando para o repo **argoproj/argocd-example-apps**, path **guestbook**, destino **%s**.", app, ns),
 			fmt.Sprintf("Crie uma Application ArgoCD **%s** usando o repo `https://github.com/argoproj/argocd-example-apps.git`, path `guestbook`, destino `https://kubernetes.default.svc` e namespace `%s`.\n\nDica: use o kind `Application` do grupo `argoproj.io/v1alpha1`.", app, ns),
 			fmt.Sprintf("GitOps com ArgoCD, passo a passo:\n\n1. O setup instala o ArgoCD no cluster se ele ainda nao existir\n2. Crie uma Application chamada **%s** em `argocd`\n3. Use `repoURL: https://github.com/argoproj/argocd-example-apps.git`, `path: guestbook`, `targetRevision: HEAD`\n4. Defina o destino como `server: https://kubernetes.default.svc` e `namespace: %s`\n5. Habilite `syncPolicy.automated.prune: true` e `selfHeal: true`\n\nAssim o ArgoCD passa a reconciliar o estado desejado a partir do Git.", app, ns)),
-		Hint:          "apiVersion: argoproj.io/v1alpha1; kind: Application; spec.source.repoURL/path; spec.destination.server/namespace; syncPolicy.automated",
-		AnswerCommand: fmt.Sprintf("kubectl apply -f app.yaml  # Application %s apontando para guestbook", app),
+		Hint: "apiVersion: argoproj.io/v1alpha1; kind: Application; spec.source.repoURL/path; spec.destination.server/namespace; syncPolicy.automated",
+		AnswerCommand: fmt.Sprintf(`kubectl apply -f - <<'EOF'
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: %s
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/argoproj/argocd-example-apps.git
+    targetRevision: HEAD
+    path: guestbook
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: %s
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+EOF`, app, ns),
 		Setup: []models.SetupStep{
 			{
 				Description: "Instalando ArgoCD se necessario...",
@@ -1260,8 +1386,18 @@ func tplAWSNetworking(p params, level int, cert string) models.Question {
 			fmt.Sprintf("Fundamentos AWS Networking/VPC: crie o namespace **%s** e uma **NetworkPolicy** chamada **%s-deny-ingress** que bloqueia todo trafego de entrada para pods com label `app=%s`.", ns, p.Name, p.Name),
 			fmt.Sprintf("Fundamentos AWS Networking/VPC: isole a aplicacao **%s** no namespace **%s** com uma NetworkPolicy deny-all ingress.\n\nPense nisso como o paralelo Kubernetes para isolamento de subnets/security groups em uma VPC.", p.Name, ns),
 			fmt.Sprintf("AWS Networking passo a passo:\n\n1. O setup cria namespace e pod alvo\n2. Aplique uma NetworkPolicy **%s-deny-ingress** em `%s`\n3. Use `podSelector.matchLabels.app: %s`\n4. Defina `policyTypes: [Ingress]` sem regras `ingress`\n\nEm AWS, VPC/subnets/security groups controlam alcance de rede; em Kubernetes, NetworkPolicy expressa isolamento entre pods.", p.Name, ns, p.Name)),
-		Hint:          fmt.Sprintf("NetworkPolicy em %s com podSelector app=%s e policyTypes [Ingress] sem ingress = deny all.", ns, p.Name),
-		AnswerCommand: fmt.Sprintf("kubectl apply -f networkpolicy.yaml  # %s/%s-deny-ingress", ns, p.Name),
+		Hint: fmt.Sprintf("NetworkPolicy em %s com podSelector app=%s e policyTypes [Ingress] sem ingress = deny all.", ns, p.Name),
+		AnswerCommand: fmt.Sprintf(`kubectl apply -n %s -f - <<'EOF'
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: %s-deny-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: %s
+  policyTypes: [Ingress]
+EOF`, ns, p.Name, p.Name),
 		Setup: []models.SetupStep{
 			{Description: fmt.Sprintf("Criando namespace %s...", ns), Command: fmt.Sprintf("kubectl create namespace %s 2>/dev/null || true", ns)},
 			{Description: "Criando pod alvo para isolamento...", Command: fmt.Sprintf("kubectl run %s --image=nginx:1.25 --labels=app=%s -n %s --restart=Never 2>/dev/null || true", p.Name, p.Name, ns)},
