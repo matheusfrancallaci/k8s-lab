@@ -135,7 +135,7 @@ jobs:
           docker pull "$ACR.azurecr.io/$IMAGE:${{ steps.version.outputs.sha }}"
 
       - name: Container vulnerability gate
-        uses: aquasecurity/trivy-action@v0.30.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: k8slabacrb9ue3.azurecr.io/estudo-app:${{ steps.version.outputs.sha }}
           format: table
