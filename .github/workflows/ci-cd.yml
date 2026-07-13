@@ -157,7 +157,11 @@ jobs:
 
       - name: Reconcile persistent runtime
         run: |
-          out=$(az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts @deploy/azure/sync-runtime.sh --query "value[0].message" -o tsv)
+          script=$(
+            printf 'export SYNC_RUNTIME_SKIP_PULL=1\n'
+            cat deploy/azure/sync-runtime.sh
+          )
+          out=$(timeout 300 az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts "$script" --query "value[0].message" -o tsv)
           echo "$out"
           grep -q RUNTIME_SYNC_OK <<<"$out"
 
