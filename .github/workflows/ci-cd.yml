@@ -164,8 +164,8 @@ jobs:
       - name: Switch container only after build succeeds
         run: |
           sha=${{ steps.version.outputs.sha }}
-          script="set -e; trap 'rm -f /run/lab-busy' EXIT; touch /run/lab-busy; az acr login --name $ACR >/dev/null; docker pull $ACR.azurecr.io/$IMAGE:$sha >/dev/null; docker pull $ACR.azurecr.io/$IMAGE:latest >/dev/null; want=\$(docker inspect --format '{{.Id}}' $ACR.azurecr.io/$IMAGE:$sha); latest=\$(docker inspect --format '{{.Id}}' $ACR.azurecr.io/$IMAGE:latest); test \"\$want\" = \"\$latest\"; systemctl restart estudo-app.service; sleep 12; got=\$(docker inspect --format '{{.Image}}' lab); test \"\$want\" = \"\$got\"; echo MATCH \$got"
-          out=$(az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts "$script" --query "value[0].message" -o tsv)
+          script="set -e; trap 'rm -f /run/lab-busy' EXIT; touch /run/lab-busy; timeout 90 az acr login --name $ACR >/dev/null; timeout 300 docker pull $ACR.azurecr.io/$IMAGE:$sha >/dev/null; timeout 300 docker pull $ACR.azurecr.io/$IMAGE:latest >/dev/null; want=\$(docker inspect --format '{{.Id}}' $ACR.azurecr.io/$IMAGE:$sha); latest=\$(docker inspect --format '{{.Id}}' $ACR.azurecr.io/$IMAGE:latest); test \"\$want\" = \"\$latest\"; got=\$(docker inspect --format '{{.Image}}' lab 2>/dev/null || true); if [ \"\$want\" != \"\$got\" ]; then timeout 600 systemctl restart estudo-app.service; sleep 12; fi; got=\$(docker inspect --format '{{.Image}}' lab); test \"\$want\" = \"\$got\"; echo MATCH \$got"
+          out=$(timeout 720 az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts "$script" --query "value[0].message" -o tsv)
           echo "$out"
           grep -q MATCH <<<"$out"
 
