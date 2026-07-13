@@ -86,6 +86,22 @@ func TestCloudShellClusterRBACIsNarrow(t *testing.T) {
 	}
 }
 
+func TestCloudShellClusterPodReaderIsReadOnlyAndDemandDriven(t *testing.T) {
+	q := &models.Question{Cert: models.CKA, Topic: "Troubleshooting", Question: "Liste os pods com kubectl get pods -A e encontre a falha"}
+	script := cloudShellNamespaceAccessScript("lab-alice", "lab-user", q)
+	want := "create clusterrole lab-shell-alice-pod-reader --verb=get,list,watch --resource=pods,pods/log"
+	if !strings.Contains(script, want) {
+		t.Fatalf("lab com pods -A deve receber leitura cluster-wide estreita: %s", script)
+	}
+	if strings.Contains(script, "cluster-admin") || strings.Contains(script, "pod-reader --verb=create") || strings.Contains(script, "pod-reader --verb=delete") {
+		t.Fatalf("pod-reader nao pode conceder escrita nem cluster-admin: %s", script)
+	}
+	ordinary := cloudShellNamespaceAccessScript("lab-alice", "lab-user", &models.Question{Question: "kubectl get pods"})
+	if strings.Contains(ordinary, "pod-reader") {
+		t.Fatalf("consulta namespaced nao deve abrir leitura cluster-wide: %s", ordinary)
+	}
+}
+
 func TestCloudShellRBACIncludesDynamicLabNamespace(t *testing.T) {
 	q := &models.Question{
 		Cert:          models.CKA,

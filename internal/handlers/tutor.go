@@ -315,8 +315,33 @@ func (h *TutorHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	qs, err := tutor.Generate(body.Topic, body.Cert, body.Level, body.Count)
+	body.Topic = strings.TrimSpace(body.Topic)
+	if body.Topic == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]any{"error": "informe o topico que deseja praticar"}) //nolint:errcheck
+		return
+	}
+	if len(body.Topic) > 180 {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]any{"error": "descreva o topico em ate 180 caracteres"}) //nolint:errcheck
+		return
+	}
+	if body.Count < 1 {
+		body.Count = 1
+	}
+	if body.Count > 8 {
+		body.Count = 8
+	}
+	if body.Level < 1 || body.Level > 3 {
+		body.Level = 2
+	}
+	if body.Cert == "" {
+		body.Cert = "CKA"
+	}
+	request := fmt.Sprintf("Crie %d labs praticos sobre %s", body.Count, body.Topic)
+	qs, _, err := tutor.GenerateSmartLabs(request, body.Cert, body.Level, body.Count)
 	if err != nil {
+		w.WriteHeader(http.StatusUnprocessableEntity)
 		json.NewEncoder(w).Encode(map[string]any{"error": err.Error()}) //nolint:errcheck
 		return
 	}

@@ -39,6 +39,18 @@
 .cta-start:hover { transform:translateY(-1px); box-shadow:0 16px 44px -12px rgba(52,211,153,.7); }
 .cta-start:disabled { opacity:.45; transform:none; }
 .cta-start svg { width:15px; height:15px; }
+.maker-card { margin:18px 0 12px; padding:20px; border:1px solid rgba(129,140,248,.32); border-radius:16px; background:linear-gradient(145deg,rgba(129,140,248,.10),rgba(34,211,238,.035) 58%,var(--surface-2)); }
+.maker-head { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; margin-bottom:15px; }
+.maker-title { font-size:15px; font-weight:750; color:var(--text); margin-bottom:4px; }
+.maker-sub { font-size:11.5px; line-height:1.5; color:var(--text-3); }
+.maker-badge { flex:none; padding:5px 8px; border-radius:999px; border:1px solid var(--violet-b); color:var(--violet); background:var(--violet-dim); font:600 9px var(--mono); letter-spacing:.08em; text-transform:uppercase; }
+.maker-grid { display:grid; grid-template-columns:minmax(0,1fr) 120px 120px; gap:9px; }
+.maker-field { width:100%; min-height:42px; border:1px solid var(--border-2); border-radius:10px; padding:0 12px; color:var(--text); background:var(--surface); font:12px var(--mono); outline:none; }
+.maker-field:focus { border-color:var(--violet-b); box-shadow:0 0 0 3px var(--violet-glow); }
+.maker-actions { display:flex; align-items:center; gap:12px; margin-top:10px; }
+.maker-actions .cta-start { width:auto; min-width:190px; padding:11px 16px; }
+.maker-feedback { font:10.5px var(--mono); color:var(--text-3); }
+@media (max-width:700px){ .maker-grid { grid-template-columns:1fr 1fr; } .maker-grid .maker-topic { grid-column:1/-1; } .maker-actions { align-items:stretch; flex-direction:column; } .maker-actions .cta-start { width:100%; } }
 
 /* ── controles refinados do configurador ── */
 .cfg-sec { padding:16px 0 4px; }
@@ -127,6 +139,22 @@
                     <div class="m-d" data-i18n="labs.incident.d">o cluster chega quebrado — diagnostique e conserte</div>
                 </button>
             </div>
+
+            <section class="maker-card" aria-labelledby="maker-title">
+                <div class="maker-head">
+                    <div><h2 class="maker-title" id="maker-title">Crie sua própria sessão</h2><p class="maker-sub">Peça qualquer tópico técnico. O tutor monta labs inéditos, com ambiente, objetivo e validação automática.</p></div>
+                    <span class="maker-badge">gerador IA</span>
+                </div>
+                <div class="maker-grid">
+                    <input class="maker-field maker-topic" id="maker-topic" maxlength="180" placeholder="Ex.: RBAC, HPA, troubleshooting de DNS, Terraform..." aria-label="Tópico dos novos labs">
+                    <select class="maker-field" id="maker-count" aria-label="Quantidade de labs"><option value="3">3 questões</option><option value="5" selected>5 questões</option><option value="8">8 questões</option></select>
+                    <select class="maker-field" id="maker-level" aria-label="Nível de orientação"><option value="1">Desafio</option><option value="2" selected>Guiado</option><option value="3">Passo a passo</option></select>
+                </div>
+                <div class="maker-actions">
+                    <button class="cta-start" id="maker-btn" type="button" onclick="generateCustomLabs()">GERAR E COMEÇAR</button>
+                    <span class="maker-feedback" id="maker-feedback" role="status" aria-live="polite">de 1 a 8 labs por sessão</span>
+                </div>
+            </section>
 
             <!-- Config card -->
             <div class="cfg-card">
@@ -401,5 +429,39 @@ async function startSession() {
         btn.innerHTML = idleHTML;
     }
 }
+
+async function generateCustomLabs() {
+    const topic = document.getElementById('maker-topic').value.trim();
+    const btn = document.getElementById('maker-btn');
+    const feedback = document.getElementById('maker-feedback');
+    if (!topic) {
+        feedback.style.color = 'var(--red)';
+        feedback.textContent = 'Digite o tópico que você quer praticar.';
+        document.getElementById('maker-topic').focus();
+        return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'CRIANDO LABS...';
+    feedback.style.color = 'var(--sky)';
+    feedback.textContent = 'planejando desafios e validações seguras';
+    try {
+        const r = await fetch('/api/tutor/generate', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({topic, cert:selectedCerts()[0] || 'CKA', count:Number(document.getElementById('maker-count').value), level:Number(document.getElementById('maker-level').value)})
+        });
+        const d = await r.json();
+        if (!r.ok || d.error) throw new Error(d.error || 'não foi possível gerar os labs');
+        location.href = '/lab/' + encodeURIComponent(d.first) + '?session=' + encodeURIComponent(d.id);
+    } catch (e) {
+        feedback.style.color = 'var(--red)';
+        feedback.textContent = e.message || 'erro ao gerar a sessão';
+        btn.disabled = false;
+        btn.textContent = 'GERAR E COMEÇAR';
+    }
+}
+
+document.getElementById('maker-topic').addEventListener('keydown', e => {
+    if (e.key === 'Enter') generateCustomLabs();
+});
 </script>
 {{end}}
