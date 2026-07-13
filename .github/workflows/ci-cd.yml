@@ -80,7 +80,7 @@ jobs:
           npm run test:e2e -- --list
 
       - name: Infrastructure validation
-        run: bash -n deploy/azure/sync-runtime.sh deploy/azure/verify-runtime.sh
+        run: bash -n deploy/azure/sync-runtime.sh deploy/azure/switch-app.sh deploy/azure/verify-runtime.sh
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -164,7 +164,12 @@ jobs:
       - name: Switch container only after build succeeds
         run: |
           sha=${{ steps.version.outputs.sha }}
-          script="set -e; trap 'rm -f /run/lab-busy' EXIT; touch /run/lab-busy; timeout 90 az acr login --name $ACR >/dev/null; timeout 300 docker pull $ACR.azurecr.io/$IMAGE:$sha >/dev/null; timeout 300 docker pull $ACR.azurecr.io/$IMAGE:latest >/dev/null; want=\$(docker inspect --format '{{.Id}}' $ACR.azurecr.io/$IMAGE:$sha); latest=\$(docker inspect --format '{{.Id}}' $ACR.azurecr.io/$IMAGE:latest); test \"\$want\" = \"\$latest\"; got=\$(docker inspect --format '{{.Image}}' lab 2>/dev/null || true); if [ \"\$want\" != \"\$got\" ]; then timeout 600 systemctl restart estudo-app.service; sleep 12; fi; got=\$(docker inspect --format '{{.Image}}' lab); test \"\$want\" = \"\$got\"; echo MATCH \$got"
+          script=$(
+            printf 'export TARGET_IMAGE=%q\n' "$ACR.azurecr.io/$IMAGE:$sha"
+            printf 'export EXPECTED_VERSION=%q\n' "$sha"
+            printf 'export ACR_NAME=%q\n' "$ACR"
+            cat deploy/azure/switch-app.sh
+          )
           out=$(timeout 720 az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts "$script" --query "value[0].message" -o tsv)
           echo "$out"
           grep -q MATCH <<<"$out"
