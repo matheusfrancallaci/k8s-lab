@@ -69,7 +69,10 @@ var groundedReplyCache = struct {
 }{Entries: map[string]groundedCacheEntry{}}
 
 func groundedReplyKey(msg, model string, report AnswerabilityReport) string {
-	return ragID(strings.ToLower(strings.TrimSpace(msg)), model, report.RAG, strings.Join(report.VerifiedSources(), "|"), report.CheckedAt)
+	// SEM CheckedAt na chave: é um timestamp por request, então o cache nunca
+	// acertava (medido em produção: 12s na repetição da MESMA pergunta). A
+	// identidade da resposta é pergunta+modelo+estado do RAG+fontes.
+	return ragID(strings.ToLower(strings.TrimSpace(msg)), model, report.RAG, strings.Join(report.VerifiedSources(), "|"))
 }
 
 func cachedGroundedReply(key string) (string, bool) {
@@ -108,12 +111,21 @@ var (
 )
 
 type GroundingAudit struct {
-	Claims       int      `json:"claims"`
-	CitedClaims  int      `json:"cited_claims"`
-	Coverage     int      `json:"coverage"`
-	InvalidRefs  []string `json:"invalid_refs,omitempty"`
-	InventedURLs []string `json:"invented_urls,omitempty"`
-	Passed       bool     `json:"passed"`
+	Claims       int             `json:"claims"`
+	CitedClaims  int             `json:"cited_claims"`
+	Coverage     int             `json:"coverage"`
+	InvalidRefs  []string        `json:"invalid_refs,omitempty"`
+	InventedURLs []string        `json:"invented_urls,omitempty"`
+	Passed       bool            `json:"passed"`
+	Details      []ClaimEvidence `json:"details,omitempty"`
+	Pedagogy     *PedagogyAudit  `json:"pedagogy,omitempty"`
+}
+
+type ClaimEvidence struct {
+	Claim     string   `json:"claim"`
+	SourceIDs []string `json:"source_ids,omitempty"`
+	Anchors   []string `json:"anchors,omitempty"`
+	Supported bool     `json:"supported"`
 }
 
 func sanitizeRetrievedText(text string) string {
@@ -141,6 +153,12 @@ func AuditGroundedReply(reply string, report AnswerabilityReport) GroundingAudit
 		}
 	}
 	maxSource := len(report.VerifiedSources())
+	// Corpus de evidência para ancoragem: o modelo local responde em PT sobre
+	// fontes em EN — identificadores técnicos (replicaset, kubelet, pod)
+	// sobrevivem à tradução. Exigir [Sn] em CADA frase mutilava respostas
+	// corretas com fontes verificadas anexas (falso positivo pego em validação
+	// ao vivo 2026-07-12): citação inline OU ancoragem no corpus contam.
+	corpus := strings.ToLower(report.Evidence + " " + report.Context)
 	for _, sentence := range regexp.MustCompile(`[.!?\n]+`).Split(reply, -1) {
 		sentence = strings.TrimSpace(sentence)
 		if sentence == "" || !technicalQuestion(sentence) {
@@ -149,15 +167,29 @@ func AuditGroundedReply(reply string, report AnswerabilityReport) GroundingAudit
 		audit.Claims++
 		refs := citationRe.FindAllStringSubmatch(sentence, -1)
 		valid := false
+		detail := ClaimEvidence{Claim: compactText(sentence, 280)}
 		for _, ref := range refs {
 			var n int
 			_, _ = fmt.Sscanf(ref[1], "%d", &n)
 			if n >= 1 && n <= maxSource {
 				valid = true
+				detail.SourceIDs = append(detail.SourceIDs, ref[0])
 			} else {
 				audit.InvalidRefs = append(audit.InvalidRefs, ref[0])
 			}
 		}
+		if !valid && corpus != "" {
+			for _, tok := range contentTokens(sentence) {
+				if strings.Contains(corpus, tok) {
+					valid = true
+					if len(detail.Anchors) < 5 {
+						detail.Anchors = append(detail.Anchors, tok)
+					}
+				}
+			}
+		}
+		detail.Supported = valid
+		audit.Details = append(audit.Details, detail)
 		if valid {
 			audit.CitedClaims++
 		}

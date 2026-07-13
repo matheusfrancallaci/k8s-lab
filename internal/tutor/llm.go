@@ -506,6 +506,27 @@ func StreamLLMReplyContext(ctx context.Context, msg string, onChunk func(string)
 	return err
 }
 
+func StreamConversationReplyContext(ctx context.Context, msg, history, mode string, onChunk func(string)) ([]string, GroundingAudit, error) {
+	prompt, report := BuildGroundedChatPromptWithContext(msg, history, mode)
+	route := RouteConversationModel(msg, mode)
+	if technicalQuestion(msg) && !report.Answerable {
+		if onChunk != nil {
+			onChunk(report.Refusal())
+		}
+		return report.VerifiedSources(), GroundingAudit{Passed: true, Coverage: 100}, nil
+	}
+	guard := newGroundingStreamGuard(report, onChunk)
+	err := llmStreamGenerateContext(ctx, prompt, false, 90*time.Second, chatTokenBudget(msg)+400, route.Model, guard.Write)
+	if err == nil && onChunk != nil {
+		guard.Close()
+		suffix := "\n\n" + strings.TrimPrefix(report.AppendVerifiedSources(""), "\n\n")
+		onChunk(suffix)
+	}
+	audit := AuditGroundedReply(guard.published.String(), report)
+	RecordModelOutcome(route, audit)
+	return report.VerifiedSources(), audit, err
+}
+
 func buildChatPrompt(msg string) string {
 	prompt, _ := BuildGroundedChatPrompt(msg)
 	return prompt

@@ -56,6 +56,7 @@ test('golden eval cobre prompts criticos do tutor', async ({ page }) => {
   expect(typeof body.regression_total).toBe('number');
   expect(body.quality).toBeTruthy();
   expect((body.cases || []).map(c => c.name)).toEqual(expect.arrayContaining([
+    'CKA Static Pods action',
     'CKA HPA',
     'AWS SQS',
     'CAPA ArgoCD Sync',
@@ -86,6 +87,19 @@ test('tutor roteia labs por certificacao e topico exato', async ({ page }) => {
     topic: 'GitOps',
     dependencies: ['argocd']
   });
+  await expectTutorSession(page, 'Criar 3 labs de pods estaticos nivel 2', 'CKA', {
+    cert: 'CKA',
+    topic: 'Static Pods'
+  });
+});
+
+test('catalogo permite sessao customizada e labs mostram confianca', async ({ page }) => {
+  await ensureLoggedIn(page);
+  await page.goto('/lab');
+  await expect(page.locator('#maker-topic')).toBeVisible();
+  await expect(page.locator('#maker-count')).toHaveValue('5');
+  await page.goto('/lab/cka-lab-001');
+  await expect(page.locator('.lab-top-actions')).toContainText(/curado|verifica|valida|simula/i);
 });
 
 test('painel de desempenho mostra RAG, observabilidade e golden eval', async ({ page }) => {
@@ -102,6 +116,41 @@ test('painel de desempenho mostra RAG, observabilidade e golden eval', async ({ 
   await expect(page.locator('.eval-card')).toContainText(/golden eval IA/i);
   await expect(page.locator('.quality-card')).toContainText(/dataset real de prompts/i);
   await expect(page.locator('.eval-card')).toContainText(/CKA HPA|AWS SQS|CAPA ArgoCD/i, { timeout: 90000 });
+});
+
+test('tutor oferece conversas persistentes, modos e anexos acessiveis', async ({ page }) => {
+  await ensureLoggedIn(page);
+  await page.goto('/tutor');
+  await expect(page.locator('.conversation-rail')).toBeVisible();
+  await expect(page.locator('#response-mode')).toHaveValue(/didactic|short|deep|diagnostic|exam/);
+  await expect(page.locator('button', { hasText: 'Anexar arquivo' })).toBeVisible();
+  await expect(page.locator('.tutor-tab')).toHaveCount(4);
+  await page.locator('.tutor-tab', { hasText: 'Progresso' }).click();
+  await expect(page.locator('#painel')).toHaveClass(/active/);
+  await expect(page.locator('.tutor-tab', { hasText: 'Progresso' })).toHaveAttribute('aria-selected', 'true');
+  await page.locator('.tutor-tab', { hasText: 'Fontes' }).click();
+  await expect(page.locator('#sources-pane')).toHaveClass(/active/);
+  await page.locator('.tutor-tab', { hasText: 'Sistema' }).click();
+  await expect(page.locator('#system-pane')).toHaveClass(/active/);
+  await expect(page.locator('#tutor-plan')).toContainText('orquestração pedagógica');
+  await expect(page.locator('body')).not.toContainText(/cache hit|cache miss/i);
+  const before = await page.locator('.conversation-item').count();
+  await page.locator('.new-chat').click();
+  await expect.poll(() => page.locator('.conversation-item').count()).toBeGreaterThanOrEqual(before + 1);
+});
+
+test('checkpoint pedagogico aparece como card interativo', async ({ page }) => {
+  await ensureLoggedIn(page);
+  await page.goto('/tutor');
+  await expect(page.locator('.tutor-tabbar')).toBeVisible();
+  await expect(page.locator('#chat-text')).toBeVisible();
+  const css = await page.locator('.chat-input-zone').evaluate(el => getComputedStyle(el).position);
+  expect(css).toBe('absolute');
+  const layout = await page.locator('.tutor-cols').boundingBox();
+  const viewport = page.viewportSize();
+  expect(layout.width).toBeGreaterThan(viewport.width * 0.8);
+  const sidebarWidth = await page.locator('.sidebar').evaluate(el => Math.round(getComputedStyle(el).width.replace('px','')));
+  expect(sidebarWidth).toBeLessThanOrEqual(72);
 });
 
 test('login, cria lab pelo tutor, abre terminal e valida comando real', async ({ page }) => {

@@ -34,16 +34,19 @@ write_files:
           ollama/ollama:0.30.11
       fi
 
-      # App: container completo (k3s dentro -> --privileged), na rede labnet.
+      # App hospedado usa AKS via identidade gerenciada. O k3s embutido fica
+      # apenas para distribuicao standalone; producao nao precisa root do host.
       # Porta publicada só no loopback (127.0.0.1) para o auto-stop consultar /api/idle.
       docker rm -f lab >/dev/null 2>&1 || true
-      docker run -d --privileged --restart=unless-stopped \
+      docker run -d --restart=unless-stopped \
+        --security-opt no-new-privileges --cap-drop ALL \
         --network labnet --name lab \
         -p 127.0.0.1:8080:8080 \
         -e APP_PASSWORD='${app_password}' \
         -e LOG_FORMAT=json \
         -e COOKIE_SECURE=1 \
         -e AZURE_MANAGED_IDENTITY=1 \
+        -e EMBEDDED_K3S=0 \
         -e AZURE_RG='${rg_name}' \
         -e AZURE_REGION='${location}' \
         -e OLLAMA_URL='http://ollama:11434' \
@@ -57,6 +60,8 @@ write_files:
         -e K8S_LAB_VERIFY_GENERATED=0 \
         -e TUTOR_TELEMETRY_PERSIST=1 \
         -e QUESTIONS_CUSTOM_DIR='/app/data/questions-custom' \
+        -e LAB_SESSIONS_PATH='/app/data/lab-sessions.json' \
+        -e TUTOR_CHECKPOINTS_PATH='/app/data/tutor/checkpoints.json' \
         -v lab-data:/app/data \
         "${image}"
 

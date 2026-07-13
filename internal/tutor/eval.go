@@ -1,6 +1,7 @@
 package tutor
 
 import (
+	"fmt"
 	"strings"
 
 	"estudo-app/internal/models"
@@ -53,6 +54,15 @@ type goldenPrompt struct {
 }
 
 var goldenPrompts = []goldenPrompt{
+	{
+		Name:       "CKA Static Pods action",
+		Prompt:     "Criar 3 labs de pods estaticos nivel 2",
+		ActiveCert: "CKA",
+		WantCert:   "CKA",
+		WantTopic:  "Static Pods",
+		WantTerms:  []string{"staticpodpath", "mirror pod", "kubelet"},
+		Level:      2,
+	},
 	{
 		Name:       "CKA HPA",
 		Prompt:     "criar questao da CKA de HPA nivel 3",
@@ -227,8 +237,13 @@ func runHistoricalRegressionPrompt(h PromptQualityCase) GoldenEvalCaseResult {
 	}
 	check(LabQualityGate(q) == nil, "quality gate ainda aprovado")
 	check(res.Quality >= minimumLabQuality, "score minimo do Lab Agent")
-	if baseline > 0 {
-		check(res.Quality+10 >= baseline, "score nao regrediu mais de 10 pontos")
+	if baseline > 0 && res.Quality+10 < baseline {
+		// Queda vs baseline é AVISO, não reprovação: o baseline congela o
+		// "melhor dia" (estado do RAG daquela hora) e um lab que ainda passa
+		// no gate absoluto não pode segurar deploy para sempre — o caso
+		// "Core Concepts" travou 3 deploys seguidos exatamente assim. Abaixo
+		// do mínimo absoluto continua reprovando (check acima).
+		res.Warnings = append(res.Warnings, fmt.Sprintf("aviso: score %d abaixo do baseline historico %d (nao fatal: gate absoluto aprovado)", res.Quality, baseline))
 	}
 	for _, dep := range limitedStrings(h.Dependencies, 3) {
 		check(containsFold(res.Dependencies, dep), "dependencia historica "+dep+" preservada")

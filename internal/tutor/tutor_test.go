@@ -677,11 +677,31 @@ func TestExactReplicaSetAndFamilyTopics(t *testing.T) {
 		{"crie um lab linux com chmod e logs", "Linux"},
 		{"crie um lab java para programar algo", "Java"},
 		{"crie um lab bash com argumentos", "Bash"},
+		{"Criar lab de pod estaticos", "Static Pods"},
 	}
 	for _, tc := range cases {
 		if got := exactTopicForRequest("CKA", tc.msg); got != tc.want {
 			t.Fatalf("%q deveria mapear para %s, veio %s", tc.msg, tc.want, got)
 		}
+	}
+}
+
+func TestStaticPodRequestCreatesExactSession(t *testing.T) {
+	t.Setenv("QUESTIONS_CUSTOM_DIR", t.TempDir())
+	res := Chat("alice", "Criar lab de pod estaticos", "CKA", func(ids []string) (string, string, int) {
+		return "session-static", ids[0], len(ids)
+	})
+	if res.Action == nil || res.Action.Type != "session" || res.Action.First == "" {
+		t.Fatalf("pedido explicito deveria criar sessao: %+v", res)
+	}
+	if len(res.Questions) == 0 || res.Questions[0].Topic != "Static Pods" {
+		t.Fatalf("lab deveria ser aderente a Static Pods: %+v", res.Questions)
+	}
+	if !strings.Contains(strings.ToLower(res.Questions[0].Explanation), "staticpodpath") {
+		t.Fatalf("lab deve ensinar o mecanismo real de static pods: %+v", res.Questions[0])
+	}
+	if err := LabQualityGate(res.Questions[0]); err != nil {
+		t.Fatalf("lab de Static Pods deve passar no gate de qualidade: %v", err)
 	}
 }
 

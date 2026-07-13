@@ -9,6 +9,7 @@ import (
 
 	"estudo-app/internal/models"
 	"estudo-app/internal/repository"
+	"estudo-app/internal/tutor"
 	"estudo-app/internal/version"
 )
 
@@ -154,6 +155,13 @@ func (h *QuizHandler) Answer(w http.ResponseWriter, r *http.Request) {
 	correct := answer == currentQ.Answer
 	questionNumber := sess.Current + 1
 	total := len(sess.Questions)
+
+	// Quiz alimenta o MESMO histórico pedagógico dos labs: EWMA, revisão
+	// espaçada, mastery, retenção e streak — antes era loop aberto e o tutor
+	// não enxergava metade do estudo do aluno.
+	uid := userID(r)
+	tutor.RecordGoal(uid, currentQ, correct)
+	tutor.RecordAttempt(uid, currentQ, -1, correct)
 
 	h.store.Answer(id, answer)
 	updatedSess, _ := h.store.Get(id)

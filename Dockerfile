@@ -31,7 +31,7 @@ RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash && rm -rf /var/lib/apt/lis
 
 # Terraform CLI — labs hands-on de IaC (providers local/random/null: rodam sem
 # credencial de nuvem, custo zero). Cada usuario tem seu workspace isolado.
-ARG TERRAFORM_VERSION=1.9.8
+ARG TERRAFORM_VERSION=1.15.8
 RUN curl -sfL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" -o /tmp/tf.zip \
     && unzip -o /tmp/tf.zip -d /usr/local/bin && rm /tmp/tf.zip && terraform version
 
@@ -40,7 +40,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ansible \
     && rm -rf /var/lib/apt/lists/* && ansible --version | head -1
 
 # k3s (traz containerd + kubectl); tag tem '+', que precisa virar %2B na URL
-ARG K3S_VERSION=v1.31.5+k3s1
+ARG K3S_VERSION=v1.36.2+k3s1
 RUN ENC=$(echo "$K3S_VERSION" | sed 's/+/%2B/') && \
     curl -sfL "https://github.com/k3s-io/k3s/releases/download/${ENC}/k3s" -o /usr/local/bin/k3s && \
     chmod +x /usr/local/bin/k3s && \

@@ -161,11 +161,11 @@ func catalogReadinessFor(q models.Question) (models.LabReadiness, bool) {
 }
 
 // PrepareLabForDelivery is the single preparation boundary used by the UI.
-// Quality and executable-verification failures are recorded as readiness
-// warnings, but never withhold the task, goals, hints or solution from the
-// student. Executable verification belongs to generation, never to a GET or
-// setup request. Potentially dangerous setup commands remain guarded at
-// execution.
+// Quality warnings never withhold content — mas lab gerado cuja verificação
+// EXECUTÁVEL provou o gabarito quebrado (rejected) não chega ao aluno: servir
+// exercício com solução que não aplica é pior que pedir outra geração.
+// Executable verification belongs to generation, never to a GET or setup
+// request. Potentially dangerous setup commands remain guarded at execution.
 func PrepareLabForDelivery(q models.Question) models.Question {
 	q = FinalizeLab(q, "")
 	if err := LabQualityGate(q); err != nil {
@@ -180,4 +180,22 @@ func PrepareLabForDelivery(q models.Question) models.Question {
 		q.LabSpec.Readiness = readiness
 	}
 	return q
+}
+
+// DeliveryBlockReason devolve o motivo para NÃO entregar o lab ao aluno, ou
+// vazio. Só a prova executável reprova ("rejected" com Executable=true) —
+// pendente/degradado continua disponível com o aviso de procedência.
+func DeliveryBlockReason(q models.Question) string {
+	if q.Source != models.SourceGenerated || q.LabSpec == nil {
+		return ""
+	}
+	r := q.LabSpec.Readiness
+	if r.State == "rejected" && r.Executable {
+		reason := strings.TrimSpace(r.Failure)
+		if reason == "" {
+			reason = "verificacao executavel reprovou o gabarito"
+		}
+		return reason
+	}
+	return ""
 }

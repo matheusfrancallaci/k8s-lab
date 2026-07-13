@@ -165,6 +165,7 @@ func main() {
 	mux.HandleFunc("GET /lab/{id}/validate", lab.Validate)
 	mux.HandleFunc("POST /lab/{id}/validate", lab.Validate)
 	mux.HandleFunc("GET /lab/{id}/setup", lab.Setup)
+	mux.HandleFunc("GET /lab/{id}/state", lab.State)
 	mux.HandleFunc("POST /lab/{id}/teardown", lab.Teardown)
 
 	// Terminal WebSocket
@@ -200,6 +201,8 @@ func main() {
 	mux.HandleFunc("POST /api/tutor/ingest", tutorH.Ingest)
 	mux.HandleFunc("POST /api/tutor/explain", tutorH.Explain)
 	mux.HandleFunc("POST /api/tutor/exam-report", tutorH.ExamReport)
+	mux.HandleFunc("POST /api/tutor/goal", tutorH.Goal)
+	mux.HandleFunc("POST /api/tutor/author", tutorH.Author)
 	mux.HandleFunc("GET /api/tutor/eval", tutorH.Eval)
 	mux.HandleFunc("GET /api/tutor/quality", tutorH.Quality)
 	mux.HandleFunc("POST /api/tutor/quality/promote", tutorH.PromoteQualityFixture)
@@ -207,6 +210,13 @@ func main() {
 	mux.HandleFunc("GET /api/tutor/deploy-gate", tutorH.DeployGate)
 	mux.HandleFunc("POST /api/tutor/chat", tutorH.Chat)
 	mux.HandleFunc("POST /api/tutor/chat/stream", tutorH.ChatStream)
+	mux.HandleFunc("GET /api/tutor/conversations", tutorH.Conversations)
+	mux.HandleFunc("POST /api/tutor/conversations", tutorH.Conversations)
+	mux.HandleFunc("PATCH /api/tutor/conversations", tutorH.Conversations)
+	mux.HandleFunc("DELETE /api/tutor/conversations", tutorH.Conversations)
+	mux.HandleFunc("GET /api/tutor/agent-trace", tutorH.AgentTrace)
+	mux.HandleFunc("GET /api/tutor/model-experiments", tutorH.ModelExperiments)
+	mux.HandleFunc("GET /api/tutor/orchestration", tutorH.Orchestration)
 
 	// Perfil = conta logada (progresso do tutor isolado por usuário)
 	mux.HandleFunc("GET /api/profile", handlers.ProfileHandler)
@@ -266,7 +276,7 @@ func main() {
 	// Cadeia de middleware: Recover (panic->500) -> RequestMetrics (conta+loga)
 	// -> RequireAuth (gating) -> mux. Recover fica por fora para capturar panics
 	// de qualquer camada abaixo.
-	root := handlers.Recover(handlers.RequestMetrics(handlers.RequireAuth(mux)))
+	root := handlers.Recover(handlers.RequestMetrics(handlers.RequireAuth(handlers.UserActivity(mux))))
 
 	srv := &http.Server{
 		Addr:    addr,

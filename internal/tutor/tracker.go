@@ -8,6 +8,7 @@ package tutor
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"estudo-app/internal/models"
+	"estudo-app/internal/persistence"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -82,14 +84,74 @@ type ProfileSnapshot struct {
 	DueReviews      int     `json:"due_reviews"`
 }
 
+// StudyGoal é o objetivo declarado do aluno (onboarding): vira contagem
+// regressiva no painel e âncora do plano. Sem objetivo, o painel pede um.
+type StudyGoal struct {
+	Cert     string `json:"cert,omitempty"`
+	ExamDate string `json:"exam_date,omitempty"` // YYYY-MM-DD
+	Level    string `json:"level,omitempty"`     // iniciante|intermediario|avancado
+	SetAt    string `json:"set_at,omitempty"`
+}
+
+// StreakState é o streak no SERVIDOR — localStorage se perde por browser/
+// dispositivo e mentia a jornada.
+type StreakState struct {
+	Count   int    `json:"count"`
+	LastDay string `json:"last_day,omitempty"` // YYYY-MM-DD
+}
+
+// QuestionOutcome é o estado HONESTO de uma questão/lab: avançar nunca
+// bloqueia, mas o que aconteceu fica registrado — aprovado, tentou, pulou,
+// abriu dica/solução, falha de ambiente.
+type QuestionOutcome struct {
+	Cert           string    `json:"cert,omitempty"`
+	Topic          string    `json:"topic,omitempty"`
+	Approved       bool      `json:"approved,omitempty"`
+	Attempts       int       `json:"attempts,omitempty"`
+	Skips          int       `json:"skips,omitempty"`
+	HintOpened     bool      `json:"hint_opened,omitempty"`
+	SolutionOpened bool      `json:"solution_opened,omitempty"`
+	EnvFailures    int       `json:"env_failures,omitempty"`
+	Seconds        int       `json:"seconds,omitempty"`
+	PassedGoals    []int     `json:"passed_goals,omitempty"` // goals de lab já verdes
+	LastAt         time.Time `json:"last_at,omitempty"`
+}
+
+// State deriva o rótulo honesto para a UI (precedência do que importa contar).
+func (o *QuestionOutcome) State() string {
+	switch {
+	case o == nil:
+		return ""
+	case o.Approved && o.SolutionOpened:
+		return "aprovado_com_solucao"
+	case o.Approved:
+		return "aprovado"
+	case o.SolutionOpened:
+		return "solucao"
+	case o.HintOpened:
+		return "dica"
+	case o.Attempts > 0:
+		return "tentou"
+	case o.EnvFailures > 0:
+		return "falha_ambiente"
+	case o.Skips > 0:
+		return "pulou"
+	default:
+		return "aberto"
+	}
+}
+
 // Profile é o estado adaptativo de UM usuário (isolado dos demais).
 type Profile struct {
 	mu          sync.Mutex
 	id          string
-	Skills      map[string]*TopicSkill `json:"skills"`
-	Review      map[string]*ReviewItem `json:"review"`
-	History     []ProfileSnapshot      `json:"history,omitempty"`
-	Memory      LearningMemory         `json:"memory,omitempty"`
+	Skills      map[string]*TopicSkill      `json:"skills"`
+	Review      map[string]*ReviewItem      `json:"review"`
+	History     []ProfileSnapshot           `json:"history,omitempty"`
+	Memory      LearningMemory              `json:"memory,omitempty"`
+	Goal        StudyGoal                   `json:"goal,omitempty"`
+	Streak      StreakState                 `json:"streak,omitempty"`
+	Activity    map[string]*QuestionOutcome `json:"activity,omitempty"` // por question ID
 	activeCert  string
 	activeTopic string
 	activeLab   *models.Question
@@ -134,14 +196,24 @@ func profileFor(userID string) *Profile {
 }
 
 type skillsDoc struct {
-	Skills  map[string]*TopicSkill `json:"skills"`
-	Review  map[string]*ReviewItem `json:"review,omitempty"`
-	History []ProfileSnapshot      `json:"history,omitempty"`
-	Memory  LearningMemory         `json:"memory,omitempty"`
+	Skills   map[string]*TopicSkill      `json:"skills"`
+	Review   map[string]*ReviewItem      `json:"review,omitempty"`
+	History  []ProfileSnapshot           `json:"history,omitempty"`
+	Memory   LearningMemory              `json:"memory,omitempty"`
+	Goal     StudyGoal                   `json:"goal,omitempty"`
+	Streak   StreakState                 `json:"streak,omitempty"`
+	Activity map[string]*QuestionOutcome `json:"activity,omitempty"`
 }
 
 func loadProfile(id string) *Profile {
 	p := &Profile{id: id, Skills: map[string]*TopicSkill{}, Review: map[string]*ReviewItem{}, lastAdvised: map[string]time.Time{}}
+	if persistence.Enabled() {
+		var s skillsDoc
+		if found, err := persistence.Get("tutor_profile", id, &s); err == nil && found {
+			applySkillsDoc(p, s)
+			return p
+		}
+	}
 	b, err := os.ReadFile(profilePath(id))
 	if err != nil && id == "default" {
 		// Migração única: progresso legado morava em data/tutor.json.
@@ -150,17 +222,29 @@ func loadProfile(id string) *Profile {
 	if err == nil {
 		var s skillsDoc
 		if json.Unmarshal(b, &s) == nil {
-			if s.Skills != nil {
-				p.Skills = s.Skills
-			}
-			if s.Review != nil {
-				p.Review = s.Review
-			}
-			p.History = s.History
-			p.Memory = s.Memory
+			applySkillsDoc(p, s)
 		}
 	}
+	if p.Activity == nil {
+		p.Activity = map[string]*QuestionOutcome{}
+	}
 	return p
+}
+
+func applySkillsDoc(p *Profile, s skillsDoc) {
+	if s.Skills != nil {
+		p.Skills = s.Skills
+	}
+	if s.Review != nil {
+		p.Review = s.Review
+	}
+	p.History, p.Memory, p.Goal, p.Streak = s.History, s.Memory, s.Goal, s.Streak
+	if s.Activity != nil {
+		p.Activity = s.Activity
+	}
+	if p.Activity == nil {
+		p.Activity = map[string]*QuestionOutcome{}
+	}
 }
 
 // scheduleSave persiste com debounce (caller deve segurar p.mu).
@@ -171,7 +255,8 @@ func (p *Profile) scheduleSave() {
 	p.saveTimer = time.AfterFunc(2*time.Second, func() {
 		p.mu.Lock()
 		refreshLearningMemoryLocked(p)
-		b, err := json.MarshalIndent(skillsDoc{Skills: p.Skills, Review: p.Review, History: p.History, Memory: p.Memory}, "", "  ")
+		doc := skillsDoc{Skills: p.Skills, Review: p.Review, History: p.History, Memory: p.Memory, Goal: p.Goal, Streak: p.Streak, Activity: p.Activity}
+		b, err := json.MarshalIndent(doc, "", "  ")
 		p.mu.Unlock()
 		if err != nil {
 			return
@@ -181,6 +266,11 @@ func (p *Profile) scheduleSave() {
 		}
 		if err := os.WriteFile(profilePath(p.id), b, 0o644); err != nil {
 			log.Printf("[tutor] falha ao salvar perfil %s: %v", p.id, err)
+		}
+		if persistence.Enabled() {
+			if err := persistence.Put("tutor_profile", p.id, doc); err != nil {
+				log.Printf("[tutor] falha ao salvar perfil %s no postgres: %v", p.id, err)
+			}
 		}
 	})
 }
@@ -251,8 +341,39 @@ func RecordGoal(userID string, q models.Question, success bool) {
 		}
 	}
 	p.recordReview(q, success, now)
+	if success {
+		p.settleTopicReviewsLocked(q, now)
+	}
 	p.snapshotLocked(now)
 	p.scheduleSave()
+}
+
+// settleTopicReviewsLocked reagenda revisões VENCIDAS do mesmo cert+tópico
+// quando o aluno acerta qualquer questão dele (caller segura p.mu). Sem isto,
+// um item de revisão apontando para uma questão antiga (id de lab gerado que
+// já nem existe) segurava o tópico e o nag de revisão PARA SEMPRE — treinar o
+// tópico por outros labs nunca limpava. A unidade pedagógica é o tópico.
+func (p *Profile) settleTopicReviewsLocked(q models.Question, now time.Time) {
+	self := reviewKey(q)
+	for key, item := range p.Review {
+		if item == nil || key == self || item.Due.After(now) {
+			continue
+		}
+		if !strings.EqualFold(item.Cert, string(q.Cert)) || !strings.EqualFold(item.Topic, q.Topic) {
+			continue
+		}
+		item.LastSeen = now
+		if item.IntervalDays < 1 {
+			item.IntervalDays = 1
+		} else {
+			item.IntervalDays *= 2
+		}
+		if item.IntervalDays > 21 {
+			item.IntervalDays = 21
+		}
+		item.Due = now.Add(time.Duration(item.IntervalDays) * 24 * time.Hour)
+		item.Reason = "consolidado por acerto recente no tópico"
+	}
 }
 
 // snapshotLocked atualiza a fotografia do DIA (caller segura p.mu). O último
@@ -356,12 +477,57 @@ func (p *Profile) recordReview(q models.Question, success bool, now time.Time) {
 	item.Reason = "falha em validador; revisar com lab guiado"
 }
 
+// outcomeForLocked devolve/cria o outcome da questão (caller segura p.mu).
+func (p *Profile) outcomeForLocked(q models.Question) *QuestionOutcome {
+	if p.Activity == nil {
+		p.Activity = map[string]*QuestionOutcome{}
+	}
+	id := strings.TrimSpace(q.ID)
+	if id == "" {
+		id = string(q.Cert) + "|" + q.Topic
+	}
+	o := p.Activity[id]
+	if o == nil {
+		o = &QuestionOutcome{Cert: string(q.Cert), Topic: q.Topic}
+		p.Activity[id] = o
+		// Cap: jornada honesta não precisa de histórico infinito por questão —
+		// descarta os outcomes mais antigos além de 800.
+		if len(p.Activity) > 800 {
+			oldestID, oldest := "", time.Now()
+			for k, v := range p.Activity {
+				if v != nil && v.LastAt.Before(oldest) {
+					oldestID, oldest = k, v.LastAt
+				}
+			}
+			delete(p.Activity, oldestID)
+		}
+	}
+	o.LastAt = time.Now()
+	return o
+}
+
+// touchStreakLocked marca atividade de estudo do dia (caller segura p.mu).
+func (p *Profile) touchStreakLocked(now time.Time) {
+	today := now.Format("2006-01-02")
+	if p.Streak.LastDay == today {
+		return
+	}
+	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
+	if p.Streak.LastDay == yesterday {
+		p.Streak.Count++
+	} else {
+		p.Streak.Count = 1
+	}
+	p.Streak.LastDay = today
+}
+
 // RecordHint registra a abertura da aba HINT.
 func RecordHint(userID string, q models.Question) {
 	p := profileFor(userID)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.skillFor(string(q.Cert), q.Topic).Hints++
+	p.outcomeForLocked(q).HintOpened = true
 	p.scheduleSave()
 }
 
@@ -371,6 +537,7 @@ func RecordSolution(userID string, q models.Question) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.skillFor(string(q.Cert), q.Topic).Solutions++
+	p.outcomeForLocked(q).SolutionOpened = true
 	p.scheduleSave()
 }
 
@@ -382,7 +549,143 @@ func RecordDone(userID string, q models.Question, seconds int) {
 	s := p.skillFor(string(q.Cert), q.Topic)
 	s.Completed++
 	s.TotalSecs += seconds
+	o := p.outcomeForLocked(q)
+	o.Seconds += seconds
+	o.Approved = true
 	p.scheduleSave()
+}
+
+// RecordAttempt registra a tentativa na jornada honesta e decide aprovação:
+// goalIdx >= 0 é um goal de lab (aprova quando TODOS os goals da questão já
+// passaram); goalIdx < 0 é questão de resposta única (quiz/validação própria):
+// sucesso aprova direto. Também marca o streak do dia.
+func RecordAttempt(userID string, q models.Question, goalIdx int, success bool) {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	o := p.outcomeForLocked(q)
+	o.Attempts++
+	if success {
+		if goalIdx < 0 || len(q.Goals) == 0 {
+			o.Approved = true
+		} else {
+			seen := false
+			for _, g := range o.PassedGoals {
+				if g == goalIdx {
+					seen = true
+					break
+				}
+			}
+			if !seen {
+				o.PassedGoals = append(o.PassedGoals, goalIdx)
+			}
+			if len(o.PassedGoals) >= len(q.Goals) {
+				o.Approved = true
+			}
+		}
+	}
+	p.touchStreakLocked(time.Now())
+	p.scheduleSave()
+}
+
+// RecordEnvFailure registra falha de AMBIENTE na questão — não conta contra o
+// aluno (skill intocado), mas a jornada honesta guarda que aconteceu.
+func RecordEnvFailure(userID string, q models.Question) {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.outcomeForLocked(q).EnvFailures++
+	p.scheduleSave()
+}
+
+// RecordSkip registra que o aluno AVANÇOU sem aprovar a questão. Avançar nunca
+// bloqueia; mentir que concluiu é que não pode.
+func RecordSkip(userID string, q models.Question) {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	o := p.outcomeForLocked(q)
+	if o.Approved {
+		return
+	}
+	o.Skips++
+	p.scheduleSave()
+}
+
+// SetStudyGoal persiste o objetivo do aluno (onboarding). examDate em
+// YYYY-MM-DD; valores vazios limpam o campo correspondente.
+func SetStudyGoal(userID, cert, examDate, level string) error {
+	cert = CanonicalCert(strings.TrimSpace(cert))
+	examDate = strings.TrimSpace(examDate)
+	if examDate != "" {
+		if _, err := time.Parse("2006-01-02", examDate); err != nil {
+			return fmt.Errorf("data da prova inválida (use AAAA-MM-DD)")
+		}
+	}
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.Goal = StudyGoal{Cert: cert, ExamDate: examDate, Level: strings.TrimSpace(level), SetAt: time.Now().Format("2006-01-02")}
+	p.scheduleSave()
+	return nil
+}
+
+// Journey resume a jornada persistida para o painel: objetivo (com dias
+// restantes), streak e contagem honesta de outcomes.
+type JourneySummary struct {
+	Goal         StudyGoal      `json:"goal"`
+	DaysToExam   int            `json:"days_to_exam"` // -1 = sem data
+	Streak       StreakState    `json:"streak"`
+	OutcomeCount map[string]int `json:"outcomes"`
+}
+
+func Journey(userID string) JourneySummary {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	js := JourneySummary{Goal: p.Goal, Streak: p.Streak, DaysToExam: -1, OutcomeCount: map[string]int{}}
+	if p.Goal.ExamDate != "" {
+		if d, err := time.Parse("2006-01-02", p.Goal.ExamDate); err == nil {
+			js.DaysToExam = int(time.Until(d).Hours() / 24)
+		}
+	}
+	for _, o := range p.Activity {
+		if o != nil {
+			js.OutcomeCount[o.State()]++
+		}
+	}
+	return js
+}
+
+// OutcomeFor devolve o estado persistido de UMA questão — restaura os goals
+// verdes ao recarregar a página do lab (a jornada é do servidor, não da aba).
+func OutcomeFor(userID, questionID string) (QuestionOutcome, bool) {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	o := p.Activity[strings.TrimSpace(questionID)]
+	if o == nil {
+		return QuestionOutcome{}, false
+	}
+	return *o, true
+}
+
+// OutcomesFor devolve o estado honesto de um conjunto de questões (fim de
+// sessão): quantas aprovadas, puladas, com solução aberta etc.
+func OutcomesFor(userID string, questionIDs []string) map[string]int {
+	p := profileFor(userID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := map[string]int{}
+	for _, id := range questionIDs {
+		o := p.Activity[strings.TrimSpace(id)]
+		if o == nil {
+			out["aberto"]++
+			continue
+		}
+		out[o.State()]++
+	}
+	return out
 }
 
 // RecordTermError registra um erro de comando visto no terminal do lab,

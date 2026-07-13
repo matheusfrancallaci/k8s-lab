@@ -30,8 +30,6 @@ var (
 	userKubeconfigs = map[string]string{}
 )
 
-const labCommandNamespace = "default"
-
 func userLabNamespace(userID string) string {
 	id := tutor.SanitizeID(userID)
 	if id == "default" {
@@ -74,7 +72,7 @@ func userKubeconfig(userID string) string {
 	// mesclada (k3s local : AKS) com ':', que só a env aceita.
 	script := fmt.Sprintf(
 		"KUBECONFIG=%s kubectl config view --raw > %s && KUBECONFIG=%s kubectl config set-context --current --namespace=%s",
-		base, path, path, labCommandNamespace)
+		base, path, path, ns)
 	if err := wslShell(script).Run(); err != nil {
 		return ""
 	}

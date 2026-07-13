@@ -69,6 +69,11 @@ type ChatAction struct {
 	DurationMin  int      `json:"duration_min,omitempty"`
 	NoHints      bool     `json:"no_hints,omitempty"`
 	Mode         string   `json:"mode,omitempty"`
+	CheckpointID string   `json:"checkpoint_id,omitempty"`
+	Question     string   `json:"question,omitempty"`
+	Outcome      string   `json:"outcome,omitempty"`
+	Score        int      `json:"score,omitempty"`
+	NextPrompt   string   `json:"next_prompt,omitempty"`
 }
 
 // ChatResult é a resposta completa do tutor.
@@ -105,6 +110,22 @@ func FreeChatReply(msg string) (string, error) { return llmChatReply(msg) }
 
 func FreeChatReplyContext(ctx context.Context, msg string) (string, error) {
 	return llmChatReplyContext(ctx, msg)
+}
+
+func FreeChatConversationReplyContext(ctx context.Context, msg, history, mode string) (string, []string, GroundingAudit, error) {
+	prompt, report := BuildGroundedChatPromptWithContext(msg, history, mode)
+	route := RouteConversationModel(msg, mode)
+	if technicalQuestion(msg) && !report.Answerable {
+		return report.Refusal(), report.VerifiedSources(), GroundingAudit{Passed: true, Coverage: 100}, nil
+	}
+	reply, err := llmGenerateContext(ctx, prompt, false, 90*time.Second, chatTokenBudget(msg)+400, route.Model)
+	if err != nil {
+		return "", nil, GroundingAudit{}, err
+	}
+	final := FinalizeGroundedReply(reply, report)
+	audit := AuditGroundedReply(final, report)
+	RecordModelOutcome(route, audit)
+	return final, report.VerifiedSources(), audit, nil
 }
 
 // sinônimos PT-BR → tópico do gerador
@@ -194,6 +215,7 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 	if cert == "" {
 		cert = "CKA"
 	}
+	intentDecision := ClassifyTutorRequest(msg, cert)
 
 	// 0. Cadastrar certificação nova → personaliza o board de verdade
 	if m := regexp.MustCompile(`(?i)(?:criar|adicionar|cadastrar|nova|quero(?:\s+estudar)?(?:\s+para)?)\s+(?:a\s+)?certifica[cç][aã]o\s+(?:de\s+|do\s+|da\s+)?([A-Za-z0-9][A-Za-z0-9 ._+-]{1,30})`).FindStringSubmatch(msg); m != nil {
@@ -236,7 +258,7 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 	}
 
 	// 1. Desempenho / progresso
-	if regexp.MustCompile(`desempenho|progresso|como estou|estat|pontos? frac|dashboard`).MatchString(l) {
+	if intentDecision.Intent == "progress" {
 		return ChatResult{
 			Reply:  "Aqui está o seu panorama. Onde o score está baixo é onde eu atacaria primeiro — quer que eu gere um lab focado nele?",
 			Action: &ChatAction{Type: "stats"},
@@ -285,6 +307,20 @@ func Chat(userID, msg, cert string, createSession func(ids []string) (string, st
 			Reply:     fmt.Sprintf("Montei uma revisao guiada com **%d lab(s)** baseada no seu caderno de erros. Comecei pelos topicos vencidos e com mais falhas.", total),
 			Action:    sessionAction(sid, first, total, qs),
 			Questions: qs,
+		}
+	}
+
+	// 1.9. Lab composto estilo prova — cenário multi-tarefa com crédito parcial
+	if regexp.MustCompile(`(?i)\b(estilo prova|desafio composto|quest[aã]o composta|lab de prova|multi.?tarefa)\b`).MatchString(l) {
+		q, err := GenerateExamComposite(cert, 3)
+		if err != nil {
+			return ChatResult{Reply: "Não consegui compor um lab estilo prova agora: " + err.Error()}
+		}
+		sid, first, total := createSession([]string{q.ID})
+		return ChatResult{
+			Reply:     fmt.Sprintf("🎯 Montei um **lab estilo prova de %s**: %d tarefas independentes com crédito parcial por goal — como na certificação real. Sem pressa, mas sem dica.", cert, len(q.Goals)),
+			Action:    sessionAction(sid, first, total, []models.Question{q}),
+			Questions: []models.Question{q},
 		}
 	}
 

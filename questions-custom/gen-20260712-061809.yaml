@@ -1,0 +1,317 @@
+questions:
+    - id: custom-c0e0900b
+      cert: CKA
+      topic: Estilo Prova
+      difficulty: hard
+      type: lab
+      source: generated
+      question: |-
+        **Cenário de prova (CKA)** — você assumiu um cluster do time e precisa executar 3 tarefas independentes. Cada tarefa pontua separadamente (crédito parcial), como na prova real.
+
+        **Tarefa 1 · Workloads** — Crie um Job **delta-store-job** com busybox:1.35 rodando `comando apropriado`.
+
+        Foco do treino: **Workloads**.
+
+        **Tarefa 2 · Autoscaling** — Crie um HPA para o Deployment **atlas-batch**: **min=2**, **max=5**, **CPU 50%**.
+
+        Foco do treino: **Autoscaling**.
+
+        **Tarefa 3 · Services** — Treino CKA de Services & Networking: crie um Pod **lunar-cache-client** com busybox e use DNS interno para resolver **lunar-auth-svc**.
+
+        Foco do treino: **Estilo Prova**.
+
+        Resolva pelo terminal. Use a aba HINT se travar; o gabarito completo fica na aba SOLUTION.
+      options: []
+      answer: 0
+      explanation: Lab composto estilo prova cobrindo Workloads, Autoscaling, Services. Na certificação real as questões encadeiam restrições de tópicos diferentes — treine alternar de contexto sem perder o namespace e o nome exato de cada recurso.
+      doc_url: ""
+      doc_section: ""
+      hint: ""
+      answer_command: |-
+        # Tarefa 1 — Workloads
+        kubectl create job delta-store-job --image=busybox:1.35 -- sh -c 'echo concluido'
+
+        # Tarefa 2 — Autoscaling
+        kubectl autoscale deployment atlas-batch --name=atlas-batch-hpa --cpu-percent=50 --min=2 --max=5
+
+        # Tarefa 3 — Services
+        kubectl run lunar-cache-client --image=busybox:1.35 --restart=Never --command -- sleep 3600
+      validation: null
+      goals:
+        - description: '[Tarefa 1] Job **delta-store-job** completou (**succeeded=1**)'
+          hint: kubectl create job --image -- <cmd>; aguarde completar.
+          validation:
+            command: kubectl -n kube-system get job delta-store-job -o jsonpath='{.status.succeeded}' 2>/dev/null
+            expected_contains: "1"
+            expected_output: ""
+        - description: '[Tarefa 2] HPA **atlas-batch-hpa** aponta para o Deployment **atlas-batch**'
+          hint: kubectl autoscale deployment ... --name ...
+          validation:
+            command: kubectl -n kube-system get hpa atlas-batch-hpa -o jsonpath='{.spec.scaleTargetRef.name}:{.spec.minReplicas}:{.spec.maxReplicas}' 2>/dev/null
+            expected_contains: atlas-batch:2:5
+            expected_output: ""
+        - description: '[Tarefa 2] HPA usa alvo de **50% CPU**'
+          hint: Confira o campo averageUtilization.
+          validation:
+            command: kubectl -n kube-system get hpa atlas-batch-hpa -o jsonpath='{.spec.metrics[0].resource.target.averageUtilization}' 2>/dev/null
+            expected_contains: "50"
+            expected_output: ""
+        - description: '[Tarefa 3] Pod cliente **lunar-cache-client** esta Running'
+          hint: Crie o pod busybox com sleep para ele continuar vivo.
+          validation:
+            command: kubectl -n kube-system get pod lunar-cache-client -o jsonpath='{.status.phase}' 2>/dev/null
+            expected_contains: Running
+            expected_output: ""
+        - description: '[Tarefa 3] DNS interno resolve o Service **lunar-auth-svc**'
+          hint: Use nslookup dentro do pod cliente.
+          validation:
+            command: kubectl -n kube-system exec lunar-cache-client -- nslookup lunar-auth-svc 2>/dev/null | grep -q 'Name:' && echo RESOLVED || echo FAIL
+            expected_contains: RESOLVED
+            expected_output: ""
+      setup:
+        - description: Instalando Metrics Server se necessario...
+          command: kubectl get deploy metrics-server -n kube-system >/dev/null 2>&1 || kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml 2>&1 | tail -3; kubectl get deploy metrics-server -n kube-system -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null | grep -q -- '--kubelet-insecure-tls' || kubectl patch deployment metrics-server -n kube-system --type=json -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]' 2>/dev/null || true; kubectl rollout status deployment/metrics-server -n kube-system --timeout=180s 2>/dev/null || true
+        - description: Criando workload alvo atlas-batch com requests de CPU...
+          command: kubectl -n kube-system create deployment atlas-batch --image=registry.k8s.io/hpa-example --port=80 2>/dev/null || true; kubectl set resources deployment/atlas-batch --requests=cpu=100m --limits=cpu=200m 2>/dev/null || true; kubectl rollout status deployment/atlas-batch --timeout=120s 2>/dev/null || true
+        - description: Criando Deployment lunar-cache...
+          command: kubectl -n kube-system create deployment lunar-cache --image=nginx:1.25 --replicas=2 2>/dev/null || true; kubectl rollout status deployment/lunar-cache --timeout=90s 2>/dev/null || true
+        - description: Criando Service lunar-auth-svc...
+          command: kubectl -n kube-system expose deployment lunar-cache --name=lunar-auth-svc --port=80 --target-port=80 2>/dev/null || true
+      teardown:
+        - kubectl -n kube-system delete job delta-store-job --ignore-not-found=true
+        - kubectl -n kube-system delete hpa atlas-batch-hpa --ignore-not-found=true
+        - kubectl -n kube-system delete deployment atlas-batch --ignore-not-found=true
+        - kubectl -n kube-system delete pod lunar-cache-client --ignore-not-found=true
+        - kubectl -n kube-system delete svc lunar-auth-svc --ignore-not-found=true
+        - kubectl -n kube-system delete deployment lunar-cache --ignore-not-found=true
+      lab_spec:
+        objective: Criar e validar autoscaling com HorizontalPodAutoscaler
+        scenario: 'Pedido do aluno: lab estilo prova'
+        namespace: kube-system
+        validation_mode: compiled
+        skills:
+            - CKA
+            - Estilo Prova
+            - metrics-server
+            - autoscaling
+        estimated_minutes: 31
+        dependencies:
+            - name: metrics-server
+              kind: kubernetes addon
+              install_action: auto setup
+              status_command: kubectl get deploy metrics-server -n kube-system
+              required: true
+        sources:
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/service/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+              section: Services & Networking
+            - title: Services & Networking
+              url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+              section: Services & Networking
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+              section: Workloads & Scheduling
+            - title: Workloads & Scheduling
+              url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+              section: Workloads & Scheduling
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
+              section: Cluster Architecture, Installation & Configuration
+            - title: Cluster Architecture, Installation & Configuration
+              url: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+              section: Cluster Architecture, Installation & Configuration
+        evidence:
+            - domain: Services & Networking
+              weight: 20
+              confidence: 100
+              matched_terms:
+                - services & networking
+                - services
+                - networking
+                - kubernetes
+                - service
+                - network
+                - dns
+                - pod
+              sources:
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/service/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+                  section: Services & Networking
+            - domain: Workloads & Scheduling
+              weight: 15
+              confidence: 100
+              matched_terms:
+                - workloads & scheduling
+                - workloads
+                - kubernetes
+                - deployment
+                - pod
+                - autoscale
+              sources:
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+                  section: Workloads & Scheduling
+            - domain: Cluster Architecture, Installation & Configuration
+              weight: 25
+              confidence: 50
+              matched_terms:
+                - cluster
+                - kubernetes
+                - resources
+              sources:
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+                  section: Cluster Architecture, Installation & Configuration
+        evidence_score: 100
+        chunks:
+            - id: df4c22c8f4b2
+              domain: Services & Networking
+              title: kubernetes.io / service
+              url: https://kubernetes.io/docs/concepts/services-networking/service/
+              excerpt: '``` apiVersion: v1 kind: Service metadata: name: nginx-service spec: selector: app.kubernetes.io/name: proxy ports: - name: name-of-service-port protocol: TCP port: 80 targetPort:...'
+              relevance: 54
+            - id: 09faff71705c
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` kubectl set image deployment.v1.apps/nginx-deployment nginx=nginx:1.16.1 ``` or use the following command: ``` kubectl set image deployment/nginx-deployment nginx=nginx:1.16.1...'
+              relevance: 53
+            - id: 1beb51332bfa
+              domain: Workloads & Scheduling
+              title: kubernetes.io / deployment
+              url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+              excerpt: '``` deployment "nginx-deployment" successfully rolled out ``` Get more details on your updated Deployment: After the rollout succeeds, you can view the Deployment by running kubec...'
+              relevance: 46
+        plan:
+            - 'Preparar: Instalando Metrics Server se necessario...'
+            - 'Preparar: Criando workload alvo atlas-batch com requests de CPU...'
+            - 'Preparar: Criando Deployment lunar-cache...'
+            - 'Preparar: Criando Service lunar-auth-svc...'
+            - 'Validar: [Tarefa 1] Job **delta-store-job** completou (**succeeded=1**)'
+            - Executar a solucao e comparar com os validadores
+            - Limpar recursos criados pelo lab
+        success_criteria:
+            - '[Tarefa 1] Job **delta-store-job** completou (**succeeded=1**)'
+            - '[Tarefa 2] HPA **atlas-batch-hpa** aponta para o Deployment **atlas-batch**'
+            - '[Tarefa 2] HPA usa alvo de **50% CPU**'
+            - '[Tarefa 3] Pod cliente **lunar-cache-client** esta Running'
+            - '[Tarefa 3] DNS interno resolve o Service **lunar-auth-svc**'
+        safety:
+            - Comandos limitados ao cluster ativo
+            - Teardown definido para remover recursos do exercicio
+        lab_plan:
+            exact_topic: Estilo Prova
+            cert: CKA
+            checked_at: "2026-07-12"
+            source_version: fontes internas/RAG, verificado 2026-07-12
+            namespace: kube-system
+            resources:
+                - pod
+                - deployment
+                - service
+                - job
+                - hpa
+            validations:
+                - kubectl -n kube-system get job delta-store-job -o jsonpath='{.status.succeeded}' 2>/dev/null
+                - kubectl -n kube-system get hpa atlas-batch-hpa -o jsonpath='{.spec.scaleTargetRef.name}:{.spec.minReplicas}:{.spec.maxReplicas}' 2>/dev/null
+                - kubectl -n kube-system get hpa atlas-batch-hpa -o jsonpath='{.spec.metrics[0].resource.target.averageUtilization}' 2>/dev/null
+                - kubectl -n kube-system get pod lunar-cache-client -o jsonpath='{.status.phase}' 2>/dev/null
+                - kubectl -n kube-system exec lunar-cache-client -- nslookup lunar-auth-svc 2>/dev/null | grep -q 'Name:' && echo RESOLVED || echo FAIL
+            risks: []
+            preflight_checks:
+                - enunciado em modo desafio
+                - 5 goal(s) declarados
+                - 5 validador(es) automaticos
+                - solucao reproduzivel declarada
+                - 'namespace alinhado: kube-system'
+                - cleanup declarado
+                - fonte/evidencia rastreavel
+            sources:
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/service/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/network-policies/
+                  section: Services & Networking
+                - title: Services & Networking
+                  url: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+                  section: Services & Networking
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+                  section: Workloads & Scheduling
+                - title: Workloads & Scheduling
+                  url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+                  section: Workloads & Scheduling
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
+                  section: Cluster Architecture, Installation & Configuration
+                - title: Cluster Architecture, Installation & Configuration
+                  url: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+                  section: Cluster Architecture, Installation & Configuration
+        quality:
+            score: 100
+            checks:
+                - enunciado contextual
+                - goals definidos
+                - goal 1 tem resultado verificavel
+                - goal 2 tem resultado verificavel
+                - goal 3 tem resultado verificavel
+                - goal 4 tem resultado verificavel
+                - goal 5 tem resultado verificavel
+                - teardown definido
+                - fonte oficial associada
+                - chunks RAG associados
+                - evidencia curricular forte
+                - dominio da certificacao rastreado
+                - dependencias declaradas
+                - solucao reproduzivel
+                - setup automatizado
+                - namespace de validacao definido
+                - validacao compilada
+                - plano do lab compilado
+            warnings: []
+        readiness:
+            state: compiled
+            version: "2"
+            content_digest: sha256:1f49001e7ce866fda0fabf07ca1defef06621f996475a8b04f746e400e0c3d5d
+            checked_at: "2026-07-12T09:18:09Z"
+            executable: false
+            setup_verified: false
+            solve_verified: false
+            checks_verified: false
+            cleanup_verified: false
+            warnings:
+                - verificacao executavel ainda nao concluida

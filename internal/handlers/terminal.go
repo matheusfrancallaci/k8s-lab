@@ -252,6 +252,7 @@ var (
 	labNSFlagRe   = regexp.MustCompile(`(?i)(?:^|\s)(?:-n|--namespace)\s+([a-z0-9]([-a-z0-9]*[a-z0-9])?)\b`)
 	labNSEqRe     = regexp.MustCompile(`(?i)(?:^|\s)--namespace=([a-z0-9]([-a-z0-9]*[a-z0-9])?)\b`)
 	labCreateNSRe = regexp.MustCompile(`(?i)\bkubectl\s+create\s+(?:ns|namespace)\s+([a-z0-9]([-a-z0-9]*[a-z0-9])?)\b`)
+	labAllPodsRe  = regexp.MustCompile(`(?i)\bkubectl\s+(?:get|describe)\s+(?:pods?|po)\b[^\n;]*(?:-A\b|--all-namespaces\b)`)
 )
 
 func cloudShellAccessRules(userNS string, q *models.Question) []cloudShellAccess {
@@ -261,12 +262,11 @@ func cloudShellAccessRules(userNS string, q *models.Question) []cloudShellAccess
 func cloudShellAccessPlanFor(userNS string, q *models.Question) cloudShellAccessPlan {
 	rules := []cloudShellAccess{
 		{Namespace: userNS, ClusterRole: "admin", EnsureNamespace: true},
-		{Namespace: labCommandNamespace, ClusterRole: "admin"},
 	}
 	var cluster []cloudShellClusterAccess
 	text := cloudShellAccessText(q)
 	if containsAny(text, "aws", "s3", "sqs", "iam", "localstack", "awslocal", "terraform", "tofu") {
-		rules = append(rules, cloudShellAccess{Namespace: "tools", ClusterRole: "admin", EnsureNamespace: true})
+		rules = append(rules, cloudShellAccess{Namespace: userNS + "-tools", ClusterRole: "admin", EnsureNamespace: true})
 	}
 	if containsAny(text, "argocd", "argo cd", "argo-cd", "gitops", "capa", "application", "applications.argoproj.io") {
 		rules = append(rules, cloudShellAccess{Namespace: "argocd", ClusterRole: "admin", EnsureNamespace: true})
@@ -278,7 +278,7 @@ func cloudShellAccessPlanFor(userNS string, q *models.Question) cloudShellAccess
 		rules = append(rules, cloudShellAccess{Namespace: "ingress-nginx", ClusterRole: "view"})
 	}
 	for _, ns := range labNamespacesFromText(text) {
-		if ns == labCommandNamespace || ns == userNS || ns == "kube-system" || ns == "ingress-nginx" {
+		if ns == "default" || ns == userNS || ns == "kube-system" || ns == "ingress-nginx" {
 			continue
 		}
 		rules = append(rules, cloudShellAccess{Namespace: ns, ClusterRole: "admin", EnsureNamespace: true})
@@ -294,6 +294,15 @@ func cloudShellAccessPlanFor(userNS string, q *models.Question) cloudShellAccess
 		cluster = append(cluster, cloudShellClusterAccess{
 			Name:      "node-reader",
 			Resources: []string{"nodes", "nodes/status"},
+			Verbs:     []string{"get", "list", "watch"},
+		})
+	}
+	// A consulta `kubectl get pods -A` e cluster-scoped. Conceda somente
+	// leitura e apenas aos labs que declaram explicitamente esse comando.
+	if labAllPodsRe.MatchString(text) {
+		cluster = append(cluster, cloudShellClusterAccess{
+			Name:      "pod-reader",
+			Resources: []string{"pods", "pods/log"},
 			Verbs:     []string{"get", "list", "watch"},
 		})
 	}
@@ -485,7 +494,7 @@ func ensureCloudShellNamespaceAccess(userNS, sa string, q *models.Question) {
 //  2. tokenFile (não token estático) — tokens de SA expiram, o arquivo é rotacionado;
 //  3. completion de verdade: exige o pacote bash-completion (instalado no provisionamento).
 func cloudShellRC(ns string) string {
-	return `# kubeconfig alinhado com as validacoes do lab (namespace ` + labCommandNamespace + `)
+	return `# kubeconfig alinhado com as validacoes do lab (namespace ` + ns + `)
 if [ ! -f /tmp/.labkube ]; then
 cat > /tmp/.labkube <<'KCFG'
 apiVersion: v1
@@ -504,13 +513,13 @@ contexts:
   context:
     cluster: incluster
     user: sa
-    namespace: ` + labCommandNamespace + `
+    namespace: ` + ns + `
 current-context: incluster
 KCFG
 fi
 export KUBECONFIG=/tmp/.labkube
 export LAB_NAMESPACE="` + ns + `"
-export LAB_DEFAULT_NAMESPACE="` + labCommandNamespace + `"
+export LAB_DEFAULT_NAMESPACE="` + ns + `"
 # completion (kubectl + alias k) — precisa do pacote bash-completion
 [ -f /usr/share/bash-completion/bash_completion ] && . /usr/share/bash-completion/bash_completion
 source <(kubectl completion bash) 2>/dev/null
@@ -519,9 +528,9 @@ complete -o default -F __start_kubectl kubectl 2>/dev/null
 complete -o default -F __start_kubectl k 2>/dev/null
 bind 'set show-all-if-ambiguous on' 2>/dev/null
 bind 'set completion-ignore-case on' 2>/dev/null
-alias kdefault='kubectl config set-context --current --namespace=` + labCommandNamespace + ` >/dev/null && echo namespace=` + labCommandNamespace + `'
+alias kdefault='kubectl config set-context --current --namespace=` + ns + ` >/dev/null && echo namespace=` + ns + `'
 alias klab='kubectl config set-context --current --namespace=` + ns + ` >/dev/null && echo namespace=` + ns + `'
-__lab_ns(){ kubectl config view --minify -o jsonpath='{..namespace}' 2>/dev/null || printf ` + labCommandNamespace + `; }
+__lab_ns(){ kubectl config view --minify -o jsonpath='{..namespace}' 2>/dev/null || printf ` + ns + `; }
 export KUBE_EDITOR=vim
 PS1='\[\e[38;2;56;189;248m\]\[\e[1m\]☁ aks\[\e[0m\]\[\e[38;2;107;114;128m\]·$(__lab_ns)\[\e[0m\] \[\e[38;2;52;211;153m\]\w\[\e[0m\] \[\e[38;2;56;189;248m\]❯\[\e[0m\] '
 cd 2>/dev/null

@@ -74,19 +74,40 @@ func VerifyGeneratedKubernetesLab(q models.Question) error {
 		}
 	}
 	if _, err := sh(base+q.AnswerCommand, 180); err != nil {
-		return fmt.Errorf("solucao Kubernetes nao aplicou: %w", err)
-	}
-	for _, validation := range appendValidationObjects(q) {
-		output, validationErr := sh(base+validation.Command, 60)
-		if validationErr != nil {
-			return fmt.Errorf("validador Kubernetes falhou: %w", validationErr)
+		// kubectl scale/patch logo após o create pode correr na frente do
+		// controller — uma segunda tentativa elimina a corrida sem mascarar
+		// solução realmente quebrada.
+		time.Sleep(3 * time.Second)
+		if _, err2 := sh(base+q.AnswerCommand, 180); err2 != nil {
+			return fmt.Errorf("solucao Kubernetes nao aplicou: %w", err2)
 		}
+	}
+	// Validadores com espera de convergência: rollout leva segundos e validar
+	// imediatamente reprovava lab legítimo (visto na autoria real: "nao
+	// confirmou 5" com as réplicas ainda subindo). Backoff até ~75s.
+	for _, validation := range appendValidationObjects(q) {
 		want := validation.ExpectedContains
 		if want == "" {
 			want = validation.ExpectedOutput
 		}
-		if want != "" && !strings.Contains(output, want) {
-			return fmt.Errorf("validador Kubernetes nao confirmou %q", want)
+		var lastErr error
+		confirmed := false
+		for attempt := 0; attempt < 6 && !confirmed; attempt++ {
+			if attempt > 0 {
+				time.Sleep(time.Duration(attempt) * 5 * time.Second)
+			}
+			output, validationErr := sh(base+validation.Command, 60)
+			switch {
+			case validationErr != nil:
+				lastErr = fmt.Errorf("validador Kubernetes falhou: %w", validationErr)
+			case want != "" && !strings.Contains(output, want):
+				lastErr = fmt.Errorf("validador Kubernetes nao confirmou %q", want)
+			default:
+				confirmed = true
+			}
+		}
+		if !confirmed {
+			return lastErr
 		}
 	}
 	if len(q.Teardown) > 0 {

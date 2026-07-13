@@ -1,12 +1,35 @@
 package handlers
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"estudo-app/internal/models"
 )
+
+func TestUserActivityTracksTutorButIgnoresProbes(t *testing.T) {
+	activityMu.Lock()
+	lastActivity = time.Now().Add(-time.Hour)
+	activityMu.Unlock()
+	h := UserActivity(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/tutor/chat/stream", nil))
+	if idleFor() > time.Second {
+		t.Fatalf("uso do tutor deveria renovar atividade; idle=%s", idleFor())
+	}
+
+	activityMu.Lock()
+	lastActivity = time.Now().Add(-time.Hour)
+	activityMu.Unlock()
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if idleFor() < 59*time.Minute {
+		t.Fatalf("probe publico nao pode manter VM ligada; idle=%s", idleFor())
+	}
+}
 
 func TestContextNameValidation(t *testing.T) {
 	valid := []string{"minikube", "k8s-study-lab", "arn:aws:eks:us-east-1:123:cluster/prod",
@@ -43,8 +66,8 @@ func TestCloudShellNamespaceAccessScript(t *testing.T) {
 	}
 	script := cloudShellNamespaceAccessScript("lab-alice", "lab-user", q)
 	mustContain := []string{
-		"kubectl -n default create rolebinding lab-shell-alice-default --clusterrole=admin --serviceaccount=lab-alice:lab-user",
-		"kubectl -n tools create rolebinding lab-shell-alice-tools --clusterrole=admin --serviceaccount=lab-alice:lab-user",
+		"kubectl -n lab-alice create rolebinding lab-shell-alice-lab-alice --clusterrole=admin --serviceaccount=lab-alice:lab-user",
+		"kubectl -n lab-alice-tools create rolebinding lab-shell-alice-lab-alice-tools --clusterrole=admin --serviceaccount=lab-alice:lab-user",
 	}
 	for _, want := range mustContain {
 		if !strings.Contains(script, want) {
@@ -86,6 +109,22 @@ func TestCloudShellClusterRBACIsNarrow(t *testing.T) {
 	}
 }
 
+func TestCloudShellClusterPodReaderIsReadOnlyAndDemandDriven(t *testing.T) {
+	q := &models.Question{Cert: models.CKA, Topic: "Troubleshooting", Question: "Liste os pods com kubectl get pods -A e encontre a falha"}
+	script := cloudShellNamespaceAccessScript("lab-alice", "lab-user", q)
+	want := "create clusterrole lab-shell-alice-pod-reader --verb=get,list,watch --resource=pods,pods/log"
+	if !strings.Contains(script, want) {
+		t.Fatalf("lab com pods -A deve receber leitura cluster-wide estreita: %s", script)
+	}
+	if strings.Contains(script, "cluster-admin") || strings.Contains(script, "pod-reader --verb=create") || strings.Contains(script, "pod-reader --verb=delete") {
+		t.Fatalf("pod-reader nao pode conceder escrita nem cluster-admin: %s", script)
+	}
+	ordinary := cloudShellNamespaceAccessScript("lab-alice", "lab-user", &models.Question{Question: "kubectl get pods"})
+	if strings.Contains(ordinary, "pod-reader") {
+		t.Fatalf("consulta namespaced nao deve abrir leitura cluster-wide: %s", ordinary)
+	}
+}
+
 func TestCloudShellRBACIncludesDynamicLabNamespace(t *testing.T) {
 	q := &models.Question{
 		Cert:          models.CKA,
@@ -102,16 +141,26 @@ func TestCloudShellRBACIncludesDynamicLabNamespace(t *testing.T) {
 	}
 }
 
-func TestCloudShellRCDefaultsToDefaultNamespace(t *testing.T) {
+func TestCloudShellRCDefaultsToPrivateNamespace(t *testing.T) {
 	rc := cloudShellRC("lab-alice")
 	for _, want := range []string{
-		"namespace: default",
+		"namespace: lab-alice",
 		`export LAB_NAMESPACE="lab-alice"`,
 		"alias kdefault=",
 		"alias klab=",
 	} {
 		if !strings.Contains(rc, want) {
 			t.Fatalf("rcfile nao contem %q\nrc=%s", want, rc)
+		}
+	}
+}
+
+func TestScopeLabForUserRewritesExplicitDefaultNamespace(t *testing.T) {
+	q := models.Question{Question: "use namespace default", AnswerCommand: "kubectl get pods -n default", Validation: &models.Validation{Command: "kubectl get pods --namespace=default"}}
+	got := scopeLabForUser(q, "alice")
+	for _, text := range []string{got.Question, got.AnswerCommand, got.Validation.Command} {
+		if strings.Contains(text, "default") || !strings.Contains(text, "lab-alice") {
+			t.Fatalf("referencia nao isolada: %q", text)
 		}
 	}
 }

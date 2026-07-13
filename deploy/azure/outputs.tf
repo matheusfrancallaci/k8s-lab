@@ -27,3 +27,13 @@ output "vm_name" {
   description = "Nome da VM (p/ az vm start/stop)."
   value       = azurerm_linux_virtual_machine.lab.name
 }
+
+output "postgres_fqdn" {
+  description = "FQDN privado do PostgreSQL Flexible Server."
+  value       = azurerm_postgresql_flexible_server.lab.fqdn
+}
+
+output "key_vault_name" {
+  description = "Key Vault que guarda a URL do banco para a managed identity da VM."
+  value       = azurerm_key_vault.lab.name
+}

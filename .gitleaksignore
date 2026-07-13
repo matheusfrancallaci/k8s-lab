@@ -1,0 +1,6 @@
+# Credenciais didaticas fixas do exercicio CKAD Secret (abc123/xyz789).
+questions/ckad/lab.yaml:generic-api-key:125
+questions/ckad/lab.yaml:generic-api-key:128
+questions/ckad/lab.yaml:generic-api-key:130
+# Bundle vendorizado/minificado do xterm; nao e credencial da aplicacao.
+web/static/vendor/xterm.js:generic-api-key:1

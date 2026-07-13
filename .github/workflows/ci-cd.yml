@@ -1,0 +1,187 @@
+name: CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit, branch ou tag a publicar
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: estudo-app-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'production' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  ACR: k8slabacrb9ue3
+  RG: k8slab-rg
+  VM: k8slab-vm
+  IMAGE: estudo-app
+  APP_URL: ${{ secrets.APP_URL }}
+
+jobs:
+  quality:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
+      E2E_INVITE_CODE: ${{ secrets.E2E_INVITE_CODE }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Secret scan
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Secret scan for manually selected source
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks detect --source . --no-git --redact --verbose
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Format, vet, build and tests
+        shell: bash
+        run: |
+          unformatted=$(gofmt -l internal/ main.go)
+          test -z "$unformatted" || { echo "$unformatted"; exit 1; }
+          go vet ./...
+          go build ./...
+          go test -count=1 ./...
+          go test -race -count=1 ./internal/tutor ./internal/handlers ./internal/repository
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Frontend and E2E checks
+        run: |
+          npm ci
+          npm audit --audit-level=moderate
+          npm run test:e2e -- --list
+
+      - name: Infrastructure validation
+        run: bash -n deploy/azure/sync-runtime.sh deploy/azure/verify-runtime.sh
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Terraform validation
+        run: |
+          terraform -chdir=deploy/azure fmt -check
+          terraform -chdir=deploy/azure init -backend=false
+          terraform -chdir=deploy/azure validate
+
+      - name: Production browser regression
+        if: ${{ env.E2E_BASE_URL != '' && env.E2E_INVITE_CODE != '' }}
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+
+  build_and_deploy:
+    name: Build image and deploy production
+    needs: quality
+    if: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Resolve immutable version
+        id: version
+        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and publish immutable image
+        run: |
+          az acr build --registry "$ACR" \
+            --image "$IMAGE:${{ steps.version.outputs.sha }}" \
+            --image "$IMAGE:latest" \
+            --build-arg VERSION=${{ steps.version.outputs.sha }} .
+
+      - name: Pull image for security verification
+        run: |
+          az acr login --name "$ACR"
+          docker pull "$ACR.azurecr.io/$IMAGE:${{ steps.version.outputs.sha }}"
+
+      - name: Container vulnerability gate
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: k8slabacrb9ue3.azurecr.io/estudo-app:${{ steps.version.outputs.sha }}
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Generate release SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: k8slabacrb9ue3.azurecr.io/estudo-app:${{ steps.version.outputs.sha }}
+          artifact-name: sbom-${{ steps.version.outputs.sha }}.spdx.json
+
+      - name: Start runtime and acquire deploy lease
+        run: |
+          power=$(az vm get-instance-view -g "$RG" -n "$VM" --query "instanceView.statuses[?starts_with(code,'PowerState')].displayStatus" -o tsv)
+          if [ "$power" != "VM running" ]; then az vm start -g "$RG" -n "$VM"; fi
+          az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts "touch /run/lab-busy" --query "value[0].message" -o tsv >/dev/null
+
+      - name: Reconcile persistent runtime
+        run: |
+          out=$(az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts @deploy/azure/sync-runtime.sh --query "value[0].message" -o tsv)
+          echo "$out"
+          grep -q RUNTIME_SYNC_OK <<<"$out"
+
+      - name: Switch container only after build succeeds
+        run: |
+          sha=${{ steps.version.outputs.sha }}
+          script="set -e; trap 'rm -f /run/lab-busy' EXIT; touch /run/lab-busy; az acr login --name $ACR >/dev/null; docker pull $ACR.azurecr.io/$IMAGE:$sha >/dev/null; docker pull $ACR.azurecr.io/$IMAGE:latest >/dev/null; want=\$(docker inspect --format '{{.Id}}' $ACR.azurecr.io/$IMAGE:$sha); latest=\$(docker inspect --format '{{.Id}}' $ACR.azurecr.io/$IMAGE:latest); test \"\$want\" = \"\$latest\"; systemctl restart estudo-app.service; sleep 12; got=\$(docker inspect --format '{{.Image}}' lab); test \"\$want\" = \"\$got\"; echo MATCH \$got"
+          out=$(az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts "$script" --query "value[0].message" -o tsv)
+          echo "$out"
+          grep -q MATCH <<<"$out"
+
+      - name: Verify runtime and live release
+        run: |
+          out=$(az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts @deploy/azure/verify-runtime.sh --query "value[0].message" -o tsv)
+          echo "$out"
+          grep -q RUNTIME_VERIFY_OK <<<"$out"
+          test -n "$APP_URL"
+          base="${APP_URL%/}"
+          for i in $(seq 1 15); do
+            health=$(curl -fsS "$base/healthz" || true)
+            grep -q "ok ${{ steps.version.outputs.sha }}" <<<"$health" && break
+            test "$i" -lt 15 || exit 1
+            sleep 5
+          done
+          test "$(curl -fsS "$base/readyz")" = ready
+          curl -fsS --max-time 180 "$base/api/tutor/deploy-gate" | tee gate.json
+          jq -e '.passed == true' gate.json >/dev/null
