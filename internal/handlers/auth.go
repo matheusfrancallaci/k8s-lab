@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"estudo-app/internal/persistence"
 	"estudo-app/internal/tutor"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -136,13 +137,21 @@ type persistedSession struct {
 // LoadAuthSessions recarrega as sessões válidas do disco no boot. Chamado uma
 // vez no start (antes de servir tráfego).
 func LoadAuthSessions() {
-	b, err := os.ReadFile(sessionsFile())
-	if err != nil {
-		return
-	}
 	var doc map[string]persistedSession
-	if json.Unmarshal(b, &doc) != nil {
-		return
+	loadedFromDatabase := false
+	if persistence.Enabled() {
+		found, err := persistence.Get("auth", "sessions", &doc)
+		if err != nil {
+			log.Printf("[auth] falha ao carregar sessoes do PostgreSQL; usando disco: %v", err)
+		} else {
+			loadedFromDatabase = found
+		}
+	}
+	if !loadedFromDatabase {
+		b, err := os.ReadFile(sessionsFile())
+		if err != nil || json.Unmarshal(b, &doc) != nil {
+			return
+		}
 	}
 	now := time.Now()
 	authMu.Lock()
@@ -152,6 +161,11 @@ func LoadAuthSessions() {
 		}
 	}
 	authMu.Unlock()
+	if persistence.Enabled() && !loadedFromDatabase {
+		if err := persistence.Put("auth", "sessions", doc); err != nil {
+			log.Printf("[auth] falha ao migrar sessoes para PostgreSQL: %v", err)
+		}
+	}
 }
 
 // persistSessions grava o mapa atual em disco. Tira um snapshot sob o lock e
@@ -173,20 +187,41 @@ func persistSessions() {
 		return
 	}
 	_ = os.WriteFile(sessionsFile(), b, 0o600)
+	if persistence.Enabled() {
+		if err := persistence.Put("auth", "sessions", snap); err != nil {
+			log.Printf("[auth] falha ao persistir sessoes no PostgreSQL: %v", err)
+		}
+	}
 }
 
 func ensureUsers() { usersOnce.Do(loadUsers) }
 
 func loadUsers() {
-	b, err := os.ReadFile(usersFile())
-	if err != nil {
-		return
-	}
 	var doc struct {
 		Users map[string]string `json:"users"`
 	}
-	if json.Unmarshal(b, &doc) == nil && doc.Users != nil {
+	loadedFromDatabase := false
+	if persistence.Enabled() {
+		found, err := persistence.Get("auth", "users", &doc)
+		if err != nil {
+			log.Printf("[auth] falha ao carregar usuarios do PostgreSQL; usando disco: %v", err)
+		} else {
+			loadedFromDatabase = found
+		}
+	}
+	if !loadedFromDatabase {
+		b, err := os.ReadFile(usersFile())
+		if err != nil || json.Unmarshal(b, &doc) != nil {
+			return
+		}
+	}
+	if doc.Users != nil {
 		users = doc.Users
+		if persistence.Enabled() && !loadedFromDatabase {
+			if err := persistence.Put("auth", "users", doc); err != nil {
+				log.Printf("[auth] falha ao migrar usuarios para PostgreSQL: %v", err)
+			}
+		}
 	}
 }
 
@@ -199,6 +234,13 @@ func saveUsers() {
 		Users map[string]string `json:"users"`
 	}{users}, "", "  ")
 	_ = os.WriteFile(usersFile(), b, 0o600)
+	if persistence.Enabled() {
+		if err := persistence.Put("auth", "users", struct {
+			Users map[string]string `json:"users"`
+		}{users}); err != nil {
+			log.Printf("[auth] falha ao persistir usuarios no PostgreSQL: %v", err)
+		}
+	}
 }
 
 // newSessionToken gera um token de 192 bits. Erro do CSPRNG é fatal para a
