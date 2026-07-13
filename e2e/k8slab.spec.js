@@ -131,6 +131,11 @@ test('checkpoint pedagogico aparece como card interativo', async ({ page }) => {
   await expect(page.locator('#chat-text')).toBeVisible();
   const css = await page.locator('.chat-input-zone').evaluate(el => getComputedStyle(el).position);
   expect(css).toBe('absolute');
+  const layout = await page.locator('.tutor-cols').boundingBox();
+  const viewport = page.viewportSize();
+  expect(layout.width).toBeGreaterThan(viewport.width * 0.8);
+  const sidebarWidth = await page.locator('.sidebar').evaluate(el => Math.round(getComputedStyle(el).width.replace('px','')));
+  expect(sidebarWidth).toBeLessThanOrEqual(72);
 });
 
 test('login, cria lab pelo tutor, abre terminal e valida comando real', async ({ page }) => {

@@ -4,16 +4,25 @@
 
 /* ── duas colunas: conversa + painel persistente ── */
 .tutor-cols {
-    height:100%; max-width:1480px; margin:0 auto;
-    display:grid; grid-template-columns:220px minmax(0,1fr); grid-template-rows:52px minmax(0,1fr); gap:0 18px; padding:0 20px;
+    width:100%; height:100%; max-width:none; margin:0;
+    display:grid; grid-template-columns:240px minmax(0,1fr); grid-template-rows:56px minmax(0,1fr); gap:0; padding:0;
 }
-.chat-wrap { grid-column:2; grid-row:2; height:100%; min-width:0; display:flex; flex-direction:column; position:relative; }
-.conversation-rail { grid-column:1; grid-row:1 / 3; min-width:0; border-right:1px solid var(--border); padding:14px 14px 20px 0; display:flex; flex-direction:column; gap:10px; background:linear-gradient(180deg,rgba(255,255,255,.018),transparent); }
+.tutor-shell .sidebar { width:68px; padding-inline:8px; overflow:hidden; }
+.tutor-shell .sidebar .sb-brand { justify-content:center; padding-inline:0; }
+.tutor-shell .sidebar .sb-brand .t,.tutor-shell .sidebar .sb-section,.tutor-shell .sidebar .sb-foot,.tutor-shell .sidebar .sb-user { display:none !important; }
+.tutor-shell .sidebar .sb-link { justify-content:center; width:42px; height:42px; padding:0; margin:2px auto; font-size:0; border-left:0; }
+.tutor-shell .sidebar .sb-link svg,.tutor-shell .sidebar .sb-link img { width:18px; height:18px; }
+.chat-wrap { grid-column:2; grid-row:2; height:100%; min-width:0; display:flex; flex-direction:column; position:relative; padding:0 24px; }
+.conversation-rail { grid-column:1; grid-row:1 / 3; min-width:0; border-right:1px solid var(--border); padding:18px 14px 20px; display:flex; flex-direction:column; gap:12px; background:linear-gradient(180deg,var(--surface),rgba(255,255,255,.012)); }
 .tutor-tabbar { grid-column:2; grid-row:1; display:flex; align-items:center; justify-content:center; gap:4px; border-bottom:1px solid var(--border); backdrop-filter:blur(16px); }
+.tutor-heading { position:absolute; left:22px; display:flex; align-items:center; gap:9px; }
+.tutor-heading img { width:22px; height:22px; }
+.tutor-heading b { display:block; font-size:12px; color:var(--text); }
+.tutor-heading small { display:block; font:9px var(--mono); color:var(--text-4); }
 .tutor-tab { border:0; border-radius:8px; background:transparent; color:var(--text-4); padding:7px 11px; cursor:pointer; font:10px var(--mono); }
 .tutor-tab:hover,.tutor-tab.active { background:var(--surface-2); color:var(--text); }
 .tutor-tab.active { box-shadow:inset 0 -2px var(--violet); }
-.tutor-tab-pane { grid-column:2; grid-row:2; min-width:0; height:100%; overflow:auto; padding:14px 2px 20px; display:none; }
+.tutor-tab-pane { grid-column:2; grid-row:2; min-width:0; height:100%; overflow:auto; padding:24px max(24px,calc((100% - 980px)/2)); display:none; }
 .tutor-tab-pane.active { display:block; }
 .conversation-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .conversation-head strong { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); }
@@ -27,8 +36,8 @@
 
 /* ── header discreto ── */
 .chat-top {
-    display:flex; align-items:center; justify-content:flex-end; gap:10px;
-    padding:14px 2px 0; flex-shrink:0;
+    position:absolute; top:-44px; right:24px; z-index:4; display:flex; align-items:center; justify-content:flex-end; gap:8px;
+    padding:0; flex-shrink:0;
 }
 .llm-pill {
     display:inline-flex; align-items:center; gap:7px;
@@ -199,11 +208,12 @@
 .attachment-preview { display:none; margin:0 0 8px; padding:8px 10px; border:1px solid var(--sky-glow); border-radius:8px; color:var(--sky); font:10px var(--mono); }
 .attachment-preview.visible { display:flex; justify-content:space-between; gap:10px; }
 .chat-log[aria-busy="true"] { cursor:progress; }
-.cert-row { display:flex; align-items:center; gap:6px; margin-bottom:8px; padding:0 4px; flex-wrap:wrap; max-height:74px; overflow:auto; }
+.cert-row { display:flex; align-items:center; gap:5px; margin-bottom:8px; padding:0 4px 3px; flex-wrap:nowrap; max-height:34px; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; }
+.cert-row > span { flex:0 0 auto; }
 .cert-chip {
     padding:3px 10px; border-radius:999px; font-family:var(--mono); font-size:10px; font-weight:600;
     color:var(--text-4); border:1px solid transparent; background:transparent; cursor:pointer;
-    transition:all .14s;
+    transition:all .14s; flex:0 0 auto;
 }
 .cert-chip.active { color:var(--violet); border-color:var(--violet-glow); background:var(--violet-dim); }
 .chat-input {
@@ -248,9 +258,16 @@
     }
     .painel.open { transform:translateX(0); }
 }
+@media (max-width:860px){
+    .tutor-shell .sidebar { width:100%; overflow-x:auto; }
+    .tutor-shell .sidebar .sb-brand .t { display:block; }
+    .tutor-shell .sidebar .sb-link { width:38px; height:38px; }
+    .chat-wrap { padding:0 10px; }
+    .chat-top { right:10px; }
+}
 </style>
 
-<div class="shell">
+<div class="shell tutor-shell">
 {{template "sidebar" .}}
 <div class="shell-main tutor-root">
 
@@ -262,6 +279,7 @@
 </nav>
 
 <div class="tutor-tabbar" role="tablist" aria-label="Áreas do tutor">
+    <div class="tutor-heading"><img src="/static/vendor/kubernetes.svg" alt=""><div><b>Tutor técnico</b><small>aprenda · pratique · valide</small></div></div>
     <button class="tutor-tab active" data-tab="chat" onclick="switchTutorTab('chat')" role="tab">Conversa</button>
     <button class="tutor-tab" data-tab="progress" onclick="switchTutorTab('progress')" role="tab">Progresso</button>
     <button class="tutor-tab" data-tab="sources" onclick="switchTutorTab('sources')" role="tab">Fontes</button>
