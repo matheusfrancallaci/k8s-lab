@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"estudo-app/internal/models"
 	"estudo-app/internal/repository"
@@ -69,7 +71,27 @@ func (h *LabHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/lab", http.StatusSeeOther)
 		return
 	}
-	q = scopeLabForUser(q, userID(r))
+	uid := userID(r)
+	lease := "lab:" + id
+	expiresAt := time.Now().UTC().Add(repository.LabSessionTTL())
+	if sid := r.URL.Query().Get("session"); sid != "" {
+		sess, found := h.labSessions.Get(uid, sid)
+		if !found {
+			http.Redirect(w, r, "/lab?expired=1", http.StatusSeeOther)
+			return
+		}
+		lease = "session:" + sess.ID
+		expiresAt = sess.ExpiresAt
+	}
+	environmentID := ""
+	if env, err := beginLabEnvironment(uid, lease, expiresAt); err != nil {
+		http.Error(w, err.Error(), http.StatusGone)
+		return
+	} else if env != nil {
+		environmentID = env.ID
+		expiresAt = env.ExpiresAt
+	}
+	q = scopeLabForUser(q, uid)
 	q = tutor.PrepareLabForDelivery(q)
 	// Gabarito PROVADO quebrado pela execução não chega ao aluno.
 	if reason := tutor.DeliveryBlockReason(q); reason != "" {
@@ -79,7 +101,7 @@ func (h *LabHandler) Show(w http.ResponseWriter, r *http.Request) {
 	prevID, nextID := h.repo.GetLabNeighbors(id)
 
 	// Contexto do tutor: eventos do terminal serão atribuídos a esta questão.
-	tutor.SetActiveQuestion(userID(r), q)
+	tutor.SetActiveQuestion(uid, q)
 
 	// Build effective goals: use explicit Goals if defined, else synthesize from question's own Validation
 	goals := q.Goals
@@ -97,7 +119,7 @@ func (h *LabHandler) Show(w http.ResponseWriter, r *http.Request) {
 	sessionIsLast := false
 	sessionPct := 0
 	if sid := r.URL.Query().Get("session"); sid != "" {
-		if sess, ok := h.labSessions.Get(userID(r), sid); ok {
+		if sess, ok := h.labSessions.Get(uid, sid); ok {
 			sessionID = sess.ID
 			sessionIndex = sess.Index + 1 // 1-based for display
 			sessionTotal = len(sess.Questions)
@@ -109,18 +131,22 @@ func (h *LabHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]any{
-		"Question":      q,
-		"Goals":         goals,
-		"HasSetup":      len(q.Setup) > 0,
-		"PrevID":        prevID,
-		"NextID":        nextID,
-		"SessionID":     sessionID,
-		"SessionIndex":  sessionIndex,
-		"SessionTotal":  sessionTotal,
-		"SessionIsLast": sessionIsLast,
-		"SessionPct":    sessionPct,
-		"TrustLabel":    labTrustLabel(q),
-		"TrustTone":     labTrustTone(q),
+		"Question":               q,
+		"Goals":                  goals,
+		"HasSetup":               len(q.Setup) > 0,
+		"PrevID":                 prevID,
+		"NextID":                 nextID,
+		"SessionID":              sessionID,
+		"SessionIndex":           sessionIndex,
+		"SessionTotal":           sessionTotal,
+		"SessionIsLast":          sessionIsLast,
+		"SessionPct":             sessionPct,
+		"EnvironmentID":          environmentID,
+		"EnvironmentExpiresUnix": expiresAt.UnixMilli(),
+		"EnvironmentTTLMinutes":  int(repository.LabSessionTTL().Minutes()),
+		"VirtualCluster":         virtualClustersEnabled(),
+		"TrustLabel":             labTrustLabel(q),
+		"TrustTone":              labTrustTone(q),
 	}
 	h.render(w, "lab.html", data)
 }
@@ -155,6 +181,12 @@ func labTrustTone(q models.Question) string {
 }
 
 func scopeLabForUser(q models.Question, uid string) models.Question {
+	if virtualClustersEnabled() {
+		// A tenant cluster already provides the isolation boundary. Preserve the
+		// namespaces from the exam material so official `default`, `tools` and
+		// cluster-scoped exercises behave exactly as written inside that cluster.
+		return q
+	}
 	ns := userLabNamespace(uid)
 	if ns == "" {
 		return q
@@ -210,6 +242,13 @@ func (h *LabHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	if req.Count > 50 {
 		req.Count = 50
 	}
+	clusterCtx, cancelCluster := context.WithTimeout(r.Context(), 10*time.Minute)
+	defer cancelCluster()
+	if err := EnsureClusterReady(clusterCtx); err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]any{"error": "a sessao nao foi criada porque o cluster nao subiu: " + err.Error()}) //nolint:errcheck
+		return
+	}
 
 	questions := h.repo.FilterLabs(req.Certs, req.Difficulty, req.Topics)
 	if len(questions) == 0 {
@@ -231,11 +270,28 @@ func (h *LabHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		ids[i] = questions[i].ID
 	}
 
-	sess := h.labSessions.Create(userID(r), ids)
+	uid := userID(r)
+	sess := h.labSessions.Create(uid, ids)
+	if _, err := beginLabEnvironment(uid, "session:"+sess.ID, sess.ExpiresAt); err != nil {
+		h.labSessions.End(uid, sess.ID)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]any{"error": "nao consegui reservar o cluster do usuario: " + err.Error()}) //nolint:errcheck
+		return
+	}
+	if _, err := provisionLabEnvironment(clusterCtx, uid, nil); err != nil {
+		h.labSessions.End(uid, sess.ID)
+		if env, found := activeLabEnvironment(uid); found {
+			endLabEnvironment(uid, env.ID)
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]any{"error": "a sessao nao foi criada porque o cluster isolado nao subiu: " + err.Error()}) //nolint:errcheck
+		return
+	}
 	json.NewEncoder(w).Encode(map[string]any{
-		"id":    sess.ID,
-		"first": ids[0],
-		"total": len(ids),
+		"id":         sess.ID,
+		"first":      ids[0],
+		"total":      len(ids),
+		"expires_at": sess.ExpiresAt,
 	})
 }
 
@@ -267,6 +323,10 @@ func (h *LabHandler) AdvanceSession(w http.ResponseWriter, r *http.Request) {
 		// Fim de sessão: resumo honesto (aprovado/pulou/dica/solução/...)
 		// para a UI mostrar a verdade, não só "concluído".
 		resp["outcomes"] = tutor.OutcomesFor(uid, sessionQuestions)
+		h.labSessions.End(uid, sid)
+		if env, found := activeLabEnvironment(uid); found && env.Lease == "session:"+sid {
+			endLabEnvironment(uid, env.ID)
+		}
 	}
 	json.NewEncoder(w).Encode(resp)
 }
@@ -291,6 +351,9 @@ func (h *LabHandler) State(w http.ResponseWriter, r *http.Request) {
 
 func runCmd(cmdStr, userID string) (string, error) {
 	touchActivity()
+	if virtualClustersEnabled() {
+		return runVirtualLabCommand(cmdStr, userID)
+	}
 	cmd := wslShell(cmdStr)
 	// LAB_USER isola o workspace de labs de IaC (Terraform): cada conta usa
 	// ~/tflab/$LAB_USER/<lab>, evitando colisão no cluster/host compartilhado.
@@ -336,6 +399,24 @@ func (h *LabHandler) Setup(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	clusterCtx, cancelCluster := context.WithTimeout(r.Context(), 10*time.Minute)
+	defer cancelCluster()
+	if _, err := provisionLabEnvironment(clusterCtx, userID(r), func(status string) {
+		msg, _ := json.Marshal(map[string]any{"type": "environment", "msg": status})
+		fmt.Fprintf(w, "data: %s\n\n", msg)
+		flusher.Flush()
+	}); err != nil {
+		msg, _ := json.Marshal(map[string]any{"type": "error", "msg": "cluster isolado nao subiu: " + err.Error()})
+		fmt.Fprintf(w, "data: %s\n\n", msg)
+		flusher.Flush()
+		return
+	}
+	if err := EnsureClusterReady(clusterCtx); err != nil {
+		msg, _ := json.Marshal(map[string]any{"type": "error", "msg": "cluster nao subiu: " + err.Error()})
+		fmt.Fprintf(w, "data: %s\n\n", msg)
+		flusher.Flush()
+		return
+	}
 
 	id := r.PathValue("id")
 	q, ok := h.repo.GetByID(id)
@@ -426,6 +507,11 @@ type validateResponse struct {
 
 func (h *LabHandler) Validate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	if _, err := requireLabEnvironment(userID(r)); err != nil {
+		w.WriteHeader(http.StatusGone)
+		json.NewEncoder(w).Encode(validateResponse{Success: false, Output: err.Error(), EnvIssue: true}) //nolint:errcheck
+		return
+	}
 
 	id := r.PathValue("id")
 	q, ok := h.repo.GetByID(id)

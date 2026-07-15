@@ -86,7 +86,7 @@
             'labs.study':     { pt: 'Sessão de Estudo', en: 'Study Session' },
             'labs.study.d':   { pt: 'configure abaixo: hints, solution e tutor liberados', en: 'configure below: hints, solution and tutor enabled' },
             'labs.exam':      { pt: 'Modo Exame', en: 'Exam Mode' },
-            'labs.exam.d':    { pt: '16 questões · 2h · sem dicas · score report', en: '16 questions · 2h · no hints · score report' },
+            'labs.exam.d':    { pt: '16 questões · 1h · sem dicas · score report', en: '16 questions · 1h · no hints · score report' },
             'labs.incident':  { pt: 'Modo Incidente', en: 'Incident Mode' },
             'labs.incident.d':{ pt: 'o cluster chega quebrado — diagnostique e conserte', en: 'the cluster arrives broken — diagnose and fix it' },
             'labs.start':     { pt: 'INICIAR SESSÃO', en: 'START SESSION' },

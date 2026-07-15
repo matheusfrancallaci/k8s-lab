@@ -73,7 +73,101 @@ func (h *TutorHandler) Status(w http.ResponseWriter, r *http.Request) {
 		"certs":           tutor.AllCerts(),
 		"llm":             map[string]any{"available": llmOK, "model": llmModel},
 		"model_readiness": tutor.LLMModelReadiness(),
+		"premium_usage":   tutor.PremiumUsageFor(uid),
 	})
+}
+
+// VerifyCurriculum reads an optional official exam/documentation page, learns
+// unknown certifications from it and returns the domain -> competency tree.
+// Known certifications are refreshed from their curated official sources.
+func (h *TutorHandler) VerifyCurriculum(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var body struct {
+		Cert   string `json:"cert"`
+		Source string `json:"source"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]any{"error": "payload invalido"}) //nolint:errcheck
+		return
+	}
+	body.Cert = tutor.CanonicalCert(strings.TrimSpace(body.Cert))
+	if body.Cert == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]any{"error": "escolha uma certificacao"}) //nolint:errcheck
+		return
+	}
+	var verified []string
+	var warnings []string
+	if source := strings.TrimSpace(body.Source); source != "" {
+		text, sources, blocked := tutor.EnrichSource(source)
+		if len(blocked) > 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]any{"error": "a fonte precisa ser uma pagina oficial permitida", "blocked": blocked}) //nolint:errcheck
+			return
+		}
+		if len(sources) == 0 || len(text) < 100 {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			json.NewEncoder(w).Encode(map[string]any{"error": "nao consegui ler conteudo suficiente dessa pagina"}) //nolint:errcheck
+			return
+		}
+		verified = sources
+		if _, ok := tutor.CurriculumFor(body.Cert); !ok {
+			if _, learned := tutor.LearnCurriculumFromMaterial(body.Cert, text, sources); !learned {
+				w.WriteHeader(http.StatusUnprocessableEntity)
+				json.NewEncoder(w).Encode(map[string]any{"error": "a pagina foi lida, mas nao encontrei dominios de certificacao confiaveis"}) //nolint:errcheck
+				return
+			}
+		}
+	} else {
+		_, sources, _, ok := tutor.FetchCurriculum(body.Cert, 1)
+		if ok {
+			verified = sources
+		}
+		if len(verified) == 0 {
+			warnings = append(warnings, "curriculo conhecido, mas as fontes oficiais nao responderam agora")
+		}
+	}
+	view, ok := tutor.CurriculumViewFor(body.Cert)
+	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]any{"error": "certificacao sem curriculo; informe a URL oficial do exame"}) //nolint:errcheck
+		return
+	}
+	if source := strings.TrimSpace(body.Source); source != "" {
+		for domainIndex := range view.Domains {
+			for itemIndex := range view.Domains[domainIndex].Competencies {
+				item := &view.Domains[domainIndex].Competencies[itemIndex]
+				item.Source = source
+				item.Researchable = true
+				if !item.Available {
+					item.Prompt = "Pesquise a documentacao oficial e tente criar um lab funcional para " + body.Cert + " sobre " + item.Label + " usando " + source
+				}
+			}
+		}
+	}
+	json.NewEncoder(w).Encode(map[string]any{"curriculum": view, "verified_sources": verified, "warnings": warnings}) //nolint:errcheck
+}
+
+// AnalyzeDocument exposes the real sections of one trusted documentation page
+// so the learner can select an exact topic before any lab is generated.
+func (h *TutorHandler) AnalyzeDocument(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var body struct {
+		Source string `json:"source"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]any{"error": "payload invalido"}) //nolint:errcheck
+		return
+	}
+	topics, sources, err := tutor.AnalyzeDocumentTopics(body.Source)
+	if err != nil {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		json.NewEncoder(w).Encode(map[string]any{"error": err.Error()}) //nolint:errcheck
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]any{"topics": topics, "verified_sources": sources}) //nolint:errcheck
 }
 
 // Author engorda o banco em lote: labs nível prova com verificação executável
@@ -96,6 +190,42 @@ func (h *TutorHandler) Author(w http.ResponseWriter, r *http.Request) {
 	}
 	h.repo.Add(qs)
 	PrewarmLabImages(qs)
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "report": rep}) //nolint:errcheck
+}
+
+// AuthorMCQ gera questões de múltipla escolha SOB DEMANDA, ancoradas no
+// currículo/RAG (mode "concept", padrão, via IA local) ou derivadas de
+// templates com verificação executável dos distratores (mode "command"). Todo
+// dedup semântico usa o banco atual como referência.
+func (h *TutorHandler) AuthorMCQ(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var body struct {
+		Cert  string `json:"cert"`
+		Topic string `json:"topic"`
+		Count int    `json:"count"`
+		Level int    `json:"level"`
+		Mode  string `json:"mode"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"error": "payload inválido"}) //nolint:errcheck
+		return
+	}
+	existing := h.repo.Filter(nil, "")
+	var (
+		qs  []models.Question
+		rep tutor.MCQReport
+		err error
+	)
+	if strings.EqualFold(body.Mode, "command") {
+		qs, rep, err = tutor.AuthorCommandMCQBatch(body.Cert, body.Topic, body.Count, body.Level, existing)
+	} else {
+		qs, rep, err = tutor.AuthorMCQBatch(body.Cert, body.Topic, body.Count, body.Level, existing)
+	}
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"error": err.Error(), "report": rep}) //nolint:errcheck
+		return
+	}
+	h.repo.Add(qs)
 	json.NewEncoder(w).Encode(map[string]any{"ok": true, "report": rep}) //nolint:errcheck
 }
 
@@ -311,10 +441,11 @@ func (h *TutorHandler) ExamReport(w http.ResponseWriter, r *http.Request) {
 func (h *TutorHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var body struct {
-		Cert  string `json:"cert"`
-		Topic string `json:"topic"`
-		Level int    `json:"level"`
-		Count int    `json:"count"`
+		Cert   string `json:"cert"`
+		Topic  string `json:"topic"`
+		Source string `json:"source"`
+		Level  int    `json:"level"`
+		Count  int    `json:"count"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		json.NewEncoder(w).Encode(map[string]any{"error": "payload inválido"}) //nolint:errcheck
@@ -344,8 +475,21 @@ func (h *TutorHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	if body.Cert == "" {
 		body.Cert = "CKA"
 	}
-	request := fmt.Sprintf("Crie %d labs praticos sobre %s", body.Count, body.Topic)
-	qs, _, err := tutor.GenerateSmartLabs(request, body.Cert, body.Level, body.Count)
+	clusterCtx, cancelCluster := context.WithTimeout(r.Context(), 10*time.Minute)
+	defer cancelCluster()
+	if err := EnsureClusterReady(clusterCtx); err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]any{"error": "nao criei os labs porque o cluster nao subiu com sucesso: " + err.Error()}) //nolint:errcheck
+		return
+	}
+	var qs []models.Question
+	var err error
+	if strings.TrimSpace(body.Source) != "" {
+		qs, _, err = tutor.GenerateDocumentLabs(body.Source, body.Cert, body.Topic, body.Level, body.Count)
+	} else {
+		request := fmt.Sprintf("Crie %d labs praticos sobre %s", body.Count, body.Topic)
+		qs, _, err = tutor.GenerateSmartLabs(request, body.Cert, body.Level, body.Count)
+	}
 	if err != nil {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		json.NewEncoder(w).Encode(map[string]any{"error": err.Error()}) //nolint:errcheck
@@ -432,6 +576,16 @@ func (h *TutorHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uid := userID(r)
+	if tutor.RequiresClusterForRequest(body.Message, body.Cert) {
+		clusterCtx, cancelCluster := context.WithTimeout(r.Context(), 10*time.Minute)
+		err := EnsureClusterReady(clusterCtx)
+		cancelCluster()
+		if err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]any{"reply": "Nao criei o lab porque o cluster nao subiu com sucesso. Tente novamente depois de verificar o ambiente.", "error": err.Error()}) //nolint:errcheck
+			return
+		}
+	}
 	if ev, ok := tutor.EvaluateTutorCheckpoint(uid, body.ConversationID, body.Message); ok {
 		reply := checkpointFeedback(ev)
 		action := &tutor.ChatAction{Type: "checkpoint_result", CheckpointID: ev.CheckpointID, Outcome: ev.Outcome, Score: ev.Score, NextPrompt: ev.NextPrompt}
@@ -458,10 +612,13 @@ func (h *TutorHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	var sources []string
 	var audit *tutor.GroundingAudit
 	if res.NeedsLLM { // conversa livre: resolve o LLM síncrono (fallback = res.Reply)
-		if r, verified, checked, err := tutor.FreeChatConversationReplyContext(r.Context(), message, conversationTurnContext(uid, body.ConversationID, message, plan), body.Mode); err == nil && r != "" {
-			reply = r
+		route, _, reserved := tutor.ReserveConversationRoute(uid, message, body.Mode)
+		if answer, verified, checked, err := tutor.FreeChatConversationReplyWithRouteContext(r.Context(), message, conversationTurnContext(uid, body.ConversationID, message, plan), body.Mode, route); err == nil && answer != "" {
+			reply = answer
 			sources = verified
 			audit = &checked
+		} else if reserved {
+			tutor.ReleasePremiumQuestion(uid)
 		}
 	}
 	if audit != nil {
@@ -501,6 +658,16 @@ func (h *TutorHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uid := userID(r)
+	if tutor.RequiresClusterForRequest(body.Message, body.Cert) {
+		clusterCtx, cancelCluster := context.WithTimeout(r.Context(), 10*time.Minute)
+		err := EnsureClusterReady(clusterCtx)
+		cancelCluster()
+		if err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			fmt.Fprint(w, "Nao criei o lab porque o cluster nao subiu com sucesso. Verifique o ambiente e tente novamente.")
+			return
+		}
+	}
 	if ev, ok := tutor.EvaluateTutorCheckpoint(uid, body.ConversationID, body.Message); ok {
 		reply := checkpointFeedback(ev)
 		fmt.Fprint(w, reply)
@@ -532,7 +699,8 @@ func (h *TutorHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	if res.NeedsLLM && flusher != nil {
 		var got bool
 		var streamed strings.Builder
-		sources, audit, err := tutor.StreamConversationReplyContext(r.Context(), message, conversationTurnContext(uid, body.ConversationID, message, plan), body.Mode, func(chunk string) {
+		route, _, reserved := tutor.ReserveConversationRoute(uid, message, body.Mode)
+		sources, audit, err := tutor.StreamConversationReplyWithRouteContext(r.Context(), message, conversationTurnContext(uid, body.ConversationID, message, plan), body.Mode, route, func(chunk string) {
 			if chunk == "" {
 				return
 			}
@@ -541,6 +709,9 @@ func (h *TutorHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, chunk)
 			flusher.Flush()
 		})
+		if (err != nil || !got) && reserved {
+			tutor.ReleasePremiumQuestion(uid)
+		}
 		if err == nil && got {
 			pedagogy := tutor.AuditTeachingResponse(streamed.String(), plan)
 			audit.Pedagogy = &pedagogy
@@ -558,12 +729,16 @@ func (h *TutorHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if res.NeedsLLM { // sem flusher (raro): resolve síncrono
-		if r, sources, audit, err := tutor.FreeChatConversationReplyContext(r.Context(), message, conversationTurnContext(uid, body.ConversationID, message, plan), body.Mode); err == nil && r != "" {
-			pedagogy := tutor.AuditTeachingResponse(r, plan)
+		route, _, reserved := tutor.ReserveConversationRoute(uid, message, body.Mode)
+		if answer, sources, audit, err := tutor.FreeChatConversationReplyWithRouteContext(r.Context(), message, conversationTurnContext(uid, body.ConversationID, message, plan), body.Mode, route); err == nil && answer != "" {
+			pedagogy := tutor.AuditTeachingResponse(answer, plan)
 			audit.Pedagogy = &pedagogy
-			persistConversationTurn(uid, body.ConversationID, message, r, sources, &audit)
-			fmt.Fprint(w, r)
+			persistConversationTurn(uid, body.ConversationID, message, answer, sources, &audit)
+			fmt.Fprint(w, answer)
 			return
+		}
+		if reserved {
+			tutor.ReleasePremiumQuestion(uid)
 		}
 		fmt.Fprint(w, res.Reply)
 		return

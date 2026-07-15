@@ -58,4 +58,7 @@ make build     # binário local
 - **Planner pedagógico**: memória por aluno, pré-requisitos, diagnóstico de lacunas e estratégia explicável
 - **Grounding verificável**: RAG híbrido, allowlist de fontes, proteção contra prompt injection e citações por afirmação
 - **Labs com contrato de publicação**: digest de conteúdo, quality gate, verificação executável e estado real de prontidão
+- **Hospedagem multiusuário isolada**: um vCluster por usuário e sessão, lease absoluto de 1 hora e remoção automática de todos os recursos
 - **Operação mensurável**: fila da LLM, keep-alive, cancelamento, telemetria persistente p50/p95/p99 e TTFT
+
+Documentação detalhada: [arquitetura completa do tutor](docs/arquitetura-do-tutor.md)

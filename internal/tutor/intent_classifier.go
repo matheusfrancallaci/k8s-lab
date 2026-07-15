@@ -24,7 +24,10 @@ var (
 func ClassifyTutorRequest(msg, activeCert string) TutorIntentDecision {
 	text := strings.TrimSpace(msg)
 	cert := inferCertFromMessage(text, activeCert)
-	topic := exactTopicForRequest(cert, text)
+	topic := topicFromCurriculumOrRequest(cert, text)
+	if topic == "" {
+		topic = exactTopicForRequest(cert, text)
+	}
 	if topic == "" {
 		topic = detectTopic(text)
 	}

@@ -476,6 +476,31 @@ func TestPromptQualityRanksRealPrompts(t *testing.T) {
 	}
 }
 
+func TestPromptQualityIgnoresCurriculumClarification(t *testing.T) {
+	resetPromptQualityForTest()
+	RecordPromptQuality("alice", "Crie um lab para CKA", "CKA", ChatResult{
+		Action: &ChatAction{Type: "choices", Cert: "CKA"},
+	})
+	if rep := PromptQualityReport(); rep.Total != 0 {
+		t.Fatalf("clarificacao de curriculo nao deve virar regressao de lab: %+v", rep)
+	}
+}
+
+func TestHistoricalRegressionAcceptsTopicRefinement(t *testing.T) {
+	result := runHistoricalRegressionPrompt(PromptQualityCase{
+		Prompt:       "quero um lab estilo prova",
+		ActiveCert:   "CKA",
+		Cert:         "CKA",
+		Topic:        "Estilo Prova",
+		ActionType:   "session",
+		LastQuality:  100,
+		Dependencies: []string{"metrics-server"},
+	})
+	if !result.Passed || result.Score < 75 {
+		t.Fatalf("categoria antiga deve ser refinada para topico geravel: %+v", result)
+	}
+}
+
 func TestGoldenEvalIncludesHistoricalRegression(t *testing.T) {
 	t.Setenv("PROMPT_QUALITY_PATH", filepath.Join(t.TempDir(), "quality.json"))
 	resetPromptQualityForTest()
@@ -918,6 +943,68 @@ func TestCurriculumEmbedded(t *testing.T) {
 		}
 		if total != 100 {
 			t.Errorf("%s: pesos somam %d, deveriam somar 100", cert, total)
+		}
+	}
+}
+
+func TestBareCertificationRequestAsksForDomainBeforeGenerating(t *testing.T) {
+	created := false
+	res := Chat("learner", "Crie um lab para CKA", "CKA", func(ids []string) (string, string, int) {
+		created = true
+		return "", "", 0
+	})
+	if created || len(res.Questions) != 0 {
+		t.Fatal("pedido sem contexto nao deve criar sessao generica")
+	}
+	if res.Action == nil || res.Action.Type != "choices" || len(res.Action.Options) != 5 {
+		t.Fatalf("esperava dominios oficiais da CKA: %+v", res.Action)
+	}
+}
+
+func TestClusterGateOnlyBlocksLabProducingTurns(t *testing.T) {
+	if RequiresClusterForRequest("Crie um lab para CKA", "CKA") {
+		t.Fatal("escolha de dominio ainda nao cria lab")
+	}
+	if !RequiresClusterForRequest("Crie um lab de NodePort", "CKA") {
+		t.Fatal("pedido especifico precisa validar/subir o cluster")
+	}
+	if RequiresClusterForRequest("Explique a diferenca entre ClusterIP e NodePort", "CKA") {
+		t.Fatal("explicacao sem lab deve continuar disponivel offline")
+	}
+}
+
+func TestCurriculumDomainAsksForExactCompetency(t *testing.T) {
+	res := Chat("learner", "Quero criar um lab de CKA no dominio Cluster Architecture, Installation & Configuration", "CKA", func(ids []string) (string, string, int) {
+		t.Fatal("dominio ainda deve pedir a competencia")
+		return "", "", 0
+	})
+	if res.Action == nil || res.Action.Type != "choices" || len(res.Action.Options) != 8 {
+		t.Fatalf("esperava as 8 competencias oficiais: %+v", res.Action)
+	}
+	if res.Action.Options[0].Topic != "RBAC" || !res.Action.Options[0].Available {
+		t.Fatalf("RBAC deve aparecer como lab exato disponivel: %+v", res.Action.Options[0])
+	}
+}
+
+func TestExactTopicsAndTyposDoNotFallBackToGenericLabs(t *testing.T) {
+	cases := map[string]string{
+		"crie lab podAntiAffinity":         "Pod Affinity and Anti-Affinity",
+		"lab de NodePort":                  "NodePort",
+		"lab de Taint e Tolerations":       "Taints and Tolerations",
+		"lab sobre Admission controlle":    "Admission Control",
+		"lab de role based access control": "RBAC",
+	}
+	for prompt, want := range cases {
+		if got := exactTopicForRequest("CKA", prompt); got != want {
+			t.Errorf("%q roteou para %q, esperado %q", prompt, got, want)
+		}
+		qs := generateQuestions(want, "CKA", 2, 1)
+		if len(qs) != 1 || qs[0].Topic != want {
+			t.Errorf("%q nao produziu template exato: %+v", want, qs)
+			continue
+		}
+		if err := LabRequestAdherence(qs[0], prompt); err != nil {
+			t.Errorf("%q falhou no gate de aderencia: %v", prompt, err)
 		}
 	}
 }

@@ -507,8 +507,11 @@ func StreamLLMReplyContext(ctx context.Context, msg string, onChunk func(string)
 }
 
 func StreamConversationReplyContext(ctx context.Context, msg, history, mode string, onChunk func(string)) ([]string, GroundingAudit, error) {
+	return StreamConversationReplyWithRouteContext(ctx, msg, history, mode, RouteConversationModel(msg, mode), onChunk)
+}
+
+func StreamConversationReplyWithRouteContext(ctx context.Context, msg, history, mode string, route ModelRoute, onChunk func(string)) ([]string, GroundingAudit, error) {
 	prompt, report := BuildGroundedChatPromptWithContext(msg, history, mode)
-	route := RouteConversationModel(msg, mode)
 	if technicalQuestion(msg) && !report.Answerable {
 		if onChunk != nil {
 			onChunk(report.Refusal())

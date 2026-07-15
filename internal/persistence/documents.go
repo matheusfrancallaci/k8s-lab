@@ -104,6 +104,19 @@ func Put(kind, key string, value any) error {
 	return err
 }
 
+// Delete removes one persisted document. Stores that model active leases use
+// this when a lease ends so a restart cannot resurrect an expired environment.
+func Delete(kind, key string) error {
+	db, err := database()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	_, err = db.ExecContext(ctx, `DELETE FROM app_documents WHERE kind=$1 AND key=$2`, kind, key)
+	return err
+}
+
 func List(kind string, out any) error {
 	db, err := database()
 	if err != nil {

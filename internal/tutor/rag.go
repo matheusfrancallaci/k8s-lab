@@ -276,6 +276,11 @@ func RAGSearch(cert, query string, max int, hydrate bool) []RAGHit {
 		}
 		return hits[i].Score > hits[j].Score
 	})
+	// MMR: entre os melhores candidatos, prioriza cobertura sobre repetição —
+	// evita entregar 4 chunks quase idênticos da mesma seção.
+	if ragMMREnabled() && len(hits) > max {
+		return mmrRerank(hits, max)
+	}
 	if len(hits) > max {
 		hits = hits[:max]
 	}
@@ -500,9 +505,10 @@ func buildHydratedRAGIndex(cert string) *ragIndex {
 		return nil
 	}
 	idx := &ragIndex{Cert: cert, BuiltAt: time.Now(), Hydrated: true}
+	maxURLs := ragMaxURLsPerDomain()
 	for _, d := range cur {
 		for i, u := range d.URLs {
-			if i > 0 {
+			if i >= maxURLs {
 				break
 			}
 			content, err := fetchURL(u)

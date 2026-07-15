@@ -74,6 +74,29 @@ type LabReadiness struct {
 	Failure         string   `yaml:"failure,omitempty" json:"failure,omitempty"`
 }
 
+// QuestionReadiness é o contrato de publicação de uma QUESTÃO de múltipla
+// escolha gerada — o análogo de LabReadiness para labs. Uma questão gerada
+// nunca é implicitamente confiável: o backend registra o que foi provado.
+// Estados:
+//
+//	grounded — enunciado e resposta ancorados em evidência oficial (heurística
+//	           determinística); os distratores ainda não foram provados errados.
+//	verified — questão de comando cujos distratores foram EXECUTADOS num cluster
+//	           efêmero e comprovadamente NÃO satisfazem o validador do efeito.
+//	rejected — reprovada (não deve chegar ao aluno).
+type QuestionReadiness struct {
+	State         string   `yaml:"state" json:"state"`
+	Version       string   `yaml:"version" json:"version"`
+	ContentDigest string   `yaml:"content_digest" json:"content_digest"`
+	CheckedAt     string   `yaml:"checked_at" json:"checked_at"`
+	Grounded      bool     `yaml:"grounded" json:"grounded"`
+	Executable    bool     `yaml:"executable" json:"executable"`
+	VerifiedAt    string   `yaml:"verified_at,omitempty" json:"verified_at,omitempty"`
+	SourceURL     string   `yaml:"source_url,omitempty" json:"source_url,omitempty"`
+	Warnings      []string `yaml:"warnings,omitempty" json:"warnings,omitempty"`
+	Failure       string   `yaml:"failure,omitempty" json:"failure,omitempty"`
+}
+
 type LabPlan struct {
 	ExactTopic      string      `yaml:"exact_topic"`
 	Cert            string      `yaml:"cert"`
@@ -153,6 +176,9 @@ type Question struct {
 	Setup         []SetupStep  `yaml:"setup"`
 	Teardown      []string     `yaml:"teardown"`
 	LabSpec       *LabSpec     `yaml:"lab_spec,omitempty"`
+	// Readiness carrega a proveniência de uma questão de múltipla escolha gerada
+	// (labs guardam a prontidão em LabSpec.Readiness; MC não tem LabSpec).
+	Readiness *QuestionReadiness `yaml:"readiness,omitempty" json:"readiness,omitempty"`
 }
 
 type QuestionFile struct {

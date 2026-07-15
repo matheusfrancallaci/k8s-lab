@@ -50,7 +50,10 @@
                 </div>
             </div>
 
-            <div class="mono" style="font-size:12px;font-weight:700;color:var(--violet);" id="timer">00:00</div>
+            <div title="Seu cluster e todos os recursos serao removidos quando este tempo terminar" style="display:flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid var(--border-2);border-radius:8px;background:var(--surface-2);">
+                <span class="mono" style="font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-4);">cluster</span>
+                <span class="mono" style="font-size:12px;font-weight:800;color:var(--violet);" id="timer">60:00</span>
+            </div>
             <button onclick="endLab()" class="btn btn-danger btn-sm">Encerrar</button>
         </div>
     </div>
@@ -126,6 +129,15 @@
                     <div style="font-size:20px;color:var(--violet);animation:spin 1s linear infinite;display:inline-block;"></div>
                     <p style="font-size:11px;color:var(--text-3);margin-top:8px;">Limpando...</p>
                 </div>
+            </div>
+        </div>
+
+        <div id="environment-expired-overlay" class="full-overlay">
+            <div style="text-align:center;padding:0 24px;max-width:420px;">
+                <div style="font-size:34px;margin-bottom:12px;">⏱</div>
+                <h2 style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:7px;">Tempo do cluster encerrado</h2>
+                <p style="font-size:12px;color:var(--text-3);line-height:1.6;margin-bottom:20px;">A hora deste laboratório terminou. O cluster Kubernetes exclusivo e todos os recursos foram removidos automaticamente.</p>
+                <a href="/lab" class="btn btn-primary btn-lg">Iniciar um novo lab</a>
             </div>
         </div>
 
@@ -501,6 +513,7 @@ async function renderPostLabEvolution() {
 // ─────────────────────────────────────────────────────────────
 const LAB_TOPIC = '{{.Question.Topic}}';
 const LAB_CERT = '{{.Question.Cert}}';
+const VIRTUAL_CLUSTER = {{if .VirtualCluster}}true{{else}}false{{end}};
 let tutorShown = false;
 
 // Registra a sessão ativa para o card "continuar de onde parou" na home
@@ -517,10 +530,9 @@ try {
 let LLM_OK = false;
 
 // ─────────────────────────────────────────────────────────────
-// MODO EXAME — 2h, sem dicas, score report ao final
+// MODO EXAME — 1h, sem dicas, score report ao final
 // ─────────────────────────────────────────────────────────────
 const EXAM = new URLSearchParams(location.search).has('exam');
-const EXAM_MS = 120 * 60 * 1000;
 
 if (EXAM) {
     ['tab-hint', 'tab-solution'].forEach(id => {
@@ -777,29 +789,39 @@ function escT(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').r
 // Timer
 // ─────────────────────────────────────────────────────────────
 const timerEl = document.getElementById('timer');
-if (EXAM) {
-    // regressivo: 120 min desde o início do exame (persiste entre questões)
-    let start = 0;
+
+const LAB_ENVIRONMENT_ID = '{{.EnvironmentID}}';
+const LAB_ENVIRONMENT_EXPIRES_AT = {{.EnvironmentExpiresUnix}};
+let labEnvironmentExpired = false;
+
+async function expireLabEnvironment() {
+    if (labEnvironmentExpired) return;
+    labEnvironmentExpired = true;
+    timerEl.textContent = '00:00';
+    timerEl.style.color = 'var(--red)';
+    try { pageLeaving = true; } catch (e) {}
     try {
-        start = parseInt(localStorage.getItem(examKey('-start')) || '0');
-        if (!start) { start = Date.now(); localStorage.setItem(examKey('-start'), String(start)); }
-    } catch (e) { start = Date.now(); }
-    const tick = () => {
-        const left = EXAM_MS - (Date.now() - start);
-        if (left <= 0) { timerEl.textContent = '00:00'; finishExam(); return; }
-        const m = Math.floor(left / 60000), s = Math.floor(left % 60000 / 1000);
-        timerEl.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-        timerEl.style.color = left < 10 * 60000 ? 'var(--red)' : 'var(--violet)';
-        setTimeout(tick, 1000);
-    };
-    tick();
-} else {
-    let secs = 0;
-    setInterval(() => {
-        secs++;
-        timerEl.textContent = String(Math.floor(secs/60)).padStart(2,'0') + ':' + String(secs%60).padStart(2,'0');
-    }, 1000);
+        TERMS.forEach(h => { h.closed = true; if (h.ws) h.ws.close(); });
+    } catch (e) {}
+    try {
+        await fetch('/api/lab/environment?id=' + encodeURIComponent(LAB_ENVIRONMENT_ID), { method: 'DELETE' });
+    } catch (e) {}
+    try { localStorage.removeItem('k8slab-resume'); } catch (e) {}
+    const overlay = document.getElementById('environment-expired-overlay');
+    if (overlay) overlay.classList.add('active');
 }
+
+function tickLabEnvironment() {
+    const left = LAB_ENVIRONMENT_EXPIRES_AT - Date.now();
+    if (left <= 0) { expireLabEnvironment(); return; }
+    const totalSeconds = Math.ceil(left / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    timerEl.textContent = String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+    timerEl.style.color = left <= 5 * 60000 ? 'var(--red)' : left <= 15 * 60000 ? 'var(--amber)' : 'var(--violet)';
+    setTimeout(tickLabEnvironment, 1000);
+}
+tickLabEnvironment();
 
 // ─────────────────────────────────────────────────────────────
 // Navigation
@@ -815,6 +837,7 @@ async function endLab() {
     // de onde parou") e derruba os resources do lab.
     try { localStorage.removeItem('k8slab-resume'); } catch (e) {}
     try { await fetch('/lab/{{.Question.ID}}/teardown', { method: 'POST' }); } catch(e) {}
+    try { await fetch('/api/lab/environment?id=' + encodeURIComponent(LAB_ENVIRONMENT_ID), { method: 'DELETE' }); } catch(e) {}
     window.location.href = '/lab';
 }
 
@@ -829,6 +852,15 @@ async function navigateLab(url) {
 // ─────────────────────────────────────────────────────────────
 async function refreshEnvChip() {
     try {
+        if (VIRTUAL_CLUSTER) {
+            const chip = document.getElementById('env-chip');
+            chip.classList.add('cloud');
+            document.getElementById('env-chip-label').textContent = 'cluster exclusivo';
+            document.getElementById('env-menu-name').textContent = 'Kubernetes virtual · expira em 1h';
+            document.getElementById('env-menu-cloud-actions').style.display = 'none';
+            document.getElementById('term-title').innerHTML = '<span class="ico">⎈</span> bash — seu cluster Kubernetes isolado';
+            return;
+        }
         const r = await fetch('/api/cloud/status');
         const d = await r.json();
         const isCloud = d.active_context === d.cluster_name;
@@ -1165,7 +1197,9 @@ pickQuote('sov-quote', 'sov-quote-author');
 const resetES = new EventSource('/api/cluster/reset');
 resetES.onmessage = ev => {
     const msg = JSON.parse(ev.data);
-    if (msg.type === 'step') {
+    if (msg.type === 'environment') {
+        sovStatus.textContent = msg.msg;
+    } else if (msg.type === 'step') {
         if (msg.status === 'running') sovStatus.textContent = msg.desc + '...';
         if (msg.status === 'warn') sovErrors = true;
     } else if (msg.type === 'done') {
@@ -1184,7 +1218,9 @@ function startSovSetup() {
     const es = new EventSource('/lab/' + SESSION_QUESTION_ID + '/setup');
     es.onmessage = ev => {
         const msg = JSON.parse(ev.data);
-        if (msg.type === 'step') {
+        if (msg.type === 'environment') {
+            sovStatus.textContent = msg.msg;
+        } else if (msg.type === 'step') {
             if (msg.status === 'running') sovStatus.textContent = msg.description;
             if (msg.status === 'warn') sovErrors = true;
         } else if (msg.type === 'done' || msg.type === 'error') {
@@ -1244,9 +1280,10 @@ async function nextQuestion() {
     }
 }
 
-function finishSession() {
+async function finishSession() {
     try { localStorage.removeItem('k8slab-resume'); } catch(e) {}
-            document.getElementById('session-complete-overlay').classList.add('active');
+    try { await fetch('/api/lab/environment?id=' + encodeURIComponent(LAB_ENVIRONMENT_ID), { method: 'DELETE' }); } catch(e) {}
+    document.getElementById('session-complete-overlay').classList.add('active');
 }
 
 function resetEnv() {
@@ -1266,7 +1303,9 @@ pickQuote('setup-quote', 'setup-quote-author');
 const evtSource = new EventSource('/lab/{{.Question.ID}}/setup');
 evtSource.onmessage = e => {
     const msg = JSON.parse(e.data);
-    if (msg.type === 'step') {
+    if (msg.type === 'environment') {
+        setupStatus.textContent = msg.msg;
+    } else if (msg.type === 'step') {
         if (msg.status === 'running') setupStatus.textContent = msg.description;
         if (msg.status === 'warn') hasErrors = true;
     } else if (msg.type === 'done') {

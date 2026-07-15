@@ -97,6 +97,8 @@ test('catalogo permite sessao customizada e labs mostram confianca', async ({ pa
   await ensureLoggedIn(page);
   await page.goto('/lab');
   await expect(page.locator('#maker-topic')).toBeVisible();
+  await expect(page.locator('#maker-source')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'ANALISAR TÓPICOS' })).toBeVisible();
   await expect(page.locator('#maker-count')).toHaveValue('5');
   await page.goto('/lab/cka-lab-001');
   await expect(page.locator('.lab-top-actions')).toContainText(/curado|verifica|valida|simula/i);
@@ -122,8 +124,13 @@ test('tutor oferece conversas persistentes, modos e anexos acessiveis', async ({
   await ensureLoggedIn(page);
   await page.goto('/tutor');
   await expect(page.locator('.conversation-rail')).toBeVisible();
-  await expect(page.locator('#response-mode')).toHaveValue(/didactic|short|deep|diagnostic|exam/);
+  await expect(page.locator('#response-mode')).toHaveValue(/auto|didactic|short|deep|diagnostic|exam/);
+  await page.getByRole('button', { name: 'Adicionar contexto' }).click();
   await expect(page.locator('button', { hasText: 'Anexar arquivo' })).toBeVisible();
+  await expect(page.locator('button', { hasText: 'Verificar certificacao' })).toBeVisible();
+  await page.getByRole('button', { name: 'Selecionar certificacao' }).click();
+  await expect(page.locator('#cert-row')).toHaveClass(/open/);
+  await expect(page.locator('#cert-active-label')).toHaveText('CKA');
   await expect(page.locator('.tutor-tab')).toHaveCount(4);
   await page.locator('.tutor-tab', { hasText: 'Progresso' }).click();
   await expect(page.locator('#painel')).toHaveClass(/active/);
@@ -137,6 +144,33 @@ test('tutor oferece conversas persistentes, modos e anexos acessiveis', async ({
   const before = await page.locator('.conversation-item').count();
   await page.locator('.new-chat').click();
   await expect.poll(() => page.locator('.conversation-item').count()).toBeGreaterThanOrEqual(before + 1);
+});
+
+test('pedido vago de certificacao pede dominio e competencia', async ({ page }) => {
+  await ensureLoggedIn(page);
+
+  const broad = await page.request.post('/api/tutor/chat', { data: { message: 'Crie um lab para CKA', cert: 'CKA', mode: 'auto' } });
+  expect(broad.ok()).toBeTruthy();
+  const broadBody = await broad.json();
+  expect(broadBody.action?.type).toBe('choices');
+  expect(broadBody.action?.options).toHaveLength(5);
+  expect(broadBody.action?.first).toBeFalsy();
+
+  const domain = await page.request.post('/api/tutor/chat', { data: { message: 'Quero criar um lab de CKA no dominio Cluster Architecture, Installation & Configuration', cert: 'CKA', mode: 'auto' } });
+  const domainBody = await domain.json();
+  expect(domainBody.action?.type).toBe('choices');
+  expect(domainBody.action?.options).toHaveLength(8);
+  expect(domainBody.action.options[0].label).toContain('RBAC');
+  expect(domainBody.action.options[1].available).toBe(false);
+  expect(domainBody.action.options[1].researchable).toBe(true);
+  expect(domainBody.action.options[1].prompt).toMatch(/Pesquise a documentacao oficial/i);
+
+  await page.goto('/tutor');
+  await page.getByRole('button', { name: 'Adicionar contexto' }).click();
+  await expect(page.getByRole('button', { name: 'Verificar certificacao' })).toBeVisible();
+  await page.getByRole('button', { name: 'Verificar certificacao' }).click();
+  await expect(page.locator('#curriculum-panel')).toHaveClass(/open/);
+  await expect(page.locator('#verify-cert')).toHaveValue('CKA');
 });
 
 test('checkpoint pedagogico aparece como card interativo', async ({ page }) => {

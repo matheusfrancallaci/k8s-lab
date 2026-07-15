@@ -44,13 +44,25 @@
 .maker-title { font-size:15px; font-weight:750; color:var(--text); margin-bottom:4px; }
 .maker-sub { font-size:11.5px; line-height:1.5; color:var(--text-3); }
 .maker-badge { flex:none; padding:5px 8px; border-radius:999px; border:1px solid var(--violet-b); color:var(--violet); background:var(--violet-dim); font:600 9px var(--mono); letter-spacing:.08em; text-transform:uppercase; }
+.maker-source-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:9px; margin-bottom:10px; }
+.maker-source-row .btn { min-width:142px; }
+.maker-step { margin:12px 0 7px; color:var(--text-4); font:700 9px var(--mono); letter-spacing:.1em; text-transform:uppercase; }
+.maker-step:first-of-type { margin-top:0; }
 .maker-grid { display:grid; grid-template-columns:minmax(0,1fr) 120px 120px; gap:9px; }
 .maker-field { width:100%; min-height:42px; border:1px solid var(--border-2); border-radius:10px; padding:0 12px; color:var(--text); background:var(--surface); font:12px var(--mono); outline:none; }
 .maker-field:focus { border-color:var(--violet-b); box-shadow:0 0 0 3px var(--violet-glow); }
+.maker-topics { display:none; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; max-height:230px; overflow:auto; padding:2px; margin-bottom:10px; }
+.maker-topics.open { display:grid; }
+.maker-topic-btn { min-width:0; text-align:left; border:1px solid var(--border-2); border-radius:10px; padding:10px; background:var(--surface); color:var(--text-2); cursor:pointer; transition:border-color .15s,background .15s; }
+.maker-topic-btn:hover,.maker-topic-btn.selected { border-color:var(--violet-b); background:var(--violet-dim); color:var(--text); }
+.maker-topic-btn strong,.maker-topic-btn small { display:block; }
+.maker-topic-btn strong { font-size:11px; line-height:1.35; }
+.maker-topic-btn small { margin-top:4px; color:var(--text-4); font:9px/1.35 var(--mono); }
+.maker-topic-btn.research small { color:var(--amber); }
 .maker-actions { display:flex; align-items:center; gap:12px; margin-top:10px; }
 .maker-actions .cta-start { width:auto; min-width:190px; padding:11px 16px; }
 .maker-feedback { font:10.5px var(--mono); color:var(--text-3); }
-@media (max-width:700px){ .maker-grid { grid-template-columns:1fr 1fr; } .maker-grid .maker-topic { grid-column:1/-1; } .maker-actions { align-items:stretch; flex-direction:column; } .maker-actions .cta-start { width:100%; } }
+@media (max-width:700px){ .maker-source-row { grid-template-columns:1fr; } .maker-source-row .btn { width:100%; } .maker-topics { grid-template-columns:1fr; } .maker-grid { grid-template-columns:1fr 1fr; } .maker-grid .maker-topic { grid-column:1/-1; } .maker-actions { align-items:stretch; flex-direction:column; } .maker-actions .cta-start { width:100%; } }
 
 /* ── controles refinados do configurador ── */
 .cfg-sec { padding:16px 0 4px; }
@@ -131,7 +143,7 @@
                 <button class="mode-card exam" onclick="startExamMode()">
                     <div class="m-ico"><svg class="lic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg></div>
                     <div class="m-t" data-i18n="labs.exam">Modo Exame</div>
-                    <div class="m-d" data-i18n="labs.exam.d">16 questões · 2h · sem dicas · score report</div>
+                    <div class="m-d" data-i18n="labs.exam.d">16 questões · 1h · sem dicas · score report</div>
                 </button>
                 <button class="mode-card incident" onclick="startIncidentMode(this)">
                     <div class="m-ico"><svg class="lic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18v-6a5 5 0 1 1 10 0v6"/><path d="M5 21a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1z"/><path d="M21 12h1"/><path d="M18.5 4.5 18 5"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="M5.5 4.5 6 5"/></svg></div>
@@ -142,9 +154,16 @@
 
             <section class="maker-card" aria-labelledby="maker-title">
                 <div class="maker-head">
-                    <div><h2 class="maker-title" id="maker-title">Crie sua própria sessão</h2><p class="maker-sub">Peça qualquer tópico técnico. O tutor monta labs inéditos, com ambiente, objetivo e validação automática.</p></div>
+                    <div><h2 class="maker-title" id="maker-title">Crie sua própria sessão</h2><p class="maker-sub">Escolha uma seção real da documentação ou descreva um tópico. A sessão só abre depois das validações.</p></div>
                     <span class="maker-badge">gerador IA</span>
                 </div>
+                <div class="maker-step">1. Documentação oficial <span class="lbl-hint">// opcional</span></div>
+                <div class="maker-source-row">
+                    <input class="maker-field" id="maker-source" type="url" maxlength="500" placeholder="https://kubernetes.io/docs/..." aria-label="URL da documentação">
+                    <button class="btn btn-secondary btn-sm" id="maker-analyze-btn" type="button" onclick="analyzeLabDocument()">ANALISAR TÓPICOS</button>
+                </div>
+                <div class="maker-topics" id="maker-topics" aria-label="Tópicos encontrados na documentação"></div>
+                <div class="maker-step">2. Tópico e configuração</div>
                 <div class="maker-grid">
                     <input class="maker-field maker-topic" id="maker-topic" maxlength="180" placeholder="Ex.: RBAC, HPA, troubleshooting de DNS, Terraform..." aria-label="Tópico dos novos labs">
                     <select class="maker-field" id="maker-count" aria-label="Quantidade de labs"><option value="3">3 questões</option><option value="5" selected>5 questões</option><option value="8">8 questões</option></select>
@@ -152,7 +171,7 @@
                 </div>
                 <div class="maker-actions">
                     <button class="cta-start" id="maker-btn" type="button" onclick="generateCustomLabs()">GERAR E COMEÇAR</button>
-                    <span class="maker-feedback" id="maker-feedback" role="status" aria-live="polite">de 1 a 8 labs por sessão</span>
+                    <span class="maker-feedback" id="maker-feedback" role="status" aria-live="polite">cluster, permissões, setup, solução e validadores são conferidos antes da sessão</span>
                 </div>
             </section>
 
@@ -353,7 +372,7 @@ async function refreshEnv() {
 refreshEnv();
 
 // ─────────────────────────────────────────────────────────────
-// 🏆 Modo Exame — 16 questões, 2h, sem dicas, score report
+// 🏆 Modo Exame — 16 questões, 1h, sem dicas, score report
 // ─────────────────────────────────────────────────────────────
 async function startExamMode() {
     try {
@@ -430,6 +449,66 @@ async function startSession() {
     }
 }
 
+let selectedDocumentSource = '';
+let selectedDocumentTopic = '';
+
+async function analyzeLabDocument() {
+    const sourceInput = document.getElementById('maker-source');
+    const source = sourceInput.value.trim();
+    const btn = document.getElementById('maker-analyze-btn');
+    const feedback = document.getElementById('maker-feedback');
+    const container = document.getElementById('maker-topics');
+    if (!/^https?:\/\//i.test(source)) {
+        feedback.style.color = 'var(--red)';
+        feedback.textContent = 'Informe uma URL completa de documentação oficial.';
+        sourceInput.focus();
+        return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'LENDO...';
+    feedback.style.color = 'var(--sky)';
+    feedback.textContent = 'lendo a página e extraindo as seções reais';
+    try {
+        const response = await fetch('/api/tutor/document/topics', {
+            method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({source})
+        });
+        const data = await response.json();
+        if (!response.ok || !Array.isArray(data.topics)) throw new Error(data.error || 'Não encontrei tópicos nessa página.');
+        selectedDocumentSource = '';
+        selectedDocumentTopic = '';
+        container.innerHTML = '';
+        data.topics.forEach(item => {
+            const topicButton = document.createElement('button');
+            topicButton.type = 'button';
+            topicButton.className = 'maker-topic-btn' + (item.available ? '' : ' research');
+            topicButton.innerHTML = `<strong>${escT(item.label)}</strong><small>${escT(item.description || '')}</small>`;
+            topicButton.onclick = () => {
+                container.querySelectorAll('.maker-topic-btn').forEach(el => el.classList.remove('selected'));
+                topicButton.classList.add('selected');
+                selectedDocumentSource = item.source || source;
+                selectedDocumentTopic = item.label;
+                document.getElementById('maker-topic').value = item.label;
+                feedback.style.color = item.available ? 'var(--green)' : 'var(--amber)';
+                feedback.textContent = item.available
+                    ? 'tópico exato selecionado; pronto para validar e gerar'
+                    : 'sem template pronto: vou pesquisar esta seção e só criar se o lab for executável';
+            };
+            container.appendChild(topicButton);
+        });
+        container.classList.add('open');
+        feedback.style.color = 'var(--green)';
+        feedback.textContent = `${data.topics.length} tópico(s) encontrado(s). Escolha um para continuar.`;
+    } catch (error) {
+        container.classList.remove('open');
+        container.innerHTML = '';
+        feedback.style.color = 'var(--red)';
+        feedback.textContent = error.message || 'Erro ao analisar a documentação.';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'ANALISAR TÓPICOS';
+    }
+}
+
 async function generateCustomLabs() {
     const topic = document.getElementById('maker-topic').value.trim();
     const btn = document.getElementById('maker-btn');
@@ -447,7 +526,7 @@ async function generateCustomLabs() {
     try {
         const r = await fetch('/api/tutor/generate', {
             method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({topic, cert:selectedCerts()[0] || 'CKA', count:Number(document.getElementById('maker-count').value), level:Number(document.getElementById('maker-level').value)})
+            body: JSON.stringify({topic, source:selectedDocumentSource, cert:selectedCerts()[0] || 'CKA', count:Number(document.getElementById('maker-count').value), level:Number(document.getElementById('maker-level').value)})
         });
         const d = await r.json();
         if (!r.ok || d.error) throw new Error(d.error || 'não foi possível gerar os labs');
@@ -462,6 +541,17 @@ async function generateCustomLabs() {
 
 document.getElementById('maker-topic').addEventListener('keydown', e => {
     if (e.key === 'Enter') generateCustomLabs();
+});
+document.getElementById('maker-topic').addEventListener('input', e => {
+    if (e.target.value.trim() !== selectedDocumentTopic) {
+        selectedDocumentSource = '';
+        document.querySelectorAll('.maker-topic-btn').forEach(el => el.classList.remove('selected'));
+    }
+});
+document.getElementById('maker-source').addEventListener('input', () => {
+    selectedDocumentSource = '';
+    selectedDocumentTopic = '';
+    document.getElementById('maker-topics').classList.remove('open');
 });
 </script>
 {{end}}

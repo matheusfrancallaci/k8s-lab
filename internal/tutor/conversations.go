@@ -182,7 +182,7 @@ func RenameConversation(userID, id, title, mode string) error {
 
 func normalizeResponseMode(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "short", "deep", "exam", "diagnostic":
+	case "auto", "short", "deep", "exam", "diagnostic":
 		return strings.ToLower(strings.TrimSpace(mode))
 	default:
 		return "didactic"

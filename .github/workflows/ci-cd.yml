@@ -11,6 +11,11 @@ on:
         description: Commit, branch ou tag a publicar
         required: false
         default: ""
+      reconcile_runtime:
+        description: Reconciliar Ollama, Key Vault e o script persistente da VM
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -80,7 +85,7 @@ jobs:
           npm run test:e2e -- --list
 
       - name: Infrastructure validation
-        run: bash -n deploy/azure/sync-runtime.sh deploy/azure/verify-runtime.sh
+        run: bash -n deploy/azure/sync-runtime.sh deploy/azure/switch-app.sh deploy/azure/verify-runtime.sh
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -131,8 +136,13 @@ jobs:
 
       - name: Pull image for security verification
         run: |
-          az acr login --name "$ACR"
-          docker pull "$ACR.azurecr.io/$IMAGE:${{ steps.version.outputs.sha }}"
+          for attempt in 1 2 3 4 5; do
+            if az acr login --name "$ACR" && docker pull "$ACR.azurecr.io/$IMAGE:${{ steps.version.outputs.sha }}"; then
+              exit 0
+            fi
+            test "$attempt" -lt 5 || exit 1
+            sleep $((attempt * 10))
+          done
 
       - name: Container vulnerability gate
         uses: aquasecurity/trivy-action@v0.36.0
@@ -156,16 +166,28 @@ jobs:
           az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts "touch /run/lab-busy" --query "value[0].message" -o tsv >/dev/null
 
       - name: Reconcile persistent runtime
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.reconcile_runtime }}
         run: |
-          out=$(az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts @deploy/azure/sync-runtime.sh --query "value[0].message" -o tsv)
+          script=$(
+            head -n 1 deploy/azure/sync-runtime.sh
+            printf 'export SYNC_RUNTIME_SKIP_PULL=1\n'
+            tail -n +2 deploy/azure/sync-runtime.sh
+          )
+          out=$(timeout 300 az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts "$script" --query "value[0].message" -o tsv)
           echo "$out"
           grep -q RUNTIME_SYNC_OK <<<"$out"
 
       - name: Switch container only after build succeeds
         run: |
           sha=${{ steps.version.outputs.sha }}
-          script="set -e; trap 'rm -f /run/lab-busy' EXIT; touch /run/lab-busy; az acr login --name $ACR >/dev/null; docker pull $ACR.azurecr.io/$IMAGE:$sha >/dev/null; docker pull $ACR.azurecr.io/$IMAGE:latest >/dev/null; want=\$(docker inspect --format '{{.Id}}' $ACR.azurecr.io/$IMAGE:$sha); latest=\$(docker inspect --format '{{.Id}}' $ACR.azurecr.io/$IMAGE:latest); test \"\$want\" = \"\$latest\"; systemctl restart estudo-app.service; sleep 12; got=\$(docker inspect --format '{{.Image}}' lab); test \"\$want\" = \"\$got\"; echo MATCH \$got"
-          out=$(az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts "$script" --query "value[0].message" -o tsv)
+          script=$(
+            head -n 1 deploy/azure/switch-app.sh
+            printf 'export TARGET_IMAGE=%q\n' "$ACR.azurecr.io/$IMAGE:$sha"
+            printf 'export EXPECTED_VERSION=%q\n' "$sha"
+            printf 'export ACR_NAME=%q\n' "$ACR"
+            tail -n +2 deploy/azure/switch-app.sh
+          )
+          out=$(timeout 720 az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts "$script" --query "value[0].message" -o tsv)
           echo "$out"
           grep -q MATCH <<<"$out"
 

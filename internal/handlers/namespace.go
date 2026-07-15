@@ -31,6 +31,11 @@ var (
 )
 
 func userLabNamespace(userID string) string {
+	if virtualClustersEnabled() {
+		if env, ok := activeLabEnvironment(userID); ok {
+			return env.Namespace
+		}
+	}
 	id := tutor.SanitizeID(userID)
 	if id == "default" {
 		return ""

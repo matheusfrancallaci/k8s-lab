@@ -19,7 +19,9 @@ func RouteConversationModel(msg, mode string) ModelRoute {
 	score := len(strings.Fields(msg)) / 20
 	complex := regexp.MustCompile(`(?i)arquitet|trade.?off|incidente|diagn[oó]st|migra|seguran|produ[cç][aã]o|multi.?cluster|terraform|c[oó]digo|analise|compare|por que`)
 	if complex.MatchString(msg) {
-		score += 3
+		// A single explicit architecture/diagnostic/trade-off signal is enough
+		// to opt into deep reasoning when the UI is in automatic mode.
+		score += 5
 	}
 	if mode == "deep" || mode == "diagnostic" {
 		score += 3

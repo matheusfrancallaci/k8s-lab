@@ -68,13 +68,14 @@ func TestCloudShellNamespaceAccessScript(t *testing.T) {
 	mustContain := []string{
 		"kubectl -n lab-alice create rolebinding lab-shell-alice-lab-alice --clusterrole=admin --serviceaccount=lab-alice:lab-user",
 		"kubectl -n lab-alice-tools create rolebinding lab-shell-alice-lab-alice-tools --clusterrole=admin --serviceaccount=lab-alice:lab-user",
+		"create clusterrole lab-shell-alice-pod-reader --verb=get,list,watch --resource=pods,pods/log",
 	}
 	for _, want := range mustContain {
 		if !strings.Contains(script, want) {
 			t.Fatalf("script de RBAC nao contem %q\nscript=%s", want, script)
 		}
 	}
-	if strings.Contains(script, "clusterrolebinding") || strings.Contains(script, "cluster-admin") {
+	if strings.Contains(script, "cluster-admin") {
 		t.Fatalf("shell scoped nao pode receber cluster-admin: %s", script)
 	}
 }
@@ -109,7 +110,7 @@ func TestCloudShellClusterRBACIsNarrow(t *testing.T) {
 	}
 }
 
-func TestCloudShellClusterPodReaderIsReadOnlyAndDemandDriven(t *testing.T) {
+func TestCloudShellClusterPodReaderIsAlwaysReadOnly(t *testing.T) {
 	q := &models.Question{Cert: models.CKA, Topic: "Troubleshooting", Question: "Liste os pods com kubectl get pods -A e encontre a falha"}
 	script := cloudShellNamespaceAccessScript("lab-alice", "lab-user", q)
 	want := "create clusterrole lab-shell-alice-pod-reader --verb=get,list,watch --resource=pods,pods/log"
@@ -120,8 +121,8 @@ func TestCloudShellClusterPodReaderIsReadOnlyAndDemandDriven(t *testing.T) {
 		t.Fatalf("pod-reader nao pode conceder escrita nem cluster-admin: %s", script)
 	}
 	ordinary := cloudShellNamespaceAccessScript("lab-alice", "lab-user", &models.Question{Question: "kubectl get pods"})
-	if strings.Contains(ordinary, "pod-reader") {
-		t.Fatalf("consulta namespaced nao deve abrir leitura cluster-wide: %s", ordinary)
+	if !strings.Contains(ordinary, want) {
+		t.Fatalf("leitura cluster-wide deve existir em toda sessao: %s", ordinary)
 	}
 }
 

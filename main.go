@@ -103,6 +103,8 @@ func main() {
 
 	store := repository.NewSessionStore()
 	labSessions := repository.NewLabSessionStore()
+	labEnvironments := repository.NewLabEnvironmentStore()
+	handlers.ConfigureLabEnvironmentStore(labEnvironments)
 	quiz := handlers.NewQuizHandler(repo, store, templatesFS)
 	lab := handlers.NewLabHandler(repo, store, labSessions, templatesFS)
 	tutorH := handlers.NewTutorHandler(repo, labSessions, templatesFS)
@@ -167,6 +169,8 @@ func main() {
 	mux.HandleFunc("GET /lab/{id}/setup", lab.Setup)
 	mux.HandleFunc("GET /lab/{id}/state", lab.State)
 	mux.HandleFunc("POST /lab/{id}/teardown", lab.Teardown)
+	mux.HandleFunc("GET /api/lab/environment", lab.EnvironmentStatus)
+	mux.HandleFunc("DELETE /api/lab/environment", lab.EndEnvironment)
 
 	// Terminal WebSocket
 	mux.HandleFunc("GET /ws/terminal", handlers.TerminalWS)
@@ -196,6 +200,8 @@ func main() {
 	// Tutor (IA local adaptativa) routes
 	mux.HandleFunc("GET /tutor", tutorH.Page)
 	mux.HandleFunc("GET /api/tutor/status", tutorH.Status)
+	mux.HandleFunc("POST /api/tutor/curriculum/verify", tutorH.VerifyCurriculum)
+	mux.HandleFunc("POST /api/tutor/document/topics", tutorH.AnalyzeDocument)
 	mux.HandleFunc("POST /api/tutor/event", tutorH.Event)
 	mux.HandleFunc("POST /api/tutor/generate", tutorH.Generate)
 	mux.HandleFunc("POST /api/tutor/ingest", tutorH.Ingest)
@@ -203,6 +209,7 @@ func main() {
 	mux.HandleFunc("POST /api/tutor/exam-report", tutorH.ExamReport)
 	mux.HandleFunc("POST /api/tutor/goal", tutorH.Goal)
 	mux.HandleFunc("POST /api/tutor/author", tutorH.Author)
+	mux.HandleFunc("POST /api/tutor/author-mcq", tutorH.AuthorMCQ)
 	mux.HandleFunc("GET /api/tutor/eval", tutorH.Eval)
 	mux.HandleFunc("GET /api/tutor/quality", tutorH.Quality)
 	mux.HandleFunc("POST /api/tutor/quality/promote", tutorH.PromoteQualityFixture)
@@ -264,6 +271,7 @@ func main() {
 		go handlers.EnsureCluster()
 		go handlers.StartCloudMonitor()
 		handlers.StartCloudShellGC() // coleta pods de shell por-usuário ociosos
+		handlers.StartLabEnvironmentGC()
 	} else {
 		log.Println("LAB_NO_CLUSTER definido — auto-gerenciamento de cluster desativado")
 	}
