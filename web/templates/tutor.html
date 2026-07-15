@@ -967,7 +967,7 @@ async function loadOperatorPanel() {
     if (opLoaded) return;
     opLoaded = true;
     const body = document.getElementById('op-body');
-    body.innerHTML = '<div class="p-card" id="tutor-plan"><div class="cc-title">orquestração pedagógica</div><div class="eval-sub">aguardando um turno...</div></div><div class="p-card" id="agent-trace"><div class="cc-title">ferramentas do agente</div><div class="eval-sub">nenhuma inspeção executada</div></div><div class="p-card" id="model-experiments"><div class="cc-title">modelos e canary</div><div class="eval-sub">coletando resultados...</div></div>' + ragCard(statusCache) + obsCard(statusCache) +
+    body.innerHTML = '<div class="p-card" id="op-authoring"><div class="cc-title">gerar questões (autoria)</div><div class="eval-sub">Múltipla escolha ancorada na doc oficial. Conceitual usa a IA local; Comando gera questões verificáveis no cluster.</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"><input id="mcq-cert" class="goal-input" style="max-width:90px" placeholder="cert"><input id="mcq-topic" class="goal-input" style="flex:1;min-width:120px" placeholder="tópico (opcional)"><select id="mcq-mode" class="goal-input"><option value="concept">Conceitual</option><option value="command">Comando</option></select><select id="mcq-count" class="goal-input"><option>3</option><option>5</option><option>8</option></select><button class="btn btn-primary btn-sm" onclick="authorMCQ(this)">Gerar</button></div><div class="eval-sub" id="mcq-out" style="margin-top:8px"></div></div><div class="p-card" id="tutor-plan"><div class="cc-title">orquestração pedagógica</div><div class="eval-sub">aguardando um turno...</div></div><div class="p-card" id="agent-trace"><div class="cc-title">ferramentas do agente</div><div class="eval-sub">nenhuma inspeção executada</div></div><div class="p-card" id="model-experiments"><div class="cc-title">modelos e canary</div><div class="eval-sub">coletando resultados...</div></div>' + ragCard(statusCache) + obsCard(statusCache) +
         '<div class="p-card" id="op-eval"><div class="cc-title">golden eval IA</div><div class="eval-sub">rodando...</div></div>' +
         '<div class="p-card" id="op-quality"><div class="cc-title">dataset real de prompts</div><div class="eval-sub">ranqueando...</div></div>' +
         '<div class="p-card" id="op-admin"><div class="cc-title">painel admin</div><div class="eval-sub">checando...</div></div>';
@@ -995,6 +995,38 @@ async function loadOperatorPanel() {
         const r = await fetch('/api/tutor/admin-quality');
         document.getElementById('op-admin').innerHTML = renderAdminQualityReport(await r.json());
     } catch (e) { document.getElementById('op-admin').innerHTML = '<div class="cc-title">painel admin</div><div class="eval-sub">indisponivel agora</div>'; }
+    const mcqCert = document.getElementById('mcq-cert');
+    if (mcqCert) mcqCert.value = (typeof chatCert !== 'undefined' && chatCert) ? chatCert : 'CKA';
+}
+
+// authorMCQ chama a autoria de questões de múltipla escolha sob demanda e mostra
+// o relatório (publicadas / reprovadas por grounding / duplicadas / verificadas).
+async function authorMCQ(btn) {
+    const cert = (document.getElementById('mcq-cert').value || 'CKA').trim();
+    const topic = document.getElementById('mcq-topic').value.trim();
+    const count = parseInt(document.getElementById('mcq-count').value, 10) || 3;
+    const mode = document.getElementById('mcq-mode').value;
+    const out = document.getElementById('mcq-out');
+    btn.disabled = true;
+    out.textContent = 'gerando e validando questões...';
+    try {
+        const r = await fetch('/api/tutor/author-mcq', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cert, topic, count, level: 2, mode })
+        });
+        const d = await r.json();
+        if (d.error) {
+            out.innerHTML = '⚠ ' + escH(d.error);
+        } else {
+            const rep = d.report || {};
+            out.innerHTML = `<strong>${rep.ready || 0} publicada(s)</strong> · ${rep.rejected || 0} reprovada(s) no grounding · ${rep.duplicates || 0} duplicada(s)` +
+                (rep.verified ? ' · distratores verificados no cluster' : '') +
+                `<br><span class="eval-sub">modelo: ${escH(rep.used_model || '—')} · entram no banco de prática/quiz</span>`;
+        }
+    } catch (e) {
+        out.textContent = 'falha: ' + e.message;
+    }
+    btn.disabled = false;
 }
 
 // ── certs / entrada ─────────────────────────────────────────

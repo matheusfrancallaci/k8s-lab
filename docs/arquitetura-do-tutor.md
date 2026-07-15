@@ -381,6 +381,82 @@ conteúdo mudar, a verificação antiga deixa de valer. Estados possíveis inclu
 Um lab Kubernetes gerado que deveria ser verificado, mas não está `ready`, é
 bloqueado antes de abrir para o aluno.
 
+## A fábrica de questões de múltipla escolha
+
+Gerar um lab que roda é difícil; gerar uma pergunta de prova que seja **de fato
+correta** é difícil de outro jeito. O maior risco é servir como fato técnico uma
+alternativa que a IA inventou. Por isso as questões geradas passam por uma linha
+de montagem própria, com a mesma filosofia dos labs: nenhuma LLM sozinha decide
+o que chega ao aluno.
+
+```mermaid
+flowchart LR
+    A[Pedido: cert + tópico] --> B[Currículo + RAG: evidência oficial]
+    B --> C{Modo}
+    C -- Conceitual --> D[LLM local com contrato JSON]
+    C -- Comando --> E[Template provado vira pergunta]
+    D --> F[Gates: 4 opções, grounding, sem contradição]
+    E --> G[Distratores mutados dos pares de confusão]
+    F --> H[Dedup semântico por embeddings]
+    G --> I[Verificação executável dos distratores]
+    H --> J[Prontidão + proveniência]
+    I --> J
+    J --> K[Banco de prática / quiz]
+```
+
+Há dois modos, expostos em `POST /api/tutor/author-mcq`:
+
+**Conceitual** (`internal/tutor/mcq_author.go`, `AuthorMCQBatch`). A partir da
+evidência do currículo e dos chunks do RAG — nunca de um texto qualquer — a IA
+local escreve questões sob o contrato JSON `quiz`. Cada questão passa por gates
+determinísticos: exatamente quatro alternativas, resposta ancorada na fonte
+(`groundedInSource`), sem alternativas repetidas, e embaralhamento anti-viés de
+posição. Os distratores são guiados pelos **pares de confusão reais**
+(`confusionSets`) — o que o aluno de fato troca na prova, não uma opção fácil de
+eliminar.
+
+**Comando** (`internal/tutor/mcq_verify.go`, `AuthorCommandMCQBatch`). A questão
+nasce de um template de lab cuja resposta e validador já são provados: o
+enunciado vira “qual comando cumpre o objetivo?”, a alternativa correta é o
+comando real e os distratores são mutações plausíveis (flag-irmã do conjunto de
+confusão, verbo trocado, valor trocado). Quando `K8S_LAB_VERIFY_GENERATED=1`,
+cada distrator é **executado num namespace efêmero** e precisa NÃO satisfazer o
+validador do efeito; se um distrator também “passar”, a questão é ambígua e é
+rejeitada. É o análogo, para questões, da prova executável dos labs.
+
+Entre a geração e a publicação há o **juiz de correção**
+(`internal/tutor/mcq_judge.go`). O grounding prova que a resposta *aparece* na
+fonte, não que ela *é* a resposta — um modelo fraco chega a marcar uma
+alternativa e escrever uma explicação que a contradiz, e isso passa no grounding.
+O juiz ataca isso respeitando a regra “não julgar com o mesmo modelo fraco é
+eco”: com gateway remoto, um modelo forte decide se a alternativa marcada é a
+única correta e se a explicação a sustenta; sem gateway, o modelo local
+**resolve a própria questão algumas vezes** (self-consistency) e, se discordar da
+marcada ou não formar maioria, a questão é rejeitada. Isso separa autoria de
+serving na prática: **autora-se com o modelo mais forte disponível**
+(`authoringModel`, custo amortizado por todos os alunos) e serve-se local.
+Questões que o juiz confirma recebem o selo `judged`, entre `grounded` (só
+ancoragem) e `verified` (execução).
+
+Dois gates transversais fecham a linha:
+
+- **Dedup semântico** (`internal/tutor/mcq_dedup.go`). O `qKey` do repositório só
+  barra texto idêntico; aqui comparamos o enunciado por embeddings (o mesmo sinal
+  denso do RAG). Paráfrases do mesmo enunciado ficam ~0.90 de similaridade e
+  questões distintas ≤0.33 — o corte em 0.88 separa com folga. A identidade é o
+  **enunciado**, não o par pergunta→resposta: modelos fracos reemitem a mesma
+  pergunta com respostas diferentes (às vezes contraditórias), e essas colapsam
+  numa só.
+- **Prontidão e proveniência** (`models.QuestionReadiness`). Espelha
+  `LabReadiness`: estado `grounded` (ancorada em evidência), `verified`
+  (distratores provados errados por execução) ou `rejected`, com digest do
+  conteúdo e catálogo em `data/quiz/catalog.json`. O aluno vê a diferença entre
+  “existe” e “foi provada”.
+
+A qualidade do modo conceitual depende diretamente da riqueza do RAG: com o
+índice hidratado (documentos oficiais + embeddings) o grounding aprova questões
+legítimas; com evidência fraca ele fecha a porta em vez de arriscar alucinação.
+
 ## O cluster de cada aluno
 
 No ambiente hospedado, “um cluster por aluno” significa um vCluster por sessão
@@ -499,6 +575,7 @@ não confundir “conteúdo existe” com “conteúdo foi testado”.
 | `POST /api/tutor/document/topics` | Lê uma documentação permitida e devolve seções escolhíveis. |
 | `POST /api/tutor/generate` | Gera labs de um tópico e cria a sessão. |
 | `POST /api/tutor/ingest` | Transforma texto fornecido em labs e quiz. |
+| `POST /api/tutor/author-mcq` | Gera questões de múltipla escolha sob demanda (modo conceitual ou comando). |
 | `POST /api/tutor/event` | Registra ações do aluno. |
 | `GET /api/tutor/eval` | Expõe avaliações automatizadas. |
 | `GET /api/tutor/admin-quality` | Junta métricas de qualidade para operação. |

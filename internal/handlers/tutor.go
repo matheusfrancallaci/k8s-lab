@@ -193,6 +193,42 @@ func (h *TutorHandler) Author(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"ok": true, "report": rep}) //nolint:errcheck
 }
 
+// AuthorMCQ gera questões de múltipla escolha SOB DEMANDA, ancoradas no
+// currículo/RAG (mode "concept", padrão, via IA local) ou derivadas de
+// templates com verificação executável dos distratores (mode "command"). Todo
+// dedup semântico usa o banco atual como referência.
+func (h *TutorHandler) AuthorMCQ(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var body struct {
+		Cert  string `json:"cert"`
+		Topic string `json:"topic"`
+		Count int    `json:"count"`
+		Level int    `json:"level"`
+		Mode  string `json:"mode"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"error": "payload inválido"}) //nolint:errcheck
+		return
+	}
+	existing := h.repo.Filter(nil, "")
+	var (
+		qs  []models.Question
+		rep tutor.MCQReport
+		err error
+	)
+	if strings.EqualFold(body.Mode, "command") {
+		qs, rep, err = tutor.AuthorCommandMCQBatch(body.Cert, body.Topic, body.Count, body.Level, existing)
+	} else {
+		qs, rep, err = tutor.AuthorMCQBatch(body.Cert, body.Topic, body.Count, body.Level, existing)
+	}
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"error": err.Error(), "report": rep}) //nolint:errcheck
+		return
+	}
+	h.repo.Add(qs)
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "report": rep}) //nolint:errcheck
+}
+
 // Goal persiste o objetivo do aluno (onboarding): cert, data da prova e nível.
 func (h *TutorHandler) Goal(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
